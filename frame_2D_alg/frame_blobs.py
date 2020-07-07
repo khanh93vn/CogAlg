@@ -1,7 +1,12 @@
 from time import time
-# from comp_pixel import comp_pixel
-from utils import *
 from collections import deque
+
+import sys
+import numpy as np
+import numpy.ma as ma
+
+# from comp_pixel import comp_pixel
+from utils import imread
 
 '''
     2D version of first-level core algorithm will have frame_blobs, intra_blob (recursive search within blobs), and comp_P.
@@ -63,7 +68,11 @@ def comp_pixel(image):  # current version of 2x2 pixel cross-correlation within 
     return ma.stack((topleft__, g__, dy__, dx__))  # 2D dert array
 
 
-def image_to_blobs(image):
+def image_to_blobs(image, verbose=False):
+    if verbose:
+        start_time = time()
+        print("Converting to image to blobs...")
+
     dert__ = comp_pixel(image)  # 2x2 cross-comparison / cross-correlation
 
     frame = dict(rng=1, dert__=dert__, mask=None, I=0, G=0, Dy=0, Dx=0, blob__=[])
@@ -71,7 +80,9 @@ def image_to_blobs(image):
     height, width = dert__.shape[1:]
 
     for y in range(height):  # first and last row are discarded
-        print(f'Processing line {y}...')
+        if verbose:
+            print(f"\rProcessing line {y}/{height}", end="")
+            sys.stdout.flush()
 
         P_ = form_P_(dert__[:, y].T)  # horizontal clustering
         P_ = scan_P_(P_, stack_, frame)  # vertical clustering, adds P up_connects and _P down_connect_cnt
@@ -80,6 +91,9 @@ def image_to_blobs(image):
     while stack_:  # frame ends, last-line stacks are merged into their blobs
         form_blob(stack_.popleft(), frame)
     find_adjacent(frame)  # add adj_blob_ to each blob
+
+    if verbose:
+        print(f"\nImage has been successfully converted to blobs in {time() - start_time:.3} seconds")
 
     return frame  # frame of blobs
 
@@ -436,13 +450,16 @@ if __name__ == '__main__':
 
     argument_parser = argparse.ArgumentParser()
     argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon_eye.jpeg')
+    argument_parser.add_argument('-v', '--verbose', help='print details, useful for debugging', type=int, default=0)
+    argument_parser.add_argument('-n', '--intra', help='run intra_blobs after frame_blobs', type=int, default=0)
     arguments = vars(argument_parser.parse_args())
     image = imread(arguments['image'])
+    verbose = arguments['verbose']
+    intra = arguments['intra']
 
     start_time = time()
-    frame = image_to_blobs(image)
+    frame = image_to_blobs(image, verbose)
 
-    intra = 0
     if intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
 
         from intra_blob import *
@@ -476,8 +493,12 @@ if __name__ == '__main__':
                     deep_blob_i_.append(bcount)  # indices of blobs with deep layers
 
     end_time = time() - start_time
-    print(end_time)
-
+    if verbose:
+        print(f"\nSession ended in {end_time:.2} seconds")
+        input("Press Enter to exit...")
+    else:
+        print(end_time)
+    pass
 # DEBUG -------------------------------------------------------------------
 
 '''

@@ -1,9 +1,7 @@
 from itertools import (repeat, accumulate, chain, starmap, tee)
 import numbers
 import numpy as np
-import numpy.ma as ma
 
-from imageio import imsave
 import cv2
 
 # ----------------------------------------------------------------------------
