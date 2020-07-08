@@ -9,10 +9,12 @@ import cv2
 
 # colors
 WHITE = 255
-GREY = 128
 BLACK = 0
+GREY = 128
+DGREY = 64
+LGREY = 192
 
-transparent_val = 128 # Pixel at this value are considered transparent
+transparent_val = 128  # Pixel at this value can be over-written
 
 SIGN_MAPS = {
     'binary': {
@@ -226,17 +228,17 @@ def map_frame(frame, *args, **kwargs):
     return image
 
 
-def draw_blob(blob, *args, **kwargs):
+def draw_blob(blob, *args, blob_box=None, **kwargs):
     '''Map a single blob into an image.'''
-
-    blob_img = blank_image(blob['box'])
+    if blob_box is None:
+        blob_box = blob['box']
+    blob_img = blank_image(blob_box)
 
     for stack in blob['stack_']:
         sub_box = stack_box(stack)
         stack_map = draw_stack(stack, sub_box, blob['sign'],
                                *args, **kwargs)
-        over_draw(blob_img, stack_map, sub_box, blob['box'])
-
+        over_draw(blob_img, stack_map, sub_box, blob_box)
     return blob_img
 
 
@@ -251,10 +253,14 @@ def draw_stack(stack, box, sign,
     y0, yn, x0, xn = box
 
     for y, P in enumerate(stack['Py_'], start= stack['y0'] - y0):
-        for x, dert in enumerate(P['dert__'], start=P['x0']-x0):
-            if sign_map is None:
-                stack_img[y, x] = dert[0]
-            else:
+        try:
+            for x, dert in enumerate(P['dert__'], start=P['x0']-x0):
+                if sign_map is None:
+                    stack_img[y, x] = dert[0]
+                else:
+                    stack_img[y, x] = sign_map[sign]
+        except KeyError:
+            for x in range(P['x0']-x0, P['x0']-x0+P['L']):
                 stack_img[y, x] = sign_map[sign]
 
     return stack_img
@@ -294,6 +300,7 @@ def over_draw(map, sub_map, sub_box, box=None, tv=transparent_val):
         y0, yn, x0, xn = sub_box
     else:
         y0, yn, x0, xn = localize(sub_box, box)
+
     map[y0:yn, x0:xn][sub_map != tv] = sub_map[sub_map != tv]
     return map
 
@@ -308,7 +315,7 @@ def blank_image(shape):
         height = yn - y0
         width = xn - x0
 
-    return np.full((height, width), transparent_val)
+    return np.full((height, width), transparent_val, 'uint8')
 
 # ---------------------------------------------------------------------
 # ----------------------------------------------------------------------------

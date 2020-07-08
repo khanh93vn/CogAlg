@@ -1,3 +1,22 @@
+"""
+2D implemetation. More details are in the comments below imports.
+
+usage: frame_blobs.py [-h] [-i IMAGE] [-v VERBOSE] [-n INTRA] [-r RENDER]
+                      [-z ZOOM]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -i IMAGE, --image IMAGE
+                        path to image file
+  -v VERBOSE, --verbose VERBOSE
+                        print details, useful for debugging
+  -n INTRA, --intra INTRA
+                        run intra_blobs after frame_blobs
+  -r RENDER, --render RENDER
+                        render the process
+  -z ZOOM, --zoom ZOOM  zooming ratio when rendering
+"""
+
 from time import time
 from collections import deque
 
@@ -6,7 +25,11 @@ import numpy as np
 import numpy.ma as ma
 
 # from comp_pixel import comp_pixel
-from utils import imread
+from stream import Img2BlobStreamer
+from utils import (
+    imread, imwrite, map_frame_binary,
+    WHITE, BLACK,
+)
 
 '''
     2D version of first-level core algorithm will have frame_blobs, intra_blob (recursive search within blobs), and comp_P.
@@ -68,7 +91,7 @@ def comp_pixel(image):  # current version of 2x2 pixel cross-correlation within 
     return ma.stack((topleft__, g__, dy__, dx__))  # 2D dert array
 
 
-def image_to_blobs(image, verbose=False):
+def image_to_blobs(image, verbose=False, render=False, rendering_zoom=None):
     if verbose:
         start_time = time()
         print("Converting to image to blobs...")
@@ -79,6 +102,9 @@ def image_to_blobs(image, verbose=False):
     stack_ = deque()  # buffer of running vertical stacks of Ps
     height, width = dert__.shape[1:]
 
+    if render:
+        streamer = Img2BlobStreamer(frame, zoom=rendering_zoom)
+
     for y in range(height):  # first and last row are discarded
         if verbose:
             print(f"\rProcessing line {y}/{height}", end="")
@@ -88,12 +114,23 @@ def image_to_blobs(image, verbose=False):
         P_ = scan_P_(P_, stack_, frame)  # vertical clustering, adds P up_connects and _P down_connect_cnt
         stack_ = form_stack_(P_, frame, y)
 
+        if render:
+            streamer.update(y)
+            streamer.render()
+
     while stack_:  # frame ends, last-line stacks are merged into their blobs
         form_blob(stack_.popleft(), frame)
-    find_adjacent(frame)  # add adj_blob_ to each blob
+    # find_adjacent(frame)  # add adj_blob_ to each blob
 
     if verbose:
-        print(f"\nImage has been successfully converted to blobs in {time() - start_time:.3} seconds")
+        nblobs = len(frame['blob__'])
+        print(f"\nImage has been successfully converted to "
+              f"{nblobs} blob{'s' if nblobs != 1 else 0} in "
+              f"{time() - start_time:.3} seconds")
+    if render:
+        streamer.update(y)
+        streamer.render()
+        streamer.stop()
 
     return frame  # frame of blobs
 
@@ -217,6 +254,7 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
         if not up_connect_:
             # initialize new stack for each input-row P that has no connections in higher row, as in the whole top row:
             blob = dict(Dert=dict(I=0, G=0, Dy=0, Dx=0, S=0, Ly=0), box=[y, x0, xn], stack_=[], sign=s, open_stacks=1)
+            frame['blob__'].append(blob)
             new_stack = dict(I=I, G=G, Dy=0, Dx=Dx, S=L, Ly=1, y0=y, Py_=[P], blob=blob, down_connect_cnt=0, sign=s)
             blob['stack_'].append(new_stack)
 
@@ -256,6 +294,7 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
                                     stack['blob'] = blob  # blobs in other up_connects are refs to blob in first up_connect
                                     blob['stack_'].append(stack)  # buffer of merged root stacks.
 
+                            frame['blob__'].pop(frame['blob__'].index(up_connect['blob']))  # remove merged blob from list
                             up_connect['blob'] = blob
                             blob['stack_'].append(up_connect)
                         blob['open_stacks'] -= 1  # overlap with merged blob.
@@ -299,9 +338,9 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
         if x0 == 0 or xn == frame['dert__'].shape[2] or y0 == 0 or yn == frame['dert__'].shape[1]:
             fopen = 1
 
-        blob_map = np.ones((frame['dert__'].shape[1], frame['dert__'].shape[2])).astype('bool')
-        blob_map[y0:yn, x0:xn] = mask
-        margin = form_margin(blob_map, diag=blob['sign'])
+        # blob_map = np.ones((frame['dert__'].shape[1], frame['dert__'].shape[2])).astype('bool')
+        # blob_map[y0:yn, x0:xn] = mask
+        # margin = form_margin(blob_map, diag=blob['sign'])
 
         blob.pop('open_stacks')
         blob.update(root_dert__=frame['dert__'],
@@ -309,15 +348,13 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
                     dert__=dert__,
                     adj_blob_=[[], []],
                     fopen=fopen,
-                    margin=[blob_map, margin]
+                    #margin=[blob_map, margin]
                     )
         frame.update(I=frame['I'] + blob['Dert']['I'],
                      G=frame['G'] + blob['Dert']['G'],
                      Dy=frame['Dy'] + blob['Dert']['Dy'],
                      Dx=frame['Dx'] + blob['Dert']['Dx'])
-
-        frame['blob__'].append(blob)
-
+        # frame['blob__'].append(blob)
 
 def find_adjacent(frame):  # scan_blob__? draft, adjacents are blobs directly next to _blob
     '''
@@ -350,7 +387,7 @@ def find_adjacent(frame):  # scan_blob__? draft, adjacents are blobs directly ne
                 if margin_AND.any():  # at least one blob's margin element is in _blob: blob is adjacent
 
                     if np.count_nonzero(margin_AND) == np.count_nonzero(margin_map) and np.count_nonzero(margin_AND) != 0:
-                        # all of blob margin is in _blob: _blob is external
+                        # all of blob margin is in _blob: _blob is external or blob is open
                         if blob not in _adj_blob_[0]:
                             _adj_blob_[0].append(blob)
                             if blob['fopen'] == 1:  # this should not happen, internal blob cannot be open?
@@ -452,13 +489,17 @@ if __name__ == '__main__':
     argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon_eye.jpeg')
     argument_parser.add_argument('-v', '--verbose', help='print details, useful for debugging', type=int, default=0)
     argument_parser.add_argument('-n', '--intra', help='run intra_blobs after frame_blobs', type=int, default=0)
+    argument_parser.add_argument('-r', '--render', help='render the process', type=int, default=0)
+    argument_parser.add_argument('-z', '--zoom', help='zooming ratio when rendering', type=float, default=None)
     arguments = vars(argument_parser.parse_args())
     image = imread(arguments['image'])
     verbose = arguments['verbose']
     intra = arguments['intra']
+    render = arguments['render']
+    rendering_zoom = arguments['zoom']
 
     start_time = time()
-    frame = image_to_blobs(image, verbose)
+    frame = image_to_blobs(image, verbose, render, rendering_zoom)
 
     if intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
 
@@ -499,14 +540,26 @@ if __name__ == '__main__':
     else:
         print(end_time)
     pass
-# DEBUG -------------------------------------------------------------------
-
-'''
+    # DEBUG -------------------------------------------------------------------
+    """
+    print("Drawing blobs...")
+    blob_ = frame['blob__']
+    blob_.sort(key=lambda blob: blob['Dert']['S'], reverse=True)
+    for i in range(20):
+        frame['blob__'] = [blob_[i]]
+        imwrite(f"images/raccoon_blobs/{i}.bmp",
+                map_frame_binary(frame,
+                                 sign_map={
+                                     1: WHITE,  # 2x2 gblobs
+                                     0: BLACK
+                                 }))
+    """
+    '''
     imwrite("images/gblobs.bmp",
         map_frame_binary(frame,
                          sign_map={
                              1: WHITE,  # 2x2 gblobs
                              0: BLACK
                          }))
-'''
-# END DEBUG ---------------------------------------------------------------
+    '''
+    # END DEBUG ---------------------------------------------------------------
