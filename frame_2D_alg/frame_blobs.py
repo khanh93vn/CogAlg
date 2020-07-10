@@ -24,6 +24,7 @@ import sys
 import numpy as np
 import numpy.ma as ma
 
+from .frame_class import CompositeStructure
 # from comp_pixel import comp_pixel
 from stream import Img2BlobStreamer
 from utils import (
