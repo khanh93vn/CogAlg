@@ -58,10 +58,10 @@ class Img2BlobStreamer(Streamer):
     def update(self, y):
         for blob in self.frame['blob__']:
             if blob not in self.complete_blobs:
-                if 'open_stacks' in blob:  # unterminated blob still got open_stacks
-                    blob_box = blob['box'][0], y + 1, *blob['box'][1:]
+                if blob.open_stacks != 0:  # unterminated blob still got open_stacks
+                    blob_box = blob.box[0], y + 1, *blob.box[1:]
                 else:
-                    blob_box = blob['box']
+                    blob_box = blob.box
                     self.complete_blobs.append(blob)
                 # Check for newly terminated blobs
                 blob_img = draw_blob(blob, blob_box=blob_box)
