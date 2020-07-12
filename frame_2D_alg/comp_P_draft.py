@@ -22,14 +22,17 @@ from time import time
    Double edge lines: assumed match between edges of high-deviation intensity, no need for cross-comp?
    secondary cross-comp of low-deviation blobs?   P comb -> intra | inter comp eval?
    
-   radial comp x co-internal blobs: 
+   radial comparison extension for co-internal blobs: 
    ! sign comp x sum( adj_blob_) -> intra_comp value, isolation value, cross-sign merge if weak, else:
    = sign comp x ind( adj_adj_blob_) -> same-sign merge | composition:
    
-   borrow = adj_G * rS: default sum div_comp S -> relative area = distance to adjj_blob_
-   internal sum comp if mS: in thin lines?, div_comp G -> raG: local contrast,
-   isolation = G + (rS * decay) * raG? adjj blob merge | composition:
-   ->
+   borrow = adj_G * rS: default sum div_comp S -> relative area and distance to adjj_blob_
+   internal sum comp if mS: in thin lines only? comp_norm_G or div_comp_G -> rG?
+   isolation = decay + contrast: 
+   G - G * (rS * ave_rG: decay) - (rS * adj_G: contrast, = lend | borrow, no need to compare vG?) 
+   
+   if isolation: cross adjj_blob composition eval, 
+   else:         cross adjj_blob merge eval:
    blob merger if internal match (~raG) - isolation, rdn external match:  
    blob compos if external match (~rS?) + isolation, 
    
@@ -58,10 +61,10 @@ def comp_P(ortho, P, _P, DdX):  # forms vertical derivatives of P params, and co
 
     s, x0, (G, M, Dx, Dy, L), derts_ = P  # ext: X, new: L, dif: Dx, Dy -> G, no comp of inp I in top dert?
     _s, _x0, (_G, _M, _Dx, _Dy, _L), _derts_, _dX = _P  # params per comp_branch, S x branch if min n?
-
-    # or redefine Ps by recomputed dx: different from decomposed, no vertical comp?
-    # no immediate redirection by input P d_ave_x: may not be in blob? then skip?
-
+    '''
+    redefine Ps by recomputed dx: different from decomposed, no vertical comp?
+    rescan dert by input P d_ave_x: skip if not in blob?
+    '''
     xn = x0 + L-1;  _xn = _x0 + _L-1
     mX = min(xn, _xn) - max(x0, _x0)  # overlap: abs proximity, cumulative binary positional match | miss:
     dX = abs(x0 - _x0) + abs(xn - _xn)  # offset, or max_L - overlap: abs distance?
