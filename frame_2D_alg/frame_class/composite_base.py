@@ -2,14 +2,19 @@
 A base class for all composite structure.
 """
 
+import weakref
 from numbers import Number
 
 
 NoneType = type(None)
 
 _methods_template = '''
-def pack(self{param_args}):
-    {assignments}
+@property
+def id(self):
+    return self._id
+    
+def pack(self{pack_args}):
+    {pack_assignments}
     
 def unpack(self):
     return ({param_vals})
@@ -32,35 +37,39 @@ def __repr__(self):
 class MetaComposite(type):
 
     def __new__(mcs, typename, bases, attrs):  # called right before a new class is created
-        params = tuple(attr for attr in attrs if not attr.startswith('_'))
+        params = tuple(attr for attr in attrs
+                       if not attr.startswith('_')
+                       and not callable(attr))
         numeric_params = tuple(param for param in params
                                if issubclass(attrs[param], Number))
 
+        # Generate methods
         methods_definitions = _methods_template.format(
             typename=typename,
             params=str(params),
             param_vals=', '.join(f'self.{param}'
                                  for param in params),
-            param_args=', '.join(param for param in ('', *params)),
-            assignments='; '.join(f'self.{param} = {param}'
+            pack_args=', '.join(param for param in ('', *params)),
+            pack_assignments='; '.join(f'self.{param} = {param}'
                                   for param in params)
-                        if params else 'pass',
+                             if params else 'pass',
             accumulations='; '.join(f"self.{param} += "
                                     f"kwargs.get('{param}', 0)"
                                     for param in numeric_params)
                           if params else 'pass',
             repr_fmt=', '.join(f'{param}=%r' for param in params),
-        ); print(methods_definitions)
+        )
         namespace = dict(print=print)
         exec(methods_definitions, namespace)
         namespace.pop('__builtins__')
         attrs.update(namespace)
         for param in params:
-            attrs['_'+param] = attrs.pop(param)
-        attrs['params'] = params
-        attrs['numeric_params'] = numeric_params
+            attrs[param + '_type'] = attrs.pop(param)
+        # attrs['params'] = params
+        # attrs['numeric_params'] = numeric_params
 
-        attrs['__slots__'] = ('_id', *params)
+        attrs['__slots__'] = (('_id', 'hid', *params, '__weakref__')
+                              if not bases else ('_id', 'hid', *params))
         cls = super().__new__(mcs, typename, bases, attrs)
         cls._instances = []
         return cls
@@ -68,15 +77,19 @@ class MetaComposite(type):
     def __call__(cls, *args, **kwargs):
         instance = super().__call__(*args, **kwargs)
 
-        for k in cls.__slots__:
-            if k != '_id':
-                setattr(instance, k,
-                        kwargs.get(k, getattr(cls, '_' + k)()))
+        for param in cls.__slots__[2:]:  # Exclude _id and __weakref__
+            setattr(instance, param,
+                    kwargs.get(param,
+                               getattr(cls, param + '_type')()))
 
         instance._id = len(cls._instances)
-        cls._instances.append(instance)
+        cls._instances.append(weakref.ref(instance))
+        instance.hid = None  # higher composite structure's id
 
         return instance
+
+    def get_cs(cls, cs_id):
+        return cls._instances[cs_id]()
 
 
 class CompositeStructure(metaclass=MetaComposite):
@@ -85,5 +98,4 @@ class CompositeStructure(metaclass=MetaComposite):
 
 if __name__ == "__main__":  # for debugging
     from sys import getsizeof as size
-    pass
-
+    size(CompositeStructure)

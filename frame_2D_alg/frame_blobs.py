@@ -24,10 +24,11 @@ import sys
 import numpy as np
 import numpy.ma as ma
 
-from frame_class import CompositeStructure, NoneType
+from frame_class import CompositeStructure, Binder, NoneType
 # from comp_pixel import comp_pixel
 from stream import Img2BlobStreamer
 from utils import (
+    pairwise,
     imread, imwrite, map_frame_binary,
     WHITE, BLACK,
 )
@@ -142,22 +143,28 @@ def image_to_blobs(image, verbose=False, render=False, rendering_zoom=None):
     if render:
         streamer = Img2BlobStreamer(frame, zoom=rendering_zoom)
 
+    stack_binder = Binder(Cstack)
+
     for y in range(height):  # first and last row are discarded
         if verbose:
             print(f"\rProcessing line {y+1}/{height}", end="")
             sys.stdout.flush()
 
-        P_ = form_P_(dert__[:, y].T)  # horizontal clustering
-        P_ = scan_P_(P_, stack_, frame)  # vertical clustering, adds P up_connects and _P down_connect_cnt
-        stack_ = form_stack_(P_, frame, y)
+        P_binder = Binder(CP)  # binder needs data about composite structures of the same level
 
+        P_ = form_P_(dert__[:, y].T, P_binder)  # horizontal clustering
+        P_ = scan_P_(P_, stack_, frame, P_binder)  # vertical clustering, adds P up_connects and _P down_connect_cnt
+        stack_ = form_stack_(P_, frame, y)
+        stack_binder.bind_from_lower(P_binder)
         if render:
             streamer.update(y)
             streamer.render()
 
     while stack_:  # frame ends, last-line stacks are merged into their blobs
         form_blob(stack_.popleft(), frame)
-    # find_adjacent(frame)  # add adj_blob_ to each blob
+    blob_binder = Binder(CBlob)
+    blob_binder.bind_from_lower(stack_binder)
+    find_adjacent(blob_binder)  # add adj_blob_ to each blob
 
     if verbose:
         nblobs = len(frame['blob__'])
@@ -183,7 +190,7 @@ dert: tuple of derivatives per pixel, initially (p, dy, dx, g), will be extended
 Dert: params of composite structures (P, stack, blob): summed dert params + dimensions: vertical Ly and area S
 '''
 
-def form_P_(dert__):  # horizontal clustering and summation of dert params into P params, per row of a frame
+def form_P_(dert__, binder):  # horizontal clustering and summation of dert params into P params, per row of a frame
     # P is a segment of same-sign derts in horizontal slice of a blob
 
     P_ = deque()  # row of Ps
@@ -210,9 +217,12 @@ def form_P_(dert__):  # horizontal clustering and summation of dert params into 
     P = CP(I=I, G=G, Dy=Dy, Dx=Dx, L=L, x0=x0, sign=_s)  # last P in a row
     P_.append(P)
 
+    for _P, P in pairwise(P_):
+        binder.bind(_P, P)
+
     return P_
 
-def scan_P_(P_, stack_, frame):  # merge P into higher-row stack of Ps which have same sign and overlap by x_coordinate
+def scan_P_(P_, stack_, frame, binder):  # merge P into higher-row stack of Ps which have same sign and overlap by x_coordinate
     '''
     Each P in P_ scans higher-row _Ps (in stack_) left-to-right, testing for x-overlaps between Ps and same-sign _Ps.
     Overlap is represented as up_connect in P and is added to down_connect_cnt in _P. Scan continues until P.x0 >= _P.xn:
@@ -244,12 +254,16 @@ def scan_P_(P_, stack_, frame):  # merge P into higher-row stack of Ps which hav
                     if P.sign == stack.sign:  # sign match
                         stack.down_connect_cnt += 1
                         up_connect_.append(stack)  # buffer P-connected higher-row stacks into P' up_connect_
+                    else:
+                        binder.bind(_P, P)
 
             else:  # -G, check for orthogonal overlaps only: 4 directions, edge blobs are more selective
                 if _x0 < xn and x0 < _xn:  # x overlap between loaded P and _P
                     if P.sign == stack.sign:  # sign match
                         stack.down_connect_cnt += 1
                         up_connect_.append(stack)  # buffer P-connected higher-row stacks into P' up_connect_
+                    else:
+                        binder.bind(_P, P)
 
             if xn < _xn:  # _P overlaps next P in P_
                 next_P_.append((P, up_connect_))  # recycle _P for the next run of scan_P_
@@ -292,6 +306,7 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
             blob = CBlob(Dert=dict(I=0, G=0, Dy=0, Dx=0, S=0, Ly=0), box=[y, x0, xn], stack_=[], sign=s, open_stacks=1)
             frame['blob__'].append(blob)
             new_stack = Cstack(I=I, G=G, Dy=0, Dx=Dx, S=L, Ly=1, y0=y, Py_=[P], blob=blob, down_connect_cnt=0, sign=s)
+            new_stack.hid = blob.id
             blob.stack_.append(new_stack)
 
         else:
@@ -307,6 +322,7 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
                 blob = up_connect_[0].blob
                 # initialize new_stack with up_connect blob:
                 new_stack = Cstack(I=I, G=G, Dy=0, Dx=Dx, S=L, Ly=1, y0=y, Py_=[P], blob=blob, down_connect_cnt=0, sign=s)
+                new_stack.hid = blob.id
                 blob.stack_.append(new_stack)  # stack is buffered into blob
 
                 if len(up_connect_) > 1:  # merge blobs of all up_connects
@@ -328,16 +344,18 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
                             for stack in stack_:
                                 if not stack is up_connect:
                                     stack.blob = blob  # blobs in other up_connects are refs to blob in first up_connect
+                                    stack.hid = blob.id
                                     blob.stack_.append(stack)  # buffer of merged root stacks.
 
                             frame['blob__'].pop(frame['blob__'].index(up_connect.blob))  # remove merged blob from list
                             up_connect.blob = blob
+                            up_connect.hid = blob.id
                             blob.stack_.append(up_connect)
                         blob.open_stacks -= 1  # overlap with merged blob.
 
         blob.box[1] = min(blob.box[1], x0)  # extend box x0
         blob.box[2] = max(blob.box[2], xn)  # extend box xn
-
+        P.hid = new_stack.id
         next_stack_.append(new_stack)
 
     return next_stack_  # input for the next line of scan_P_
@@ -379,7 +397,7 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
         blob.root_dert__=frame['dert__']
         blob.box=(y0, yn, x0, xn)
         blob.dert__=dert__
-        blob.adj_blob_=[[], []]
+        blob.adj_blob_= [[], [], 0, 0]
         blob.fopen=fopen
         # blob.margin=[blob_map, margin]
 
@@ -389,68 +407,35 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
                      Dx=frame['Dx'] + blob.Dert['Dx'])
         # frame['blob__'].append(blob)
 
-def find_adjacent(frame):  # scan_blob__? draft, adjacents are blobs directly next to _blob
+
+def find_adjacent(blob_binder):  # scan_blob__? draft, adjacents are blobs directly next to _blob
     '''
     2D version of scan_P_, but primarily vertical and checking for opposite-sign adjacency vs. same-sign overlap
     '''
-    blob_adj__ = []  # [(blob, adj_blob__)] to replace blob__
-    while frame['blob__']:  # outer loop
-
-        _blob = frame['blob__'].pop(0)  # pop left outer loop's blob
-        _y0, _yn, _x0, _xn = _blob.box
-        if 'adj_blob_' in _blob:  # reuse adj_blob_ if any
-            _adj_blob_ = _blob.adj_blob_
-        else:
-            _adj_blob_ = [[], []]  # [adj_blobs], [positions]: 0 = internal to current blob, 1 = external, 2 = open
-
-        i = 0  # inner loop counter
-        while i <= len(frame['blob__']) - 1:  # vertical overlap between _blob and blob + margin
-
-            blob = frame['blob__'][i]  # inner loop's blob
-            if 'adj_blob_' in blob:
-                adj_blob_ = blob.adj_blob_
+    for blob_id1, blob_id2 in blob_binder.adj_pairs:
+        assert blob_id1 < blob_id2
+        blob1 = CBlob.get_cs(blob_id1)
+        blob2 = CBlob.get_cs(blob_id2)
+        blob1.adj_blob_[0].append(blob2)
+        blob2.adj_blob_[0].append(blob1)
+        blob1.adj_blob_[2] += blob2.Dert['S']
+        blob2.adj_blob_[2] += blob1.Dert['S']
+        blob1.adj_blob_[3] += blob2.Dert['G']
+        blob2.adj_blob_[3] += blob1.Dert['G']
+        if blob1.box[1] < blob2.box[1]:  # yn1 < yn2: blob1 is potentially internal to blob2
+            if blob1.fopen:
+                blob1.adj_blob_[1].append(2)  # 2 for open
+                blob2.adj_blob_[1].append(2)
             else:
-                adj_blob_ = [[], []]  # [adj_blobs], [positions]: 0 = internal to current blob, 1 = external, 2 = open
-            y0, yn, x0, xn = blob.box
-
-            if y0 <= _yn and blob.sign != _blob.sign:  # adjacent blobs have opposite sign and vertical overlap with _blob + margin
-                _blob_map = _blob.margin[0]
-                margin_map = blob.margin[1]
-                margin_AND = np.logical_and(margin_map, ~_blob_map)
-                if margin_AND.any():  # at least one blob's margin element is in _blob: blob is adjacent
-
-                    if np.count_nonzero(margin_AND) == np.count_nonzero(margin_map) and np.count_nonzero(margin_AND) != 0:
-                        # all of blob margin is in _blob: _blob is external or blob is open
-                        if blob not in _adj_blob_[0]:
-                            _adj_blob_[0].append(blob)
-                            if blob.fopen == 1:  # this should not happen, internal blob cannot be open?
-                                _adj_blob_[1].append(2)  # 2 for open
-                            else:
-                                _adj_blob_[1].append(0)  # 0 for internal
-                        if _blob not in adj_blob_[0]:
-                            adj_blob_[0].append(_blob)
-                            adj_blob_[1].append(1)  # 1 for external
-
-                    else:  # _blob is internal or open
-                        if blob not in _adj_blob_[0]:
-                            _adj_blob_[0].append(blob)
-                            _adj_blob_[1].append(1)  # 1 for external
-                        if _blob not in adj_blob_[0]:
-                            adj_blob_[0].append(_blob)
-                            if _blob.fopen == 1:
-                                adj_blob_[1].append(2)  # 2 for open
-                            else:
-                                adj_blob_[1].append(0)  # 0 for internal
-
-            blob.adj_blob_ = adj_blob_  # pack adj_blob_ to _blob
-            frame['blob__'][i] = blob  # reassign blob in inner loop
-            _blob.adj_blob_ = _adj_blob_  # pack _adj_blob_ into _blob
-            i += 1
-        blob_adj__.append(_blob)  # repack processed _blob into blob__
-
-    frame['blob__'] = blob_adj__  # update empty frame['blob__']
-
-    return frame
+                blob1.adj_blob_[1].append(0)  # 0 for internal
+                blob2.adj_blob_[1].append(1)  # 1 for external
+        else:  # blob2 is potentially internal to blob1
+            if blob2.fopen:
+                blob1.adj_blob_[1].append(2)
+                blob2.adj_blob_[1].append(2)
+            else:
+                blob1.adj_blob_[1].append(0)
+                blob2.adj_blob_[1].append(1)
 
 
 def form_margin(blob_map, diag):  # get 1-pixel margin of blob, in 4 or 8 directions, to find adjacent blobs
