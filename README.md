@@ -11,7 +11,7 @@ For excellent popular introductions to cognition-as-prediction thesis see “On
 
 In the next section, I define similarity for the simplest inputs, then describe hierarchically recursive algorithm 
 of search for similarity among incrementally complex inputs: lower-level patterns. The following two sections compare my scheme to ANN, BNN, and CapsNet. 
-This is an open project, we need help with design and implementation: [WIKI](https://github.com/boris-kz/CogAlg/wiki). I have a prize for contributions or monthly payment if there is a track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md). 
+This is an open project, we need help with design and implementation: [WIKI](https://github.com/boris-kz/CogAlg/wiki). I have awards for contributions or monthly payment if there is a track record, see [CONTRIBUTING](https://github.com/boris-kz/CogAlg/blob/master/CONTRIBUTING.md). 
 
 
 ### Outline of my approach
@@ -20,6 +20,8 @@ This is an open project, we need help with design and implementation: [WIKI](htt
 Proposed algorithm is a first-principles alternative to deep learning, neither statistical nor neuromorphic. It is designed to discover hierarchical patterns in recursively extended pipeline, with higher-composition patterns encoded on higher stages. Each stage of this pipeline has two feedforward sub-stages:
 - input cross-comparison over selectively incremental distance and derivation,
 - pattern composition: parameterized connectivity clustering by resulting match.
+
+Please see [whole-system diagram](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/Whole-system%20hierarchy.png)
 
 First-level comparands must be sensory inputs at the limit of resolution: adjacent pixels of video or equivalents in other modalities. All symbolic data is encoded by some prior cognitive process. To discover meaningful patterns in a set of symbols, they must be decoded before being cross-compared. The difficulty of decoding is exponential with the level of encoding, thus hierarchical learning that starts with raw sensory input is by far the easiest to implement (part 0).
 
@@ -43,9 +45,11 @@ Resulting hierarchy is a dynamic pipeline: terminated patterns are outputted for
 
 
 
-I see all statistical learning as [centroid clustering](https://en.wikipedia.org/wiki/Cluster_analysis#Centroid-based_clustering), including neural nets. Basic ANN is multi-layer perceptron: each node weighs the inputs at synapses, then sums and thresholds them into output. This normalized sum of inputs is their centroid, which is an input of the next layer. Output of the top layer is compared to some template, forming an error. With Stochastic Gradient Descent, that error backpropagates, converting initially random weights into meaningful values. This is a form of learning, but I have basic problems with the process:
+From a pattern discovery perspective, all learning consists of input comparison followed by future input selection: clustering. In my scheme both are primarily lateral: within a level, while in statistical learning both comparison and clustering are vertical: between the layers. That makes it some form of [centroid clustering](https://en.wikipedia.org/wiki/Cluster_analysis#Centroid-based_clustering), which conceptually includes neural nets.
 
-- Learning is driven by feedback of input-to-output comparison. This is seductively simple, but it takes tens of thousands of cycles to form accurate representations. That's because summation is a loss of resolution, which means the output becomes exponentially less precise with each added layer. My cross-comp and parametrized clustering is far more complex per layer, but the output is immediately meaningful. My feedback adjusts layer-wide hyper-parameters: thresholds for input segmentation into patterns. 
+Basic ANN is multi-layer perceptron: each node weighs the inputs at synapses, then sums and thresholds them into output. This normalized sum of inputs is their centroid, which becomes an input to next layer. Output of top layer is compared to some template, forming an error. With Stochastic Gradient Descent, that error backpropagates, converting initially random weights into meaningful values. This is a form of learning, but I have basic problems with the process:
+
+- Vertical learning, by feedback of error, takes tens of thousands of cycles to form accurate representations. That's because intermediate summation is a loss of resolution, which means the output becomes exponentially less precise with each added layer. My cross-comp and parametrized clustering is far more complex per layer, but the output is immediately meaningful. My feedback adjusts layer-wide hyper-parameters: thresholds for input segmentation into patterns. 
 
 - Both initial weights and sampling that feeds SGD are randomized: a zero-knowledge option. But we do have prior knowledge for any raw data in real space-time: proximity predicts similarity, thus search should proceed with incremental comparison range and input composition. Also driven by random variation are methods like RBM and GAN. Which is antithetical to intelligence, there is nothing random in my scheme. Rather, my variation is pattern projection by co-derived miss: projected input = input - (d_input * d_coordinate) / 2.
 

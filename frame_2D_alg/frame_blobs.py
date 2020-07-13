@@ -114,19 +114,24 @@ class CBlob(CompositeStructure):
 # prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
 # postfix '_' denotes array name, vs. same-name elements of that array
 
-def comp_pixel(image):  # current version of 2x2 pixel cross-correlation within image
+def comp_pixel(image):  # 2x2 pixel cross-correlation within image,
+    # see comp_pixel_versions file for other versions and more explanation
 
-    # input slices to a sliding 2x2 kernel:
+    # input slices into sliding 2x2 kernel, each slice is a shifted 2D frame of grey-scale pixels:
     topleft__ = image[:-1, :-1]
     topright__ = image[:-1, 1:]
-    botleft__ = image[1:, :-1]
-    botright__ = image[1:, 1:]
+    bottomleft__ = image[1:, :-1]
+    bottomright__ = image[1:, 1:]
 
-    dy__ = ((botleft__ + botright__) - (topleft__ + topright__))  # same as diagonal from left
-    dx__ = ((topright__ + botright__) - (topleft__ + botleft__))  # same as diagonal from right
-    g__ = np.hypot(dy__, dx__)  # gradient per kernel
+    Gy__ = ((bottomleft__ + bottomright__) - (topleft__ + topright__))
+    # decomposition of two diagonal differences into Gy, same as diagonal from left
+    Gx__ = ((topright__ + bottomright__) - (topleft__ + bottomleft__))
+    # decomposition of two diagonal differences into Gx, same as diagonal from right
 
-    return ma.stack((topleft__, g__, dy__, dx__))  # 2D dert array
+    G__ = np.hypot(Gy__, Gx__)  # central gradient per kernel, logically at diagonal crossing between vertex pixels
+
+    return ma.stack((topleft__, G__, Gy__, Gx__))  # tuple of 2D arrays per param of dert (derivatives' tuple)
+    # renamed dert__= (i__, g__, dy__, dx__) for readability in functions below
 
 
 def image_to_blobs(image, verbose=False, render=False, rendering_zoom=None):
@@ -185,7 +190,6 @@ Parameterized connectivity clustering functions below:
 - form_stack combines these overlapping Ps into vertical stacks of Ps, with 1 up_P to 1 down_P
 - form_blob merges terminated or forking stacks into blob, removes redundant representations of the same blob 
   by multiple forked P stacks, then checks for blob termination and merger into whole-frame representation.
-
 dert: tuple of derivatives per pixel, initially (p, dy, dx, g), will be extended in intra_blob
 Dert: params of composite structures (P, stack, blob): summed dert params + dimensions: vertical Ly and area S
 '''
@@ -481,17 +485,19 @@ def accum_Dert(Dert: dict, **params) -> None:
     Dert.update({param: Dert[param] + value for param, value in params.items()})
 
 
-def update_dert(blob):  # Update blob dert with new params
+def update_dert(blob):  # add idy, idx, m to dert__
 
-    new_dert__ = np.zeros((7, blob.dert__.shape[1], blob.dert__.shape[2]))
-    # initialize all params with 0s, including dert__[1]: idy, dert__[2]: idx, dert__[6]: m
+    new_dert__ = np.zeros((7, blob.dert__.shape[1], blob.dert__.shape[2])) # initialize with 0
     new_dert__ = ma.array(new_dert__, mask=True)  # create masked array
     new_dert__.mask = blob.dert__[0].mask
 
     new_dert__[0] = blob.dert__[0]  # i
+    # new_dert__[1] = idy
+    # new_dert__[2] = idx
     new_dert__[3] = blob.dert__[1]  # g
     new_dert__[4] = blob.dert__[2]  # dy
     new_dert__[5] = blob.dert__[3]  # dx
+    # new_dert__[6] = m
 
     blob.dert__ = new_dert__.copy()
 
@@ -522,34 +528,35 @@ if __name__ == '__main__':
     if intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
 
         from intra_blob import *
-        deep_frame = frame, frame
-        bcount = 0
-        deep_blob_i_ = []
-        deep_layers = []
-        layer_count = 0
 
-        for blob in frame['blob__']:
-            bcount += 1
-            # print('Processing blob number ' + str(bcount))
-            # blob.update({'fcr': 0, 'fig': 0, 'rdn': 0, 'rng': 1, 'ls': 0, 'sub_layers': []})
+        deep_frame = frame, frame # why 2 instance of frame to deep_frame initialization?
+        deep_blob_i_ = []  # index of a blob with deep layers
+        deep_layers = [[]]*len(frame['blob__'])  # for visibility only
 
-            if blob.sign:
-                if blob.Dert['G'] > aveB and blob.Dert['S'] > 20 and blob.dert__.shape[1] > 3 and blob.dert__.shape[2] > 3:
+        for i, blob in enumerate(frame['blob__']):  # print('Processing blob number ' + str(bcount))
+            '''
+            Blob G: -|+ predictive value, should be lent to or borrowed from the value of adjacent blobs. 
+            High-G "edge" blobs are low-match, they are only valuable as contrast: 
+            to the extent that their negative value cancels predictive value of adjacent low-G "flat" blobs:
+            '''
+            adj_S, adj_G = blob['adj_blobs'][2,3];  S, G = blob['Dert']['S','G']
+            # value borrow from flat blob to edge blob = min of values:
+            borrow_G = min(G, adj_G * (1 - S / (S + adj_S)))
+
+            # or decay is proportional to relative adj_S,
+            # contrast is proportional to relative adj_G: * (1 - G / (G + adj_G))?
+
+            if blob['sign']:
+                if G + borrow_G > aveB and blob['dert__'].shape[1] > 3 and blob['dert__'].shape[2] > 3:  # min dimensions replace min S
                     blob = update_dert(blob)
+                    deep_layers[i] = intra_blob(blob, rdn=1, rng=.0, fig=0, fcr=0)  # +G blob' dert__' comp_g
 
-                    deep_layers.append(intra_blob(blob, rdn=1, rng=.0, fig=0, fcr=0))  # +G blob' dert__' comp_g
-                    layer_count += 1
-
-            elif -blob.Dert['G'] > aveB and blob.Dert['S'] > 6 and blob.dert__.shape[1] > 3 and blob.dert__.shape[2] > 3:
-
+            elif -G - borrow_G > aveB and blob['dert__'].shape[1] > 3 and blob['dert__'].shape[2] > 3:  # min dimensions replace min S
                 blob = update_dert(blob)
+                deep_layers[i] = intra_blob(blob, rdn=1, rng=1, fig=0, fcr=1)  # -G blob' dert__' comp_r in 3x3 kernels
 
-                deep_layers.append(intra_blob(blob, rdn=1, rng=1, fig=0, fcr=1))  # -G blob' dert__' comp_r in 3x3 kernels
-                layer_count += 1
-
-            if len(deep_layers) > 0:
-                if len(deep_layers[layer_count - 1]) > 2:
-                    deep_blob_i_.append(bcount)  # indices of blobs with deep layers
+            if deep_layers[i]: # if there are deeper layers
+                deep_blob_i_.append(i)  # indices of blobs with deep layers
 
     end_time = time() - start_time
     if verbose:
@@ -579,5 +586,5 @@ if __name__ == '__main__':
                              1: WHITE,  # 2x2 gblobs
                              0: BLACK
                          }))
-
-    # END DEBUG ---------------------------------------------------------------
+'''
+# END DEBUG ---------------------------------------------------------------
