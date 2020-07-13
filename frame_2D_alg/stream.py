@@ -33,13 +33,20 @@ class Streamer:
             cv.imshow(winname=self.winname, mat=self.img)
         else:
             y, x = self.img.shape[:2]
+            self.zoomed = cv.resize(self.img, (int(x * self.zoom),
+                                               int(y * self.zoom)))
             cv.imshow(winname=self.winname,
-                      mat=cv.resize(self.img, (int(x * self.zoom),
-                                               int(y * self.zoom))))
+                      mat=self.zoomed)
         cv.waitKey(1)
 
     def stop(self):
         cv.destroyAllWindows()
+
+    def imwrite(self, path):
+        if self.zoom is None:
+            cv.imwrite(path, self.img)
+        else:
+            cv.imwrite(path, self.zoomed)
 
 
 class Img2BlobStreamer(Streamer):

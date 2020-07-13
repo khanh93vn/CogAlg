@@ -19,12 +19,13 @@ optional arguments:
 
 from time import time
 from collections import deque
+from pathlib import Path
 
 import sys
 import numpy as np
 import numpy.ma as ma
 
-from frame_class import CompositeStructure, Binder, NoneType
+from frame_class import Cluster, Binder, NoneType
 # from comp_pixel import comp_pixel
 from stream import Img2BlobStreamer
 from utils import (
@@ -75,7 +76,7 @@ from utils import (
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 
 
-class CP(CompositeStructure):
+class CP(Cluster):
     I = int  # default type at initialization
     G = int
     Dy = int
@@ -85,7 +86,7 @@ class CP(CompositeStructure):
     sign = NoneType
 
 
-class Cstack(CompositeStructure):
+class Cstack(Cluster):
     I = int
     G = int
     Dy = int
@@ -98,7 +99,7 @@ class Cstack(CompositeStructure):
     down_connect_cnt = int
     sign = NoneType
 
-class CBlob(CompositeStructure):
+class CBlob(Cluster):
     Dert = dict
     box = list
     stack_ = list
@@ -155,7 +156,7 @@ def image_to_blobs(image, verbose=False, render=False, rendering_zoom=None):
             print(f"\rProcessing line {y+1}/{height}", end="")
             sys.stdout.flush()
 
-        P_binder = Binder(CP)  # binder needs data about composite structures of the same level
+        P_binder = Binder(CP)  # binder needs data about clusters of the same level
 
         P_ = form_P_(dert__[:, y].T, P_binder)  # horizontal clustering
         P_ = scan_P_(P_, stack_, frame, P_binder)  # vertical clustering, adds P up_connects and _P down_connect_cnt
@@ -180,6 +181,8 @@ def image_to_blobs(image, verbose=False, render=False, rendering_zoom=None):
         streamer.update(y)
         streamer.render()
         streamer.stop()
+        out_path = Path(arguments['image'])
+        streamer.imwrite(str(out_path.with_suffix('.out.jpg')))
 
     return frame  # frame of blobs
 
@@ -394,10 +397,6 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
         if x0 == 0 or xn == frame['dert__'].shape[2] or y0 == 0 or yn == frame['dert__'].shape[1]:
             fopen = 1
 
-        # blob_map = np.ones((frame['dert__'].shape[1], frame['dert__'].shape[2])).astype('bool')
-        # blob_map[y0:yn, x0:xn] = mask
-        # margin = form_margin(blob_map, diag=blob.sign)
-
         blob.root_dert__=frame['dert__']
         blob.box=(y0, yn, x0, xn)
         blob.dert__=dert__
@@ -418,8 +417,8 @@ def find_adjacent(blob_binder):  # scan_blob__? draft, adjacents are blobs direc
     '''
     for blob_id1, blob_id2 in blob_binder.adj_pairs:
         assert blob_id1 < blob_id2
-        blob1 = CBlob.get_cs(blob_id1)
-        blob2 = CBlob.get_cs(blob_id2)
+        blob1 = CBlob.get_cluster(blob_id1)
+        blob2 = CBlob.get_cluster(blob_id2)
         blob1.adj_blob_[0].append(blob2)
         blob2.adj_blob_[0].append(blob1)
         blob1.adj_blob_[2] += blob2.Dert['S']
@@ -441,42 +440,6 @@ def find_adjacent(blob_binder):  # scan_blob__? draft, adjacents are blobs direc
                 blob1.adj_blob_[1].append(0)
                 blob2.adj_blob_[1].append(1)
 
-
-def form_margin(blob_map, diag):  # get 1-pixel margin of blob, in 4 or 8 directions, to find adjacent blobs
-
-    up_margin = np.zeros_like(blob_map)
-    up_margin[:-1, :] = np.logical_and(blob_map[:-1, :], ~blob_map[1:, :])
-
-    down_margin = np.zeros_like(blob_map)
-    down_margin[1:, :] = np.logical_and(blob_map[1:, :], ~blob_map[:-1, :])
-
-    left_margin = np.zeros_like(blob_map)
-    left_margin[:, :-1] = np.logical_and(blob_map[:, :-1], ~blob_map[:, 1:])
-
-    right_margin = np.zeros_like(blob_map)
-    right_margin[:, 1:] = np.logical_and(blob_map[:, 1:], ~blob_map[:, :-1])
-
-    # combine margins:
-    margin = up_margin + down_margin + left_margin + right_margin
-
-    if diag:  # add diagonal margins
-
-        upleft_margin = np.zeros_like(blob_map)
-        upleft_margin[:-1, :-1] = np.logical_and(blob_map[:-1, :-1], ~blob_map[1:, 1:])
-
-        upright_margin = np.zeros_like(blob_map)
-        upright_margin[:-1, 1:] = np.logical_and(blob_map[:-1, 1:], ~blob_map[1:, :-1])
-
-        downleft_margin = np.zeros_like(blob_map)
-        downleft_margin[1:, :-1] = np.logical_and(blob_map[1:, :-1], ~blob_map[:-1, 1:])
-
-        downright_margin = np.zeros_like(blob_map)
-        downright_margin[1:, 1:] = np.logical_and(blob_map[1:, 1:], ~blob_map[:-1, :-1])
-
-        # combine:
-        margin = margin + upleft_margin + upright_margin + downleft_margin + downright_margin
-
-    return margin
 
 # -----------------------------------------------------------------------------
 # Utilities
@@ -539,19 +502,19 @@ if __name__ == '__main__':
             High-G "edge" blobs are low-match, they are only valuable as contrast: 
             to the extent that their negative value cancels predictive value of adjacent low-G "flat" blobs:
             '''
-            adj_S, adj_G = blob['adj_blobs'][2,3];  S, G = blob['Dert']['S','G']
+            adj_S, adj_G = blob.adj_blobs[2][3];  S, G = blob.Dert['S','G']
             # value borrow from flat blob to edge blob = min of values:
             borrow_G = min(G, adj_G * (1 - S / (S + adj_S)))
 
             # or decay is proportional to relative adj_S,
             # contrast is proportional to relative adj_G: * (1 - G / (G + adj_G))?
 
-            if blob['sign']:
-                if G + borrow_G > aveB and blob['dert__'].shape[1] > 3 and blob['dert__'].shape[2] > 3:  # min dimensions replace min S
+            if blob.sign:
+                if G + borrow_G > aveB and blob.dert__.shape[1] > 3 and blob.dert__.shape[2] > 3:  # min dimensions replace min S
                     blob = update_dert(blob)
                     deep_layers[i] = intra_blob(blob, rdn=1, rng=.0, fig=0, fcr=0)  # +G blob' dert__' comp_g
 
-            elif -G - borrow_G > aveB and blob['dert__'].shape[1] > 3 and blob['dert__'].shape[2] > 3:  # min dimensions replace min S
+            elif -G - borrow_G > aveB and blob.dert__.shape[1] > 3 and blob.dert__.shape[2] > 3:  # min dimensions replace min S
                 blob = update_dert(blob)
                 deep_layers[i] = intra_blob(blob, rdn=1, rng=1, fig=0, fcr=1)  # -G blob' dert__' comp_r in 3x3 kernels
 
@@ -579,12 +542,12 @@ if __name__ == '__main__':
                                      0: BLACK
                                  }))
     """
-
+    """
     imwrite("images/gblobs.bmp",
         map_frame_binary(frame,
                          sign_map={
                              1: WHITE,  # 2x2 gblobs
                              0: BLACK
                          }))
-'''
-# END DEBUG ---------------------------------------------------------------
+    """
+    # END DEBUG ---------------------------------------------------------------
