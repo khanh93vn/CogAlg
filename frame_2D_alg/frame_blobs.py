@@ -272,7 +272,8 @@ def scan_P_(P_, stack_, frame, binder):  # merge P into higher-row stack of Ps w
                     else:
                         binder.bind(_P, P)
 
-            if xn < _xn:  # _P overlaps next P in P_
+            if (xn < _xn or  # _P overlaps next P in P_
+                    xn == _xn and stack.sign):  # Sign taken accounted
                 next_P_.append((P, up_connect_))  # recycle _P for the next run of scan_P_
                 up_connect_ = []
                 if P_:
@@ -400,7 +401,7 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
         blob.root_dert__=frame['dert__']
         blob.box=(y0, yn, x0, xn)
         blob.dert__=dert__
-        blob.adj_blob_= [[], [], 0, 0]
+        blob.adj_blob_= []
         blob.fopen=fopen
         # blob.margin=[blob_map, margin]
 
@@ -417,28 +418,27 @@ def find_adjacent(blob_binder):  # scan_blob__? draft, adjacents are blobs direc
     '''
     for blob_id1, blob_id2 in blob_binder.adj_pairs:
         assert blob_id1 < blob_id2
-        blob1 = CBlob.get_cluster(blob_id1)
-        blob2 = CBlob.get_cluster(blob_id2)
-        blob1.adj_blob_[0].append(blob2)
-        blob2.adj_blob_[0].append(blob1)
-        blob1.adj_blob_[2] += blob2.Dert['S']
-        blob2.adj_blob_[2] += blob1.Dert['S']
-        blob1.adj_blob_[3] += blob2.Dert['G']
-        blob2.adj_blob_[3] += blob1.Dert['G']
+        blob1 = CBlob.get_instance(blob_id1)
+        blob2 = CBlob.get_instance(blob_id2)
+
+        S1 = blob1.Dert['S']
+        S2 = blob2.Dert['S']
+        G1 = blob1.Dert['G']
+        G2 = blob2.Dert['G']
         if blob1.box[1] < blob2.box[1]:  # yn1 < yn2: blob1 is potentially internal to blob2
             if blob1.fopen:
-                blob1.adj_blob_[1].append(2)  # 2 for open
-                blob2.adj_blob_[1].append(2)
+                pos12 = pos21 = 2  # 2 for open
             else:
-                blob1.adj_blob_[1].append(0)  # 0 for internal
-                blob2.adj_blob_[1].append(1)  # 1 for external
+                pos12 = 0  # 0 for internal
+                pos21 = 1  # 1 for external
         else:  # blob2 is potentially internal to blob1
             if blob2.fopen:
-                blob1.adj_blob_[1].append(2)
-                blob2.adj_blob_[1].append(2)
+                pos12 = pos21 = 2
             else:
-                blob1.adj_blob_[1].append(0)
-                blob2.adj_blob_[1].append(1)
+                pos12, pos21 = 1, 0
+
+        blob1.adj_blob_.append((blob2, pos12, S2, G2))
+        blob2.adj_blob_.append((blob1, pos21, S1, G1))
 
 
 # -----------------------------------------------------------------------------

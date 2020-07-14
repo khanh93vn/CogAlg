@@ -1,2 +1,2 @@
-from .composite_base import *
+from .cluster_base import *
 from .bind import *

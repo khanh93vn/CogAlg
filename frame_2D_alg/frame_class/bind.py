@@ -61,7 +61,7 @@ class Binder:
         """
         for lid1, lid2 in sub_binder.adj_pairs:  # iterate over lower's adj pairs
             # get instances lower cluster by id
-            lcs1, lcs2 = (sub_binder.cluster_cls.get_cluster(lid1),
-                          sub_binder.cluster_cls.get_cluster(lid2))
+            lcs1, lcs2 = (sub_binder.cluster_cls.get_instance(lid1),
+                          sub_binder.cluster_cls.get_instance(lid2))
             # get corresponding higher cluster ids and bind them
             self.bind_by_id(lcs1.hid, lcs2.hid)

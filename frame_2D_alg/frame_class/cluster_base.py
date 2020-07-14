@@ -123,7 +123,7 @@ class MetaCluster(type):
 
         return instance
 
-    def get_cluster(cls, cluster_id):
+    def get_instance(cls, cluster_id):
         return cls._instances[cluster_id]()
 
 
@@ -159,7 +159,7 @@ class Cluster(metaclass=MetaCluster):
     0 1
 
     >>> # look for object by instance's ids
-    >>> print(CP.get_cluster(0), CP.get_cluster(1))
+    >>> print(CP.get_instance(0), CP.get_instance(1))
     CP(L=1, I=5) CP(L=0, I=0)
 
     >>> P2.L += 1; P2.I += 10  # assignment, fields are mutable
