@@ -433,6 +433,7 @@ def assign_adjacent(blob_binder):  # scan_blob__? draft, adjacents are blobs dir
             else:
                 pose12, pose21 = 1, 0
 
+        # bilateral assignments
         blob1.adj_blobs[0].append((blob2, pose21))
         blob2.adj_blobs[0].append((blob1, pose12))
         blob1.adj_blobs[1] += blob2.Dert['S']
