@@ -1,8 +1,8 @@
 """
-Provide Binder object for frame_blobs.py
+Provide AdjBinder object for frame_blobs.py
 """
 
-class Binder:
+class AdjBinder:
     """
     Bind different-sign adjacent clusters of the same level.
 

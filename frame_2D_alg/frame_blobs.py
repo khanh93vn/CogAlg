@@ -25,7 +25,7 @@ import sys
 import numpy as np
 import numpy.ma as ma
 
-from frame_class import Cluster, Binder, NoneType
+from frame_class import Cluster, AdjBinder, NoneType
 # from comp_pixel import comp_pixel
 from stream import Img2BlobStreamer
 from utils import (
@@ -107,7 +107,7 @@ class CBlob(Cluster):
     open_stacks = int
     root_dert__ = object
     dert__ = object
-    adj_blob_ = list
+    adj_blobs = list
     fopen = bool
     margin = list
 
@@ -149,14 +149,14 @@ def image_to_blobs(image, verbose=False, render=False, rendering_zoom=None):
     if render:
         streamer = Img2BlobStreamer(frame, zoom=rendering_zoom)
 
-    stack_binder = Binder(Cstack)
+    stack_binder = AdjBinder(Cstack)
 
     for y in range(height):  # first and last row are discarded
         if verbose:
             print(f"\rProcessing line {y+1}/{height}", end="")
             sys.stdout.flush()
 
-        P_binder = Binder(CP)  # binder needs data about clusters of the same level
+        P_binder = AdjBinder(CP)  # binder needs data about clusters of the same level
 
         P_ = form_P_(dert__[:, y].T, P_binder)  # horizontal clustering
         P_ = scan_P_(P_, stack_, frame, P_binder)  # vertical clustering, adds P up_connects and _P down_connect_cnt
@@ -168,9 +168,9 @@ def image_to_blobs(image, verbose=False, render=False, rendering_zoom=None):
 
     while stack_:  # frame ends, last-line stacks are merged into their blobs
         form_blob(stack_.popleft(), frame)
-    blob_binder = Binder(CBlob)
+    blob_binder = AdjBinder(CBlob)
     blob_binder.bind_from_lower(stack_binder)
-    find_adjacent(blob_binder)  # add adj_blob_ to each blob
+    assign_adjacent(blob_binder)  # add adj_blobs to each blob
 
     if verbose:
         nblobs = len(frame['blob__'])
@@ -401,7 +401,7 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
         blob.root_dert__=frame['dert__']
         blob.box=(y0, yn, x0, xn)
         blob.dert__=dert__
-        blob.adj_blob_= []
+        blob.adj_blobs= [[], 0, 0]
         blob.fopen=fopen
         # blob.margin=[blob_map, margin]
 
@@ -412,33 +412,33 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
         # frame['blob__'].append(blob)
 
 
-def find_adjacent(blob_binder):  # scan_blob__? draft, adjacents are blobs directly next to _blob
+def assign_adjacent(blob_binder):  # scan_blob__? draft, adjacents are blobs directly next to _blob
     '''
-    2D version of scan_P_, but primarily vertical and checking for opposite-sign adjacency vs. same-sign overlap
+    Assign adjacent blobs bilaterally according to adjacent pairs' ids in blob_finder.
     '''
     for blob_id1, blob_id2 in blob_binder.adj_pairs:
         assert blob_id1 < blob_id2
         blob1 = CBlob.get_instance(blob_id1)
         blob2 = CBlob.get_instance(blob_id2)
 
-        S1 = blob1.Dert['S']
-        S2 = blob2.Dert['S']
-        G1 = blob1.Dert['G']
-        G2 = blob2.Dert['G']
         if blob1.box[1] < blob2.box[1]:  # yn1 < yn2: blob1 is potentially internal to blob2
             if blob1.fopen:
-                pos12 = pos21 = 2  # 2 for open
+                pose12 = pose21 = 2  # 2 for open
             else:
-                pos12 = 0  # 0 for internal
-                pos21 = 1  # 1 for external
+                pose12 = 0  # 0 for internal
+                pose21 = 1  # 1 for external
         else:  # blob2 is potentially internal to blob1
             if blob2.fopen:
-                pos12 = pos21 = 2
+                pose12 = pose21 = 2
             else:
-                pos12, pos21 = 1, 0
+                pose12, pose21 = 1, 0
 
-        blob1.adj_blob_.append((blob2, pos12, S2, G2))
-        blob2.adj_blob_.append((blob1, pos21, S1, G1))
+        blob1.adj_blobs[0].append((blob2, pose21))
+        blob2.adj_blobs[0].append((blob1, pose12))
+        blob1.adj_blobs[1] += blob2.Dert['S']
+        blob2.adj_blobs[1] += blob1.Dert['S']
+        blob1.adj_blobs[2] += blob2.Dert['G']
+        blob2.adj_blobs[2] += blob1.Dert['G']
 
 
 # -----------------------------------------------------------------------------

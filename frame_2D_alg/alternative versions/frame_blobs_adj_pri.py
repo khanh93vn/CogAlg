@@ -87,7 +87,7 @@ def image_to_blobs(image):
     return frame  # frame of blobs
 
 def list_adjacent(frame):
-    # loops across blob__ to find opposite-sign adjacent blobs and store them as adj_blob_
+    # loops across blob__ to find opposite-sign adjacent blobs and store them as adj_blobs
 
     total_blobs = len(frame['blob__']) # total blobs number for looping purpose
 
@@ -365,10 +365,10 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
         for stack in stack_:
             if stack['pri_blob_']:
                 for ite_num, pri_blob in enumerate(stack['pri_blob_']):
-                    if pri_blob is not blob and pri_blob not in blob['adj_blob_']:
-                        blob['adj_blob_'].append(pri_blob) # add stacks's prior blob into current blob's adjacent blob
-                    if pri_blob is not blob and blob not in pri_blob['adj_blob_']:
-                        pri_blob['adj_blob_'].append(blob)  # add current blob into stacks' prior blob' adjacent blob
+                    if pri_blob is not blob and pri_blob not in blob['adj_blobs']:
+                        blob['adj_blobs'].append(pri_blob) # add stacks's prior blob into current blob's adjacent blob
+                    if pri_blob is not blob and blob not in pri_blob['adj_blobs']:
+                        pri_blob['adj_blobs'].append(blob)  # add current blob into stacks' prior blob' adjacent blob
 
         mask = np.ones((yn - y0, xn - x0), dtype=bool)  # mask box, then unmask Ps:
         for stack in stack_:
@@ -415,7 +415,7 @@ def update_blob_adjacency(frame):
         # 2nd index = flags for internal, external or open
         # 0 = internal to current blob, 1 = external, 2 = open
         adj_blob_new_ = [[],[]]
-        for adj_blob in blob['adj_blob_']:
+        for adj_blob in blob['adj_blobs']:
 
             # remove incomplete blob and repeating blob
             if 'dert__' in adj_blob and adj_blob not in adj_blob_new_ and adj_blob is not blob:
@@ -444,7 +444,7 @@ def update_blob_adjacency(frame):
                     adj_blob_new_[0].append(adj_blob)
                     adj_blob_new_[1].append(1) # set external
 
-        blob['adj_blob_'] = adj_blob_new_  # repack adj_blob to blob
+        blob['adj_blobs'] = adj_blob_new_  # repack adj_blob to blob
 
     return frame
 

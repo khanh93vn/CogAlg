@@ -288,13 +288,13 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
 
                     if stack_[i]['Py_'][j]['adj_P_'][k]['blob']:  # if adj_P'blob_ is not empty
                         if stack_[i]['Py_'][j]['adj_P_'][k]['blob'] != blob:  # if the adjacent blob is not the current blob
-                            adj_blob_.append(stack_[i]['Py_'][j]['adj_P_'][k]['blob'])  # add adj_P' blobs to current P' adj_blob_
+                            adj_blob_.append(stack_[i]['Py_'][j]['adj_P_'][k]['blob'])  # add adj_P' blobs to current P' adj_blobs
 
-                        if len(stack_[i]['Py_'][j]['adj_P_'][k]['blob']['adj_blob_']) == 0:  # if adj_P' blob' adj_blob_ is empty
-                             stack_[i]['Py_'][j]['adj_P_'][k]['blob']['adj_blob_'].append(blob)  # add P' blob to adj P blob' adj_blob_
+                        if len(stack_[i]['Py_'][j]['adj_P_'][k]['blob']['adj_blobs']) == 0:  # if adj_P' blob' adj_blobs is empty
+                             stack_[i]['Py_'][j]['adj_P_'][k]['blob']['adj_blobs'].append(blob)  # add P' blob to adj P blob' adj_blobs
                         else:
-                             if blob not in stack_[i]['Py_'][j]['adj_P_'][k]['blob']['adj_blob_']:  # if P'blob is not in adj_P adj_blob_
-                                 stack_[i]['Py_'][j]['adj_P_'][k]['blob']['adj_blob_'].append(blob)
+                             if blob not in stack_[i]['Py_'][j]['adj_P_'][k]['blob']['adj_blobs']:  # if P'blob is not in adj_P adj_blobs
+                                 stack_[i]['Py_'][j]['adj_P_'][k]['blob']['adj_blobs'].append(blob)
         # remove repeating blobs
         adj_blob_ = list({id(blob):blob for blob in adj_blob_}.values())
 
@@ -360,8 +360,8 @@ def list_adjacent(frame):  # separate function to find and store adjacent blobs 
 
         print(f'Processing blobs {i}...')
 
-        frame['blob__'][i].update({'adj_blob_': [[],[]]})  # add adjacent blob param to current blob
-        # adj_blob_[0]: opposite-sign blobs, adj_blob_[1]: same sign blobs
+        frame['blob__'][i].update({'adj_blobs': [[],[]]})  # add adjacent blob param to current blob
+        # adj_blobs[0]: opposite-sign blobs, adj_blobs[1]: same sign blobs
 
         current_box = frame['blob__'][i]['box']  # box coordinates = y0,yn,x0,xn
         # add 1-pixel overlap with adjacent blobs:
@@ -410,11 +410,11 @@ def list_adjacent(frame):  # separate function to find and store adjacent blobs 
 
                                     # if different sign blobs intersect
                                     if frame['blob__'][i]['sign'] != frame['blob__'][j]['sign']:
-                                        frame['blob__'][i]['adj_blob_'][0].append(frame['blob__'][j])
+                                        frame['blob__'][i]['adj_blobs'][0].append(frame['blob__'][j])
                                         f_break = 1
                                     # if same sign blobs intersect
                                     else:
-                                        frame['blob__'][i]['adj_blob_'][1].append(frame['blob__'][j])
+                                        frame['blob__'][i]['adj_blobs'][1].append(frame['blob__'][j])
                                         f_break = 1
 
                                 # break from loop if derts in those blobs are intersect

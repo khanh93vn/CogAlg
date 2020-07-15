@@ -265,14 +265,14 @@ def update_blob_adjacency(frame):
     for blob in frame['blob__']:
 
         adj_blob_new = []
-        for adj_blob in blob['adj_blob_']:
+        for adj_blob in blob['adj_blobs']:
             if 'dert__' in adj_blob:  # get complete blob only
                 adj_blob_new.append(adj_blob)
 
         if adj_blob_new:  # last adjacent blob is the external adjacent blob
             blob['adj_blob_ext_'].append(adj_blob_new.pop())
 
-        blob['adj_blob_'] = adj_blob_new  # repack adj_blob to blob
+        blob['adj_blobs'] = adj_blob_new  # repack adj_blob to blob
 
     return frame
 
@@ -298,8 +298,8 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
                 if stack['prior_stack'][0]['blob'] not in adj_blob_:  # if prior stack's blob not in current blob' adjacent blob
                     adj_blob_.append(stack['prior_stack'][0]['blob'])  # add prior stack's blob to current blob's adjacent blob
 
-                if blob not in stack['prior_stack'][0]['blob']['adj_blob_']:  # if current blob is not in prior stack' blob' adjacent blob
-                    stack['prior_stack'][0]['blob']['adj_blob_'].append(blob)  # add current blob to prior stack' blob' adjacent blob
+                if blob not in stack['prior_stack'][0]['blob']['adj_blobs']:  # if current blob is not in prior stack' blob' adjacent blob
+                    stack['prior_stack'][0]['blob']['adj_blobs'].append(blob)  # add current blob to prior stack' blob' adjacent blob
 
         yn = last_stack['y0'] + last_stack['Ly']
 
