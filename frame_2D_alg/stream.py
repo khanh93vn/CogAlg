@@ -6,7 +6,8 @@ import numpy as np
 import cv2 as cv
 
 from utils import (
-    blank_image, over_draw, draw_blob,
+    blank_image, over_draw, stack_box,
+    draw_blob, draw_stack,
     BLACK, WHITE, GREY, DGREY, LGREY,
 )
 
@@ -37,7 +38,7 @@ class Streamer:
                                                int(y * self.zoom)))
             cv.imshow(winname=self.winname,
                       mat=self.zoomed)
-        cv.waitKey(1)
+        return cv.waitKey(1)
 
     def stop(self):
         cv.destroyAllWindows()
@@ -53,23 +54,39 @@ class Img2BlobStreamer(Streamer):
     """
     Use this class to monitor the actions of image_to_blobs in frame_blobs.
     """
-    def __init__(self, frame, winname='image_to_blobs', zoom=None):
-        self.frame = frame
+    sign_map = {False: BLACK, True: WHITE}  # sign_map for terminated blobs
+    sign_map_unterminated = {False: DGREY, True: LGREY}  # sign_map for unterminated blobs
+
+    def __init__(self, blob_cls, frame, winname='image_to_blobs', zoom=None):
+        self.blob_cls = blob_cls
         height, width = frame['dert__'].shape[1:]
         self.box = (0, height, 0, width)
         Streamer.__init__(self, window=blank_image(self.box),
                           winname=winname,
                           zoom=zoom)
-        self.complete_blobs = []
+        self.incomplete_blob_ids = set()
+        self.first_id = 0
 
-    def update(self, y):
-        for blob in self.frame['blob__']:
-            if blob not in self.complete_blobs:
-                if blob.open_stacks != 0:  # unterminated blob still got open_stacks
-                    blob_box = blob.box[0], y + 1, *blob.box[1:]
-                else:
-                    blob_box = blob.box
-                    self.complete_blobs.append(blob)
-                # Check for newly terminated blobs
-                blob_img = draw_blob(blob, blob_box=blob_box)
-                over_draw(self.img, blob_img, blob_box, self.box)
+    def update(self, y, P_=()):
+        # draw Ps in new row
+        for P in P_:
+            self.img[y, P.x0 : P.x0+P.L] = self.sign_map_unterminated[P.sign]
+
+        # add new blobs' ids, if any
+        id_end = self.blob_cls.instance_cnt
+        new_blobs_ids = range(self.first_id, id_end)
+        self.incomplete_blob_ids.update(new_blobs_ids)
+        self.first_id = id_end
+
+        # iterate through incomplete blobs
+        for blob_id in set(self.incomplete_blob_ids):
+            blob = self.blob_cls.get_instance(blob_id)
+            if blob is None:
+                self.incomplete_blob_ids.remove(blob_id)
+                continue
+            elif blob.open_stacks == 0:  # terminated blob has no open_stack
+                blob_box = blob.box
+                self.incomplete_blob_ids.remove(blob_id)
+                blob_img = draw_blob(blob, blob_box=blob_box,
+                                     sign_map=Img2BlobStreamer.sign_map)
+                over_draw(self.img, blob_img, blob_box)

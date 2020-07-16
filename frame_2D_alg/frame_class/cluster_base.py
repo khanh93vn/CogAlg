@@ -124,7 +124,14 @@ class MetaCluster(type):
         return instance
 
     def get_instance(cls, cluster_id):
-        return cls._instances[cluster_id]()
+        try:
+            return cls._instances[cluster_id]()
+        except IndexError:
+            return None
+
+    @property
+    def instance_cnt(cls):
+        return len(cls._instances)
 
 
 class Cluster(metaclass=MetaCluster):

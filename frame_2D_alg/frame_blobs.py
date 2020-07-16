@@ -147,7 +147,7 @@ def image_to_blobs(image, verbose=False, render=False, rendering_zoom=None):
     height, width = dert__.shape[1:]
 
     if render:
-        streamer = Img2BlobStreamer(frame, zoom=rendering_zoom)
+        streamer = Img2BlobStreamer(CBlob, frame, zoom=rendering_zoom)
 
     stack_binder = AdjBinder(Cstack)
 
@@ -157,14 +157,17 @@ def image_to_blobs(image, verbose=False, render=False, rendering_zoom=None):
             sys.stdout.flush()
 
         P_binder = AdjBinder(CP)  # binder needs data about clusters of the same level
-
         P_ = form_P_(dert__[:, y].T, P_binder)  # horizontal clustering
+
+        if render:
+            streamer.update(y, P_)
+            if streamer.render() == 32: # press space to pause
+                while streamer.render() != 32:
+                    pass
+
         P_ = scan_P_(P_, stack_, frame, P_binder)  # vertical clustering, adds P up_connects and _P down_connect_cnt
         stack_ = form_stack_(P_, frame, y)
         stack_binder.bind_from_lower(P_binder)
-        if render:
-            streamer.update(y)
-            streamer.render()
 
     while stack_:  # frame ends, last-line stacks are merged into their blobs
         form_blob(stack_.popleft(), frame)
@@ -179,7 +182,8 @@ def image_to_blobs(image, verbose=False, render=False, rendering_zoom=None):
               f"{time() - start_time:.3} seconds")
     if render:
         streamer.update(y)
-        streamer.render()
+        while streamer.render() != ord('q'):    # press Q key to qut
+            pass
         streamer.stop()
         out_path = Path(arguments['image'])
         streamer.imwrite(str(out_path.with_suffix('.out.jpg')))
@@ -312,7 +316,6 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
         if not up_connect_:
             # initialize new stack for each input-row P that has no connections in higher row, as in the whole top row:
             blob = CBlob(Dert=dict(I=0, G=0, Dy=0, Dx=0, S=0, Ly=0), box=[y, x0, xn], stack_=[], sign=s, open_stacks=1)
-            frame['blob__'].append(blob)
             new_stack = Cstack(I=I, G=G, Dy=0, Dx=Dx, S=L, Ly=1, y0=y, Py_=[P], blob=blob, down_connect_cnt=0, sign=s)
             new_stack.hid = blob.id
             blob.stack_.append(new_stack)
@@ -355,7 +358,6 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
                                     stack.hid = blob.id
                                     blob.stack_.append(stack)  # buffer of merged root stacks.
 
-                            frame['blob__'].pop(frame['blob__'].index(up_connect.blob))  # remove merged blob from list
                             up_connect.blob = blob
                             up_connect.hid = blob.id
                             blob.stack_.append(up_connect)
@@ -409,7 +411,7 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
                      G=frame['G'] + blob.Dert['G'],
                      Dy=frame['Dy'] + blob.Dert['Dy'],
                      Dx=frame['Dx'] + blob.Dert['Dx'])
-        # frame['blob__'].append(blob)
+        frame['blob__'].append(blob)
 
 
 def assign_adjacent(blob_binder):  # scan_blob__? draft, adjacents are blobs directly next to _blob
@@ -525,7 +527,6 @@ if __name__ == '__main__':
     end_time = time() - start_time
     if verbose:
         print(f"\nSession ended in {end_time:.2} seconds")
-        input("Press Enter to exit...")
     else:
         print(end_time)
     pass
