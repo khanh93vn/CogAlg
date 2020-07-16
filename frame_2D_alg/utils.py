@@ -14,7 +14,7 @@ GREY = 128
 DGREY = 64
 LGREY = 192
 
-transparent_val = 128  # Pixel at this value can be over-written
+masking_val = 128  # Pixel at this value can be over-written
 
 SIGN_MAPS = {
     'binary': {
@@ -293,15 +293,18 @@ def debug_blob(background_shape, *blobs):
     return image
 
 
-def over_draw(map, sub_map, sub_box, box=None, tv=transparent_val):
+def over_draw(map, sub_map, sub_box,
+              box=None, mask=None, mv=masking_val):
     '''Over-write map of sub-structure onto map of parent-structure.'''
 
     if  box is None:
         y0, yn, x0, xn = sub_box
     else:
         y0, yn, x0, xn = localize(sub_box, box)
-
-    map[y0:yn, x0:xn][sub_map != tv] = sub_map[sub_map != tv]
+    if mask is None:
+        map[y0:yn, x0:xn][sub_map != mv] = sub_map[sub_map != mv]
+    else:
+        map[y0:yn, x0:xn][~mask] = sub_map[~mask]
     return map
 
 
@@ -315,7 +318,7 @@ def blank_image(shape):
         height = yn - y0
         width = xn - x0
 
-    return np.full((height, width), transparent_val, 'uint8')
+    return np.full((height, width, 3), masking_val, 'uint8')
 
 # ---------------------------------------------------------------------
 # ----------------------------------------------------------------------------

@@ -135,7 +135,7 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image,
     # renamed dert__= (i__, g__, dy__, dx__) for readability in functions below
 
 
-def image_to_blobs(image, verbose=False, render=False, rendering_zoom=None):
+def image_to_blobs(image, verbose=False, render=False):
     if verbose:
         start_time = time()
         print("Converting to image to blobs...")
@@ -147,7 +147,11 @@ def image_to_blobs(image, verbose=False, render=False, rendering_zoom=None):
     height, width = dert__.shape[1:]
 
     if render:
-        streamer = Img2BlobStreamer(CBlob, frame, zoom=rendering_zoom)
+        def output_path(input_path, suffix):
+            return str(Path(input_path).with_suffix(suffix))
+        streamer = Img2BlobStreamer(CBlob, frame,
+                                    record_path=output_path(arguments['image'],
+                                                            suffix='.out.avi'))
 
     stack_binder = AdjBinder(Cstack)
 
@@ -163,7 +167,7 @@ def image_to_blobs(image, verbose=False, render=False, rendering_zoom=None):
             streamer.update(y, P_)
             if streamer.render() == 32: # press space to pause
                 while streamer.render() != 32:
-                    pass
+                    streamer.update(y)
 
         P_ = scan_P_(P_, stack_, frame, P_binder)  # vertical clustering, adds P up_connects and _P down_connect_cnt
         stack_ = form_stack_(P_, frame, y)
@@ -182,11 +186,12 @@ def image_to_blobs(image, verbose=False, render=False, rendering_zoom=None):
               f"{time() - start_time:.3} seconds")
     if render:
         streamer.update(y)
+        print("Press Q to quit...")
         while streamer.render() != ord('q'):    # press Q key to qut
-            pass
+            streamer.update_after_conversion()
         streamer.stop()
-        out_path = Path(arguments['image'])
-        streamer.imwrite(str(out_path.with_suffix('.out.jpg')))
+        streamer.writeframe(output_path(arguments['image'],
+                                        suffix='.out.jpg'))
 
     return frame  # frame of blobs
 
@@ -480,16 +485,14 @@ if __name__ == '__main__':
     argument_parser.add_argument('-v', '--verbose', help='print details, useful for debugging', type=int, default=0)
     argument_parser.add_argument('-n', '--intra', help='run intra_blobs after frame_blobs', type=int, default=0)
     argument_parser.add_argument('-r', '--render', help='render the process', type=int, default=0)
-    argument_parser.add_argument('-z', '--zoom', help='zooming ratio when rendering', type=float, default=None)
     arguments = vars(argument_parser.parse_args())
     image = imread(arguments['image'])
     verbose = arguments['verbose']
     intra = arguments['intra']
     render = arguments['render']
-    rendering_zoom = arguments['zoom']
 
     start_time = time()
-    frame = image_to_blobs(image, verbose, render, rendering_zoom)
+    frame = image_to_blobs(image, verbose, render)
 
     if intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
 
