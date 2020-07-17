@@ -149,7 +149,8 @@ def image_to_blobs(image, verbose=False, render=False):
 
     for y in range(height):  # first and last row are discarded
         if verbose:
-            print(f"\rProcessing line {y+1}/{height}", end="")
+            print(f"\rProcessing line {y+1}/{height}, ", end="")
+            print(f"{len(frame['blob__'])} blobs converted", end="")
             sys.stdout.flush()
 
         P_binder = AdjBinder(CP)  # binder needs data about clusters of the same level
@@ -174,14 +175,19 @@ def image_to_blobs(image, verbose=False, render=False):
 
     if verbose:
         nblobs = len(frame['blob__'])
-        print(f"\nImage has been successfully converted to "
+        print(f"\rImage has been successfully converted to "
               f"{nblobs} blob{'s' if nblobs != 1 else 0} in "
-              f"{time() - start_time:.3} seconds")
+              f"{time() - start_time:.3} seconds", end="")
+        blob_ids = [blob_id for blob_id in range(CBlob.instance_cnt)]
+        merged_percentage = len([*filter(lambda bid: CBlob.get_instance(bid) is None, blob_ids)]) / len(blob_ids)
+        print(f"\nPercentage of merged blobs: {merged_percentage}")
+
     if render:
         streamer.update(y)
         print("Press Q to quit...")
+        streamer.init_adj_disp()
         while streamer.render() != ord('q'):    # press Q key to qut
-            streamer.update_after_conversion()
+            streamer.update_adj_disp()
         streamer.stop()
         streamer.writeframe(output_path(arguments['image'],
                                         suffix='.out.jpg'))
@@ -521,7 +527,7 @@ if __name__ == '__main__':
 
     end_time = time() - start_time
     if verbose:
-        print(f"\nSession ended in {end_time:.2} seconds")
+        print(f"\nSession ended in {end_time:.2} seconds", end="")
     else:
         print(end_time)
     pass
