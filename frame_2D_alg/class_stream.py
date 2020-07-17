@@ -173,6 +173,7 @@ class Img2BlobStreamer(Streamer):
         self.is_zooming = False
         self.render = self._render
         self.background = self.img  # stay constant from here
+        self.background[self.background == 255] = 32
 
         # id_map act like a hash table to look for blob id,
         # given mouse position
@@ -220,7 +221,7 @@ class Img2BlobStreamer(Streamer):
                     blob = self.blob_cls.get_instance(self.pointing_blob_id)
                     over_draw(self.img, None, blob.box,
                               mask=blob.dert__.mask[0],
-                              fill_color=(128, 128, 128))  # gray
+                              fill_color=(255, 255, 255))  # gray
                     # ... and its adjacents
                     for adj_blob, pose in blob.adj_blobs[0]:
                         if pose == 0:  # internal
