@@ -103,11 +103,18 @@ class Img2BlobStreamer(Streamer):
     sign_map = {False: BLACK, True: WHITE}  # sign_map for terminated blobs
     sign_map_unterminated = {False: DGREY, True: LGREY}  # sign_map for unterminated blobs
 
-    def __init__(self, blob_cls, frame, winname='image_to_blobs',
+    def __init__(self, blob_cls, frame,
+                 window_size=None,
+                 winname='image_to_blobs',
                  record_path=None):
         self.blob_cls = blob_cls
         height, width = frame['dert__'].shape[1:]
-        Streamer.__init__(self, window_size=(width, height),
+        if window_size is None:
+            if height < 480:
+                window_size = 640, 480
+            else:
+                window_size = width, height
+        Streamer.__init__(self, window_size=window_size,
                           winname=winname,
                           record_path=record_path)
         self.img = blank_image((height, width))

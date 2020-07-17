@@ -134,7 +134,7 @@ class MetaCluster(type):
         return len(cls._instances)
 
 
-class Cluster(metaclass=MetaCluster):
+class ClusterStructure(metaclass=MetaCluster):
     """
     Base class for cluster objects in 2D implementation of CogAlg.
 
@@ -145,7 +145,7 @@ class Cluster(metaclass=MetaCluster):
     (meaning that if there's no other references to instance,
     it will be garbage collected, weakref to it will return None
     afterwards)
-    - Set higher cluster id to None (no higher cluster yet)
+    - Set higher cluster id to None (no higher cluster structure yet)
 
     Examples
     --------
@@ -185,4 +185,4 @@ class Cluster(metaclass=MetaCluster):
 
 if __name__ == "__main__":  # for debugging
     from sys import getsizeof as size
-    size(Cluster)
+    size(ClusterStructure)

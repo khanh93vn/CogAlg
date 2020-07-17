@@ -1,9 +1,6 @@
 """
-2D implemetation. More details are in the comments below imports.
-
-usage: frame_blobs.py [-h] [-i IMAGE] [-v VERBOSE] [-n INTRA] [-r RENDER]
+usage: frame_blobs_find_adj.py [-h] [-i IMAGE] [-v VERBOSE] [-n INTRA] [-r RENDER]
                       [-z ZOOM]
-
 optional arguments:
   -h, --help            show this help message and exit
   -i IMAGE, --image IMAGE
@@ -20,25 +17,24 @@ optional arguments:
 from time import time
 from collections import deque
 from pathlib import Path
-
 import sys
 import numpy as np
 import numpy.ma as ma
 
-from frame_class import Cluster, AdjBinder, NoneType
+from class_cluster import ClusterStructure, NoneType
+from class_bind import  AdjBinder
 # from comp_pixel import comp_pixel
-from stream import Img2BlobStreamer
+from class_stream import Img2BlobStreamer
 from utils import (
     pairwise,
     imread, imwrite, map_frame_binary,
     WHITE, BLACK,
 )
-
 '''
     2D version of first-level core algorithm will have frame_blobs, intra_blob (recursive search within blobs), and comp_P.
     frame_blobs() forms parameterized blobs: contiguous areas of positive or negative deviation of gradient per pixel.    
-    comp_pixel (lateral, vertical, diagonal) forms dert, queued in dert__: tuples of pixel + derivatives, over whole image. 
 
+    comp_pixel (lateral, vertical, diagonal) forms dert, queued in dert__: tuples of pixel + derivatives, over whole image. 
     Then pixel-level and external parameters are accumulated in row segment Ps, vertical blob segment, and blobs,
     adding a level of encoding per row y, defined relative to y of current input row, with top-down scan:
 
@@ -63,10 +59,10 @@ from utils import (
     is not meaningful in vision. Intensity of reflected light doesn't correlate with predictive value of observed object 
     (predictive value is physical density, hardness, inertia that represent resistance to change in positional parameters)  
 
-    This is clustering by connectivity because distance between clustered pixels should not exceed cross-comparison range.
+    This is clustering by nearest-neighbor connectivity to avoid overlap / redundancy  exceed cross-comparison range.
     That range is fixed for each layer of search, to enable encoding of input pose parameters: coordinates, dimensions, 
-    orientation. These params are essential because value of prediction = precision of what * precision of where. 
-
+    orientation. These params are essential because value of prediction = precision of what * precision of where.
+     
     frame_blobs is a complex function with a simple purpose: to sum pixel-level params in blob-level params. These params 
     were derived by pixel cross-comparison (cross-correlation) to represent predictive value per pixel, so they are also
     predictive on a blob level, and should be cross-compared between blobs on the next level of search and composition.
@@ -75,8 +71,7 @@ from utils import (
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 
-
-class CP(Cluster):
+class CP(ClusterStructure):
     I = int  # default type at initialization
     G = int
     Dy = int
@@ -85,8 +80,7 @@ class CP(Cluster):
     x0 = int
     sign = NoneType
 
-
-class Cstack(Cluster):
+class Cstack(ClusterStructure):
     I = int
     G = int
     Dy = int
@@ -99,7 +93,7 @@ class Cstack(Cluster):
     down_connect_cnt = int
     sign = NoneType
 
-class CBlob(Cluster):
+class CBlob(ClusterStructure):
     Dert = dict
     box = list
     stack_ = list
@@ -124,15 +118,13 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image,
     bottomleft__ = image[1:, :-1]
     bottomright__ = image[1:, 1:]
 
-    Gy__ = ((bottomleft__ + bottomright__) - (topleft__ + topright__))
-    # decomposition of two diagonal differences into Gy, same as diagonal from left
-    Gx__ = ((topright__ + bottomright__) - (topleft__ + bottomleft__))
-    # decomposition of two diagonal differences into Gx, same as diagonal from right
+    Gy__ = ((bottomleft__ + bottomright__) - (topleft__ + topright__))  # same as decomposition of two diagonal differences into Gy
+    Gx__ = ((topright__ + bottomright__) - (topleft__ + bottomleft__))  # same as decomposition of two diagonal differences into Gx
 
-    G__ = np.hypot(Gy__, Gx__)  # central gradient per kernel, logically at diagonal crossing between vertex pixels
+    G__ = np.hypot(Gy__, Gx__)  # central gradient per kernel, between its four vertex pixels
 
     return ma.stack((topleft__, G__, Gy__, Gx__))  # tuple of 2D arrays per param of dert (derivatives' tuple)
-    # renamed dert__= (i__, g__, dy__, dx__) for readability in functions below
+    # renamed dert__= (p__, g__, dy__, dx__) for readability in functions below
 
 
 def image_to_blobs(image, verbose=False, render=False):
@@ -151,7 +143,7 @@ def image_to_blobs(image, verbose=False, render=False):
             return str(Path(input_path).with_suffix(suffix))
         streamer = Img2BlobStreamer(CBlob, frame,
                                     record_path=output_path(arguments['image'],
-                                                            suffix='.out.avi'))
+                                    suffix='.out.avi'))
 
     stack_binder = AdjBinder(Cstack)
 
@@ -175,6 +167,7 @@ def image_to_blobs(image, verbose=False, render=False):
 
     while stack_:  # frame ends, last-line stacks are merged into their blobs
         form_blob(stack_.popleft(), frame)
+
     blob_binder = AdjBinder(CBlob)
     blob_binder.bind_from_lower(stack_binder)
     assign_adjacent(blob_binder)  # add adj_blobs to each blob
@@ -199,11 +192,11 @@ def image_to_blobs(image, verbose=False, render=False):
 Parameterized connectivity clustering functions below:
 - form_P sums dert params within P and increments its L: horizontal length.
 - scan_P_ searches for horizontal (x) overlap between Ps of consecutive (in y) rows.
-- form_stack combines these overlapping Ps into vertical stacks of Ps, with 1 up_P to 1 down_P
+- form_stack combines these overlapping Ps into vertical stacks of Ps, with one up_P to one down_P
 - form_blob merges terminated or forking stacks into blob, removes redundant representations of the same blob 
   by multiple forked P stacks, then checks for blob termination and merger into whole-frame representation.
 dert: tuple of derivatives per pixel, initially (p, dy, dx, g), will be extended in intra_blob
-Dert: params of composite structures (P, stack, blob): summed dert params + dimensions: vertical Ly and area S
+Dert: params of cluster structures (P, stack, blob): summed dert params + dimensions: vertical Ly and area S
 '''
 
 def form_P_(dert__, binder):  # horizontal clustering and summation of dert params into P params, per row of a frame
@@ -222,8 +215,8 @@ def form_P_(dert__, binder):  # horizontal clustering and summation of dert para
             # initialize new P params:
             I, G, Dy, Dx, L, x0 = 0, 0, 0, 0, 0, x
             P_.append(P)
-
-        I += p  # accumulate P params
+        # accumulate P params:
+        I += p
         G += vg
         Dy += dy
         Dx += dx
@@ -419,7 +412,7 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
         frame['blob__'].append(blob)
 
 
-def assign_adjacent(blob_binder):  # scan_blob__? draft, adjacents are blobs directly next to _blob
+def assign_adjacent(blob_binder):  # adjacents are connected opposite-sign blobs
     '''
     Assign adjacent blobs bilaterally according to adjacent pairs' ids in blob_finder.
     '''
@@ -430,19 +423,18 @@ def assign_adjacent(blob_binder):  # scan_blob__? draft, adjacents are blobs dir
 
         if blob1.box[1] < blob2.box[1]:  # yn1 < yn2: blob1 is potentially internal to blob2
             if blob1.fopen:
-                pose12 = pose21 = 2  # 2 for open
+                pose1 = pose2 = 2  # 2 for open
             else:
-                pose12 = 0  # 0 for internal
-                pose21 = 1  # 1 for external
+                pose1, pose2 = 0, 1  # 0 for internal, 1 for external
         else:  # blob2 is potentially internal to blob1
             if blob2.fopen:
-                pose12 = pose21 = 2
+                pose1 = pose2 = 2
             else:
-                pose12, pose21 = 1, 0
+                pose1, pose2 = 1, 0
 
         # bilateral assignments
-        blob1.adj_blobs[0].append((blob2, pose21))
-        blob2.adj_blobs[0].append((blob1, pose12))
+        blob1.adj_blobs[0].append((blob2, pose2))
+        blob2.adj_blobs[0].append((blob1, pose1))
         blob1.adj_blobs[1] += blob2.Dert['S']
         blob2.adj_blobs[1] += blob1.Dert['S']
         blob1.adj_blobs[2] += blob2.Dert['G']
@@ -508,23 +500,23 @@ if __name__ == '__main__':
             High-G "edge" blobs are low-match, they are only valuable as contrast: 
             to the extent that their negative value cancels predictive value of adjacent low-G "flat" blobs:
             '''
-            adj_S, adj_G = blob.adj_blobs[2][3];  S, G = blob.Dert['S','G']
-            # value borrow from flat blob to edge blob = min of values:
-            borrow_G = min(G, adj_G * (1 - S / (S + adj_S)))
+            G = blob.Dert.G; adj_G = blob.adj_blobs[2]
 
-            # or decay is proportional to relative adj_S,
-            # contrast is proportional to relative adj_G: * (1 - G / (G + adj_G))?
+            borrow_G = min(G, adj_G)  # only the value present in both parties can be borrowed from one to another
+            if blob.sign:
+                borrow_G *= min(G, adj_G) / max( G, adj_G)  # still tentative:
+                # borrow from adj_blobs to blob is reduced because it's not exclusive, adj_blobs may also lend to other blobs?
 
             if blob.sign:
-                if G + borrow_G > aveB and blob.dert__.shape[1] > 3 and blob.dert__.shape[2] > 3:  # min dimensions replace min S
+                if G + borrow_G > aveB and blob.dert__.shape[1] > 3 and blob.dert__.shape[2] > 3:  # min blob dimensions
                     blob = update_dert(blob)
                     deep_layers[i] = intra_blob(blob, rdn=1, rng=.0, fig=0, fcr=0)  # +G blob' dert__' comp_g
 
-            elif -G - borrow_G > aveB and blob.dert__.shape[1] > 3 and blob.dert__.shape[2] > 3:  # min dimensions replace min S
+            elif -G - borrow_G > aveB and blob.dert__.shape[1] > 3 and blob.dert__.shape[2] > 3:  # min blob dimensions
                 blob = update_dert(blob)
                 deep_layers[i] = intra_blob(blob, rdn=1, rng=1, fig=0, fcr=1)  # -G blob' dert__' comp_r in 3x3 kernels
 
-            if deep_layers[i]: # if there are deeper layers
+            if deep_layers[i]:  # if there are deeper layers
                 deep_blob_i_.append(i)  # indices of blobs with deep layers
 
     end_time = time() - start_time
