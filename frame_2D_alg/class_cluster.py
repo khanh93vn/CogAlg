@@ -42,7 +42,7 @@ def __delattr__(self, item):
                          "'{typename}' object")
 
 def __repr__(self):
-    return "{typename}({repr_fmt})" % ({param_vals})
+    return "{typename}({repr_fmt})" % ({numeric_param_vals})
 
 '''
 
@@ -64,6 +64,8 @@ class MetaCluster(type):
             params=str(params),
             param_vals=', '.join(f'self.{param}'
                                  for param in params),
+            numeric_param_vals=', '.join(f'self.{param}'
+                                         for param in numeric_params),
             pack_args=', '.join(param for param in ('', *params)),
             pack_assignments='; '.join(f'self.{param} = {param}'
                                   for param in params)
@@ -72,7 +74,7 @@ class MetaCluster(type):
                                     f"kwargs.get('{param}', 0)"
                                     for param in numeric_params)
                           if params else 'pass',
-            repr_fmt=', '.join(f'{param}=%r' for param in params),
+            repr_fmt=', '.join(f'{param}=%r' for param in numeric_params),
         )
         # Generate methods
         namespace = dict(print=print)

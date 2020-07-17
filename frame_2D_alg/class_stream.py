@@ -1,7 +1,7 @@
 """
 Provide streaming methods to monitor some of frame_2D_alg operations.
 """
-
+import sys
 import numpy as np
 import cv2 as cv
 
@@ -35,6 +35,8 @@ class Streamer:
 
         # initialize window
         def mouse_call(event, x, y, flags, param):
+            x = min(self.window_size[0]-1, max(x, 0))
+            y = min(self.window_size[1]-1, max(y, 0))
             self.x = x
             self.y = y
 
@@ -180,6 +182,8 @@ class Img2BlobStreamer(Streamer):
 
         # New mouse callback, extra adj highlighting utility
         def mouse_call(event, x, y, flags, param):
+            x = min(self.window_size[0]-1, max(x, 0))
+            y = min(self.window_size[1]-1, max(y, 0))
             self.x = x
             self.y = y
 
@@ -230,6 +234,18 @@ class Img2BlobStreamer(Streamer):
                         over_draw(self.img, None, adj_blob.box,
                                   mask=adj_blob.dert__.mask[0],
                                   fill_color=color)
+                    # ... print blobs properties.
+                    print("\rblob:",
+                          "id =", blob.id,
+                          "sign =", "'+'" if blob.sign else "'-'",
+                          "I =", blob.Dert['I'],
+                          "G =", blob.Dert['G'],
+                          "Dy =", blob.Dert['Dy'],
+                          "Dx =", blob.Dert['Dx'],
+                          "S =", blob.Dert['S'],
+                          "Ly =", blob.Dert['Ly'],
+                          end="              ")
+                    sys.stdout.flush()
 
         cv.setMouseCallback(self.winname, mouse_call)
 
