@@ -281,7 +281,7 @@ def scan_P_(P_, stack_, frame, binder):  # merge P into higher-row stack of Ps w
                         binder.bind(_P, P)
 
             if (xn < _xn or  # _P overlaps next P in P_
-                    xn == _xn and stack.sign):  # Sign taken accounted
+                    xn == _xn and stack.sign):  # sign taken accounted
                 next_P_.append((P, up_connect_))  # recycle _P for the next run of scan_P_
                 up_connect_ = []
                 if P_:
@@ -494,7 +494,12 @@ if __name__ == '__main__':
 
     if intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
 
-        from intra_blob import *
+        if verbose:
+            print("\nRunning intra_blob...")
+
+        from intra_blob import (
+            intra_blob, CDeepBlob, aveB,
+        )
 
         deep_frame = frame, frame # why 2 instance of frame to deep_frame initialization?
         deep_blob_i_ = []  # index of a blob with deep layers
@@ -506,7 +511,11 @@ if __name__ == '__main__':
             High-G "edge" blobs are low-match, they are only valuable as contrast: 
             to the extent that their negative value cancels predictive value of adjacent low-G "flat" blobs:
             '''
-            G = blob.Dert.G; adj_G = blob.adj_blobs[2]
+            G = blob.Dert['G']; adj_G = blob.adj_blobs[2]
+            blob = CDeepBlob(Dert=blob.Dert, box=blob.box, stack_=blob.stack_,
+                             sign=blob.sign, root_dert__=frame['dert__'],
+                             dert__=blob.dert__, adj_blobs=blob.adj_blobs,
+                             fopen=blob.fopen, margin=blob.margin)
 
             borrow_G = min(G, adj_G)  # only the value present in both parties can be borrowed from one to another
             if blob.sign:
@@ -524,6 +533,9 @@ if __name__ == '__main__':
 
             if deep_layers[i]:  # if there are deeper layers
                 deep_blob_i_.append(i)  # indices of blobs with deep layers
+
+        if verbose:
+            print("Finished running intra_blob")
 
     end_time = time() - start_time
     if verbose:
