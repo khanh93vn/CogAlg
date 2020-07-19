@@ -22,7 +22,7 @@ import numpy as np
 import numpy.ma as ma
 
 from class_cluster import ClusterStructure, NoneType
-from class_bind import  AdjBinder
+from class_bind import AdjBinder
 # from comp_pixel import comp_pixel
 from class_stream import Img2BlobStreamer
 from utils import (
@@ -33,8 +33,8 @@ from utils import (
 '''
     2D version of first-level core algorithm will have frame_blobs, intra_blob (recursive search within blobs), and comp_P.
     frame_blobs() forms parameterized blobs: contiguous areas of positive or negative deviation of gradient per pixel.    
-
     comp_pixel (lateral, vertical, diagonal) forms dert, queued in dert__: tuples of pixel + derivatives, over whole image. 
+
     Then pixel-level and external parameters are accumulated in row segment Ps, vertical blob segment, and blobs,
     adding a level of encoding per row y, defined relative to y of current input row, with top-down scan:
 
@@ -59,10 +59,10 @@ from utils import (
     is not meaningful in vision. Intensity of reflected light doesn't correlate with predictive value of observed object 
     (predictive value is physical density, hardness, inertia that represent resistance to change in positional parameters)  
 
-    This is clustering by nearest-neighbor connectivity to avoid overlap / redundancy  exceed cross-comparison range.
-    That range is fixed for each layer of search, to enable encoding of input pose parameters: coordinates, dimensions, 
+    Comparison range is fixed for each layer of search, to enable encoding of input pose parameters: coordinates, dimensions, 
     orientation. These params are essential because value of prediction = precision of what * precision of where.
-     
+    Clustering is by nearest-neighbor connectivity only, to avoid overlap among the blobs.
+
     frame_blobs is a complex function with a simple purpose: to sum pixel-level params in blob-level params. These params 
     were derived by pixel cross-comparison (cross-correlation) to represent predictive value per pixel, so they are also
     predictive on a blob level, and should be cross-compared between blobs on the next level of search and composition.
@@ -109,7 +109,7 @@ class CBlob(ClusterStructure):
 # prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
 # postfix '_' denotes array name, vs. same-name elements of that array
 
-def comp_pixel(image):  # 2x2 pixel cross-correlation within image,
+def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge detection operators
     # see comp_pixel_versions file for other versions and more explanation
 
     # input slices into sliding 2x2 kernel, each slice is a shifted 2D frame of grey-scale pixels:
@@ -281,7 +281,7 @@ def scan_P_(P_, stack_, frame, binder):  # merge P into higher-row stack of Ps w
                         binder.bind(_P, P)
 
             if (xn < _xn or  # _P overlaps next P in P_
-                    xn == _xn and stack.sign):  # sign taken accounted
+                    xn == _xn and stack.sign):  # check in 8 directions
                 next_P_.append((P, up_connect_))  # recycle _P for the next run of scan_P_
                 up_connect_ = []
                 if P_:
@@ -446,6 +446,22 @@ def assign_adjacent(blob_binder):  # adjacents are connected opposite-sign blobs
         blob1.adj_blobs[2] += blob2.Dert['G']
         blob2.adj_blobs[2] += blob1.Dert['G']
 
+def compute_borrow_G(frame):
+    '''
+    Compute borrow_G of each blob by using ratio of min(current G & adj G) to the sum of all adj blob' adj blob's min(G and adj G)
+    '''
+    for blob in frame['blob__']:
+        sum_min_G_pair = 0
+        for adj_blob in blob.adj_blobs[0]: # loop in each adj blob
+            for adj_adj_blob in adj_blob[0].adj_blobs[0]: # loop in each adj adj blob
+                sum_min_G_pair += adj_adj_blob[2] # get sum of min G per adj adj blob pair
+
+        # borrow G = current min G per pair / sum of all adj adj blob's min G per pair
+        if sum_min_G_pair:
+            blob.borrow_G = blob.adj_blobs[2] * (blob.adj_blobs[2] / sum_min_G_pair)
+        else: # sum_min_G_pair = 0
+            blob.borrow_G  = blob.adj_blobs[2]
+            # value divided by zero should be very large, in this case, borrow G will getting the highest (G/sum G) ratio which is 1
 
 # -----------------------------------------------------------------------------
 # Utilities
@@ -501,26 +517,26 @@ if __name__ == '__main__':
             intra_blob, CDeepBlob, aveB,
         )
 
-        deep_frame = frame, frame # why 2 instance of frame to deep_frame initialization?
+        deep_frame = frame, frame  # 1st frame initializes summed representation of hierarchy, 2nd is individual top layer
         deep_blob_i_ = []  # index of a blob with deep layers
         deep_layers = [[]]*len(frame['blob__'])  # for visibility only
 
         for i, blob in enumerate(frame['blob__']):  # print('Processing blob number ' + str(bcount))
             '''
-            Blob G: -|+ predictive value, should be lent to or borrowed from the value of adjacent blobs. 
-            High-G "edge" blobs are low-match, they are only valuable as contrast: 
-            to the extent that their negative value cancels predictive value of adjacent low-G "flat" blobs:
+            Blob G: -|+ predictive value, positive value of -G blobs is lent to the value of their adjacent +G blobs. 
+            +G "edge" blobs are low-match, they are only valuable as contrast: to the extent that 
+            their negative value cancels the value of adjacent -G "flat" blobs:
             '''
             G = blob.Dert['G']; adj_G = blob.adj_blobs[2]
+
             blob = CDeepBlob(Dert=blob.Dert, box=blob.box, stack_=blob.stack_,
                              sign=blob.sign, root_dert__=frame['dert__'],
                              dert__=blob.dert__, adj_blobs=blob.adj_blobs,
                              fopen=blob.fopen, margin=blob.margin)
 
-            borrow_G = min(G, adj_G)  # only the value present in both parties can be borrowed from one to another
+            borrow_G = min(abs(G), abs(adj_G))  # comp(G,_G): value present in both parties can be borrowed from one to another
             if blob.sign:
-                borrow_G *= min(G, adj_G) / max( G, adj_G)  # still tentative:
-                # borrow from adj_blobs to blob is reduced because it's not exclusive, adj_blobs may also lend to other blobs?
+                borrow_G /= 4  # to be replaced with borrow_G *= min_G / Min_G (min_Gs summed for adj_blobs)
 
             if blob.sign:
                 if G + borrow_G > aveB and blob.dert__.shape[1] > 3 and blob.dert__.shape[2] > 3:  # min blob dimensions

@@ -30,6 +30,8 @@ class AdjBinder:
         clusters, given their ids.
         """
         if id1 == id2:
+            if id1 is None:
+                raise ValueError("both ids are None")
             raise ValueError("bound clusters' ids are identical")
         elif id1 < id2:  # cluster should not be bound to itself
             self.adj_pairs.add((id1, id2))
