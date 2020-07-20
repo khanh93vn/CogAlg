@@ -1,9 +1,11 @@
 from collections import deque, defaultdict
 from class_cluster import ClusterStructure, NoneType
 from class_bind import AdjBinder
-from intra_comp import *
+from intra_comp import comp_g, comp_r
 from itertools import zip_longest
 from utils import pairwise
+import numpy as np
+import numpy.ma as ma
 # from comp_P_draft import comp_P_blob
 
 '''
@@ -144,7 +146,7 @@ def cluster_derts(dert__, Ave, fcr, fig):  # similar to frame_to_blobs
             P_ = form_P_(dert__[y,:,:], crit__[y, :], P_binder)  # horizontal clustering, adds a row of Ps
             P_ = scan_P_(P_, stack_,root_dert__, P_binder)  # vertical clustering, adds up_connects per P and down_connect_cnt per stack
             stack_ = form_stack_(P_, root_dert__, y)
-            stack_binder.bind_from_lower(P_binder)
+            # stack_binder.bind_from_lower(P_binder)
 
     sub_blobs =[]  # from form_blob:
 

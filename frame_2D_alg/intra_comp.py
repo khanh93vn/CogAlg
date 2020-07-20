@@ -194,16 +194,10 @@ def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack
     g__, dy__, dx__ = dert__[[3, 4, 5]]  # g, dy, dx -> local i, idy, idx
     g__[ma.where(g__ == 0)] = 1  # replace 0 values with 1 to avoid error, not needed in high-g blobs?
 
-    g0__, dy0__, dx0__ = g__[:-1, :-1].copy(), dy__[:-1, :-1].copy(), dx__[:-1, :-1].copy()  # top left
-    g1__, dy1__, dx1__ = g__[:-1, 1:].copy(),  dy__[:-1, 1:].copy(),  dx__[:-1, 1:].copy()   # top right
-    g2__, dy2__, dx2__ = g__[1:, 1:].copy(),   dy__[1:, 1:].copy(),   dx__[1:, 1:].copy()    # bottom right
-    g3__, dy3__, dx3__ = g__[1:, :-1].copy(),  dy__[1:, :-1].copy(),  dx__[1:, :-1].copy()   # bottom left
-
-    dy0__.mask = dx0__.mask = dy1__.mask = dx1__.mask = dy2__.mask = dx2__.mask = dy3__.mask = dx3__.mask = \
-    functools.reduce(lambda x1, x2:
-                     x1.astype('int') + x2.astype('int'),
-                     [g0__.mask, g1__.mask, g2__.mask, g3__.mask]
-                     ) > 1
+    g0__, dy0__, dx0__ = g__[:-1, :-1], dy__[:-1, :-1], dx__[:-1, :-1]  # top left
+    g1__, dy1__, dx1__ = g__[:-1, 1:],  dy__[:-1, 1:],  dx__[:-1, 1:]   # top right
+    g2__, dy2__, dx2__ = g__[1:, 1:],   dy__[1:, 1:],   dx__[1:, 1:]    # bottom right
+    g3__, dy3__, dx3__ = g__[1:, :-1],  dy__[1:, :-1],  dx__[1:, :-1]   # bottom left
 
     sin0__ = dy0__ / g0__;  cos0__ = dx0__ / g0__
     sin1__ = dy1__ / g1__;  cos1__ = dx1__ / g1__
@@ -214,8 +208,8 @@ def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack
     cosine of difference between diagonally opposed angles, in vector representation
     print(cos_da1__.shape, type(cos_da1__))
     '''
-    cos_da0__ = (sin0__ * cos0__) + (sin2__ * cos2__)  # top left to bottom right
-    cos_da1__ = (sin1__ * cos1__) + (sin3__ * cos3__)  # top right to bottom left
+    cos_da0__ = (cos2__ * cos0__) + (sin2__ * sin0__)  # top left to bottom right
+    cos_da1__ = (cos3__ * cos1__) + (sin3__ * sin1__)  # top right to bottom left
 
     dgy__ = ((g3__ + g2__) - (g0__ * cos_da0__ + g1__ * cos_da1__))
     # y-decomposed cosine difference between gs
@@ -229,16 +223,16 @@ def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack
     mg1__ = np.minimum(g1__, g3__) * cos_da1__
     mg__  = mg0__ + mg1__
 
-    g__ = g__ [:-1, :-1].copy()  # remove last row and column to align with derived params
-    dy__= dy__[:-1, :-1].copy()
-    dx__= dx__[:-1, :-1].copy()  # -> idy, idx to compute cos for comp rg
+    g__ = g__ [:-1, :-1]  # remove last row and column to align with derived params
+    dy__= dy__[:-1, :-1]
+    dx__= dx__[:-1, :-1]  # -> idy, idx to compute cos for comp rg
 
     # no longer needed: g__.mask = dy__.mask = dx__.mask = gg__.mask?
     '''
     next comp_rg will use g, dy, dx     
     next comp_gg will use gg, dgy, dgx  
     '''
-    return  ma.stack((g__, dy__, dx__, gg__, dgy__, dgx__, mg__))
+    return ma.stack((g__, dy__, dx__, gg__, dgy__, dgx__, mg__))
 
 
 def shape_check(dert__):
