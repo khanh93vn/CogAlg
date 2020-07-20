@@ -213,7 +213,6 @@ def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack
 
     dgy__ = ((g3__ + g2__) - (g0__ * cos_da0__ + g1__ * cos_da1__))
     # y-decomposed cosine difference between gs
-
     dgx__ = ((g1__ + g2__) - (g0__ * cos_da0__ + g3__ * cos_da1__))
     # x-decomposed cosine difference between gs
 
