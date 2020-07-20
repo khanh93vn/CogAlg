@@ -229,8 +229,8 @@ def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack
 
     # no longer needed: g__.mask = dy__.mask = dx__.mask = gg__.mask?
     '''
-    next comp_rg will use g, dy, dx     
-    next comp_gg will use gg, dgy, dgx  
+    next comp_rg will use g, dy, dx
+    next comp_gg will use gg, dgy, dgx
     '''
     return ma.stack((g__, dy__, dx__, gg__, dgy__, dgx__, mg__))
 

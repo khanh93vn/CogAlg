@@ -130,9 +130,10 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge d
 def image_to_blobs(image, verbose=False, render=False):
     if verbose:
         start_time = time()
-        print("Converting to image to blobs...")
-
+        print("Doing comparison...", end=" ")
     dert__ = comp_pixel(image)  # 2x2 cross-comparison / cross-correlation
+    if verbose:
+        print(f"Done in {(time() - start_time):f} seconds")
 
     frame = dict(rng=1, dert__=dert__, mask=None, I=0, G=0, Dy=0, Dx=0, blob__=[])
     stack_ = deque()  # buffer of running vertical stacks of Ps
@@ -143,9 +144,13 @@ def image_to_blobs(image, verbose=False, render=False):
             return str(Path(input_path).with_suffix(suffix))
         streamer = Img2BlobStreamer(CBlob, frame,
                                     record_path=output_path(arguments['image'],
-                                    suffix='.out.avi'))
+                                    suffix='.im2blobs.avi'))
 
     stack_binder = AdjBinder(Cstack)
+
+    if verbose:
+        start_time = time()
+        print("Converting to image to blobs...")
 
     for y in range(height):  # first and last row are discarded
         if verbose:
@@ -184,13 +189,13 @@ def image_to_blobs(image, verbose=False, render=False):
 
     if render:
         streamer.update(y)
+        streamer.writeframe(output_path(arguments['image'],
+                                        suffix='.im2blobs.jpg'))
         print("Press Q to quit...")
         streamer.init_adj_disp()
         while streamer.render() != ord('q'):    # press Q key to qut
             streamer.update_adj_disp()
         streamer.stop()
-        streamer.writeframe(output_path(arguments['image'],
-                                        suffix='.out.jpg'))
 
     return frame  # frame of blobs
 
@@ -559,26 +564,3 @@ if __name__ == '__main__':
     else:
         print(end_time)
     pass
-    # DEBUG -------------------------------------------------------------------
-    """
-    print("Drawing blobs...")
-    blob_ = frame['blob__']
-    blob_.sort(key=lambda blob: blob.Dert['S'], reverse=True)
-    for i in range(20):
-        frame['blob__'] = [blob_[i]]
-        imwrite(f"images/raccoon_blobs/{i}.bmp",
-                map_frame_binary(frame,
-                                 sign_map={
-                                     1: WHITE,  # 2x2 gblobs
-                                     0: BLACK
-                                 }))
-    """
-    """
-    imwrite("images/gblobs.bmp",
-        map_frame_binary(frame,
-                         sign_map={
-                             1: WHITE,  # 2x2 gblobs
-                             0: BLACK
-                         }))
-    """
-    # END DEBUG ---------------------------------------------------------------
