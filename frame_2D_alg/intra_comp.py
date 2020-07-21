@@ -110,15 +110,15 @@ def comp_r(dert__, fig, root_fcr):
         '''
         sparse aligned a__center and a__rim arrays:
         '''
-        a__center = a__[:, 1:-1:2, 1:-1:2].copy()
-        a__topleft = a__[:, :-2:2, :-2:2].copy()
-        a__top = a__[:, :-2:2, 1:-1: 2].copy()
-        a__topright = a__[:, :-2:2, 2::2].copy()
-        a__right = a__[:, 1:-1:2, 2::2].copy()
+        a__center      = a__[:, 1:-1:2, 1:-1:2].copy()
+        a__topleft     = a__[:, :-2:2, :-2:2].copy()
+        a__top         = a__[:, :-2:2, 1:-1: 2].copy()
+        a__topright    = a__[:, :-2:2, 2::2].copy()
+        a__right       = a__[:, 1:-1:2, 2::2].copy()
         a__bottomright = a__[:, 2::2, 2::2].copy()
-        a__bottom = a__[:, 2::2, 1:-1:2].copy()
-        a__bottomleft = a__[:, 2::2, :-2:2].copy()
-        a__left = a__[:, 1:-1:2, :-2:2].copy()
+        a__bottom      = a__[:, 2::2, 1:-1:2].copy()
+        a__bottomleft  = a__[:, 2::2, :-2:2].copy()
+        a__left        = a__[:, 1:-1:2, :-2:2].copy()
 
         ''' 
         mask kernels with more than one masked dert 
@@ -134,14 +134,14 @@ def comp_r(dert__, fig, root_fcr):
         8-tuple of differences between center dert angle and rim dert angle:
         '''
         cos_da = np.stack((
-                  ((a__center[0] * a__center[1]) + (a__topleft[0] * a__topleft[1])),
-                  ((a__center[0] * a__center[1]) + (a__top[0] *  a__top[1])),
-                  ((a__center[0] * a__center[1]) + (a__topright[0] * a__topright[1])),
-                  ((a__center[0] * a__center[1]) + (a__right[0] * a__right[1])),
+                  ((a__center[0] * a__center[1]) + (a__topleft[0]     * a__topleft[1])),
+                  ((a__center[0] * a__center[1]) + (a__top[0]         * a__top[1])),
+                  ((a__center[0] * a__center[1]) + (a__topright[0]    * a__topright[1])),
+                  ((a__center[0] * a__center[1]) + (a__right[0]       * a__right[1])),
                   ((a__center[0] * a__center[1]) + (a__bottomright[0] * a__bottomright[1])),
-                  ((a__center[0] * a__center[1]) + (a__bottom[0] * a__bottom[1])),
-                  ((a__center[0] * a__center[1]) + (a__bottomleft[0] * a__bottomleft[1])),
-                  ((a__center[0] * a__center[1]) + (a__left[0] * a__left[1]))
+                  ((a__center[0] * a__center[1]) + (a__bottom[0]      * a__bottom[1])),
+                  ((a__center[0] * a__center[1]) + (a__bottomleft[0]  * a__bottomleft[1])),
+                  ((a__center[0] * a__center[1]) + (a__left[0]        * a__left[1]))
                 ))
         '''
         8-tuple of cosine matches per direction:
@@ -261,7 +261,6 @@ def mask_SUM(list_of_arrays):  # sum of masks converted to int
     return mask
 '''
 Unpack in code:
-
         a__center.mask = a__topleft.mask = a__top.mask = a__topright.mask = a__right.mask = a__bottomright.mask = \
         a__bottom.mask = a__bottomleft.mask = a__left.mask = \
         functools.reduce(lambda x1, x2:
