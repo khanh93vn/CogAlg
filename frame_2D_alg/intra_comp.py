@@ -39,7 +39,7 @@ def comp_r(dert__, fig, root_fcr):
                            (dert__.shape[2] - 1) // 2),
                           dtype=dert__.dtype)
     new_dert__.mask = True
-    # extract new_dert__ 'views'
+    # extract new_dert__ 'views', use [:] to 'update' views and new_dert__ at the same time
     i__center, idy__, idx__, g__, dy__, dx__, m__ = new_dert__
 
     i__ = dert__[0]  # i is ig if fig else pixel
@@ -67,7 +67,7 @@ def comp_r(dert__, fig, root_fcr):
     # i__center.mask = i__topleft.mask = i__top.mask = i__topright.mask = i__right.mask = i__bottomright.mask = \
     # i__bottom.mask = i__bottomleft.mask = i__left.mask = mask_i
 
-    idy__[:], idx__[:] = dert__[[1, 2], 1:-1:2, 1:-1:2]
+    idy__[:], idx__[:] = dert__[[1, 2], 1:-1:2, 1:-1:2]  # use [:] to update without reassigning variables
 
     if root_fcr:  # root fork is comp_r, accumulate derivatives:
 
@@ -187,24 +187,35 @@ def comp_r(dert__, fig, root_fcr):
             '''
             accumulate in prior-range dy, dx: 3x3 -> 5x5 -> 9x9 
             '''
-        g__[:] = ma.hypot(dy__, dx__)
+        g__[:] = ma.hypot(dy__, dx__)  # use g__[:] = instead of g__ = to assign elements instead of g__ itself
 
     '''
     next comp_r will use full dert       
     next comp_g will use g__, dy__, dx__
     '''
-    return new_dert__
+    return new_dert__  # new_dert__ has been updated along with 'view' arrays: i__center, idy__, idx__, g__, dy__, dx__, m__
 
 
 def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack dert__
 
-    g__, dy__, dx__ = dert__[[3, 4, 5]]  # g, dy, dx -> local i, idy, idx
-    g__[ma.where(g__ == 0)] = 1  # replace 0 values with 1 to avoid error, not needed in high-g blobs?
+    # initialize the return variable
+    new_dert__ = ma.zeros((dert__.shape[0], dert__.shape[1] - 1, dert__.shape[2] - 1))
+    new_dert__.mask = True  # initialize mask
+    ig__, idy__, idx__, gg__, dgy__, dgx__, mg__ = new_dert__  # assign 'views'. Use [:] to update views
 
-    g0__, dy0__, dx0__ = g__[:-1, :-1], dy__[:-1, :-1], dx__[:-1, :-1]  # top left
-    g1__, dy1__, dx1__ = g__[:-1, 1:],  dy__[:-1, 1:],  dx__[:-1, 1:]   # top right
-    g2__, dy2__, dx2__ = g__[1:, 1:],   dy__[1:, 1:],   dx__[1:, 1:]    # bottom right
-    g3__, dy3__, dx3__ = g__[1:, :-1],  dy__[1:, :-1],  dx__[1:, :-1]   # bottom left
+    # Unpack relevant derts
+    g__, dy__, dx__ = dert__[[3, 4, 5]]  # g, dy, dx -> local i, idy, idx
+    g__.data[np.where(g__.data == 0)] = 1  # replace 0 values with 1 to avoid error, not needed in high-g blobs?
+
+    g0__, dy0__, dx0__ = g__[:-1, :-1].data, dy__[:-1, :-1].data, dx__[:-1, :-1].data  # top left
+    g1__, dy1__, dx1__ = g__[:-1, 1:].data,  dy__[:-1, 1:].data,  dx__[:-1, 1:].data   # top right
+    g2__, dy2__, dx2__ = g__[1:, 1:].data,   dy__[1:, 1:].data,   dx__[1:, 1:].data    # bottom right
+    g3__, dy3__, dx3__ = g__[1:, :-1].data,  dy__[1:, :-1].data,  dx__[1:, :-1].data   # bottom left
+
+    summed_mask = (g__[:-1, :-1].mask.astype(int) +
+                   g__[:-1, 1:].mask.astype(int) +
+                   g__[1:, 1:].mask.astype(int) +
+                   g__[1:, :-1].mask.astype(int)) > 1
 
     sin0__ = dy0__ / g0__;  cos0__ = dx0__ / g0__
     sin1__ = dy1__ / g1__;  cos1__ = dx1__ / g1__
@@ -218,27 +229,27 @@ def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack
     cos_da0__ = (cos2__ * cos0__) + (sin2__ * sin0__)  # top left to bottom right
     cos_da1__ = (cos3__ * cos1__) + (sin3__ * sin1__)  # top right to bottom left
 
-    dgy__ = ((g3__ + g2__) - (g0__ * cos_da0__ + g1__ * cos_da1__))
+    dgy__[:] = ((g3__ + g2__) - (g0__ * cos_da0__ + g1__ * cos_da1__))
     # y-decomposed cosine difference between gs
-    dgx__ = ((g1__ + g2__) - (g0__ * cos_da0__ + g3__ * cos_da1__))
+    dgx__[:] = ((g1__ + g2__) - (g0__ * cos_da0__ + g3__ * cos_da1__))
     # x-decomposed cosine difference between gs
 
-    gg__ = ma.hypot(dgy__, dgx__)  # gradient of gradient
+    gg__[:] = ma.hypot(dgy__, dgx__)  # gradient of gradient
 
     mg0__ = ma.minimum(g0__, g2__) * cos_da0__  # g match = min(g, _g) *cos(da)
     mg1__ = ma.minimum(g1__, g3__) * cos_da1__
-    mg__  = mg0__ + mg1__
+    mg__[:]  = mg0__ + mg1__
 
-    g__ = g__ [:-1, :-1]  # remove last row and column to align with derived params
-    dy__= dy__[:-1, :-1]
-    dx__= dx__[:-1, :-1]  # -> idy, idx to compute cos for comp rg
-
+    ig__[:] = g__ [:-1, :-1]  # remove last row and column to align with derived params
+    idy__[:] = dy__[:-1, :-1]
+    idx__[:] = dx__[:-1, :-1]  # -> idy, idx to compute cos for comp rg
+    gg__.mask = mg__.mask = dgy__.mask = dgx__.mask = summed_mask
     # no longer needed: g__.mask = dy__.mask = dx__.mask = gg__.mask?
     '''
     next comp_rg will use g, dy, dx
     next comp_gg will use gg, dgy, dgx
     '''
-    return ma.stack((g__, dy__, dx__, gg__, dgy__, dgx__, mg__))
+    return new_dert__ # new_dert__ has been updated along with 'view' arrays: ig__, idy__, idx__, gg__, dgy__, dgx__, mg__
 
 
 def shape_check(dert__):  # deprecated
