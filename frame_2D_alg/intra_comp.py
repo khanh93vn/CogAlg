@@ -111,12 +111,12 @@ def comp_r(dert__, fig, root_fcr):
               + abs(i__center.data - i__bottomleft.data)
               + abs(i__center.data - i__left.data)
               )
-
+        # print(0)
     else:  # fig is TRUE, compare angle and then magnitude of 8 center-rim pairs
         # replace float with int
 
         i__[ma.where(i__ == 0)] = 1  # if g is int
-        a__ = [idy__, idx__] / i__  # sin, cos;  i = ig
+        a__ = dert__[[1, 2]] / i__  # sin, cos;  i = ig
         '''
         sparse aligned a__center and a__rim arrays:
         '''
@@ -188,7 +188,7 @@ def comp_r(dert__, fig, root_fcr):
             accumulate in prior-range dy, dx: 3x3 -> 5x5 -> 9x9 
             '''
         g__[:] = ma.hypot(dy__, dx__)  # use g__[:] = instead of g__ = to assign elements instead of g__ itself
-
+        # print(1)
     '''
     next comp_r will use full dert       
     next comp_g will use g__, dy__, dx__
@@ -249,6 +249,7 @@ def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack
     next comp_rg will use g, dy, dx
     next comp_gg will use gg, dgy, dgx
     '''
+    # print(2)
     return new_dert__ # new_dert__ has been updated along with 'view' arrays: ig__, idy__, idx__, gg__, dgy__, dgx__, mg__
 
 
