@@ -38,24 +38,34 @@ def comp_r(dert__, fig, root_fcr):
     '''
     sparse aligned i__center and i__rim arrays:
     '''
-    i__center =      i__[1:-1:2, 1:-1:2]
-    i__topleft =     i__[:-2:2, :-2:2]
-    i__top =         i__[:-2:2, 1:-1:2]
-    i__topright =    i__[:-2:2, 2::2]
-    i__right =       i__[1:-1:2, 2::2]
-    i__bottomright = i__[2::2, 2::2]
-    i__bottom =      i__[2::2, 1:-1:2]
-    i__bottomleft =  i__[2::2, :-2:2]
-    i__left =        i__[1:-1:2, :-2:2]
+    i__center =      i__[1:-1:2, 1:-1:2].copy()
+    i__topleft =     i__[:-2:2, :-2:2].copy()
+    i__top =         i__[:-2:2, 1:-1:2].copy()
+    i__topright =    i__[:-2:2, 2::2].copy()
+    i__right =       i__[1:-1:2, 2::2].copy()
+    i__bottomright = i__[2::2, 2::2].copy()
+    i__bottom =      i__[2::2, 1:-1:2].copy()
+    i__bottomleft =  i__[2::2, :-2:2].copy()
+    i__left =        i__[1:-1:2, :-2:2].copy()
+    ''' 
+    remove mask from kernels with only one masked dert 
+    '''
+    mask_i = mask_SUM([i__center.mask, i__topleft.mask, i__top.mask,
+                       i__topright.mask, i__right.mask, i__bottomright.mask,
+                       i__bottom.mask, i__bottomleft.mask, i__left.mask])
+
+    i__center.mask = i__topleft.mask = i__top.mask = i__topright.mask = i__right.mask = i__bottomright.mask = \
+    i__bottom.mask = i__bottomleft.mask = i__left.mask = mask_i
 
     idy__, idx__ = dert__[[1, 2]]
 
     if root_fcr:  # root fork is comp_r, accumulate derivatives:
 
         dy__, dx__, m__ = dert__[[4, 5, 6]]
-        dy__ = dy__[1:-1:2, 1:-1:2]  # sparse to align with i__center
-        dx__ = dx__[1:-1:2, 1:-1:2]
-        m__  =  m__[1:-1:2, 1:-1:2]
+        dy__ = dy__[1:-1:2, 1:-1:2].copy()  # sparse to align with i__center
+        dx__ = dx__[1:-1:2, 1:-1:2].copy()
+        m__  =  m__[1:-1:2, 1:-1:2].copy()
+        dy__.mask = dx__.mask = m__.mask = mask_i
 
     else:   # root fork is comp_g or comp_pixel, initialize sparse derivatives:
 
@@ -70,7 +80,7 @@ def comp_r(dert__, fig, root_fcr):
                          i__topright - i__bottomleft,
                          i__right - i__left
                          ))
-        # dt__.mask = mask_i: not needed?
+        dt__.mask = mask_i  # not needed?
 
         for d__, YCOEF, XCOEF in zip(dt__, YCOEFs[:4], XCOEFs[:4]):
 
@@ -100,28 +110,38 @@ def comp_r(dert__, fig, root_fcr):
         '''
         sparse aligned a__center and a__rim arrays:
         '''
-        a__center      = a__[:, 1:-1:2, 1:-1:2]
-        a__topleft     = a__[:, :-2:2, :-2:2]
-        a__top         = a__[:, :-2:2, 1:-1: 2]
-        a__topright    = a__[:, :-2:2, 2::2]
-        a__right       = a__[:, 1:-1:2, 2::2]
-        a__bottomright = a__[:, 2::2, 2::2]
-        a__bottom      = a__[:, 2::2, 1:-1:2]
-        a__bottomleft  = a__[:, 2::2, :-2:2]
-        a__left        = a__[:, 1:-1:2, :-2:2]
+        a__center      = a__[:, 1:-1:2, 1:-1:2].copy()
+        a__topleft     = a__[:, :-2:2, :-2:2].copy()
+        a__top         = a__[:, :-2:2, 1:-1: 2].copy()
+        a__topright    = a__[:, :-2:2, 2::2].copy()
+        a__right       = a__[:, 1:-1:2, 2::2].copy()
+        a__bottomright = a__[:, 2::2, 2::2].copy()
+        a__bottom      = a__[:, 2::2, 1:-1:2].copy()
+        a__bottomleft  = a__[:, 2::2, :-2:2].copy()
+        a__left        = a__[:, 1:-1:2, :-2:2].copy()
+
+        ''' 
+        mask kernels with more than one masked dert 
+        '''
+        mask_a = mask_SUM([a__center.mask, a__topleft.mask, a__top.mask,
+                           a__topright.mask, a__right.mask, a__bottomright.mask,
+                           a__bottom.mask, a__bottomleft.mask, a__left.mask])
+
+        a__center.mask = a__topleft.mask = a__top.mask = a__topright.mask = a__right.mask = a__bottomright.mask = \
+            a__bottom.mask = a__bottomleft.mask = a__left.mask = mask_a
 
         '''
-        8-tuple of differences between center dert angle and rim dert angle:
+        8-tuple of differences between central dert angle and rim dert angle:
         '''
         cos_da = ma.stack((
-                  ((a__topleft[1] * a__center[1]) + (a__center[0] * a__topleft[0])),
-                  ((a__top[1] * a__center[1]) + (a__center[0] * a__top[0])),
-                  ((a__topright[1] * a__center[1]) + (a__center[0] * a__topright[0])),
-                  ((a__right[1] * a__center[1]) + (a__center[0] * a__right[0])),
+                  ((a__topleft[1]     * a__center[1]) + (a__center[0] * a__topleft[0])),
+                  ((a__top[1]         * a__center[1]) + (a__center[0] * a__top[0])),
+                  ((a__topright[1]    * a__center[1]) + (a__center[0] * a__topright[0])),
+                  ((a__right[1]       * a__center[1]) + (a__center[0] * a__right[0])),
                   ((a__bottomright[1] * a__center[1]) + (a__center[0] * a__bottomright[0])),
-                  ((a__bottom[1] * a__center[1]) + (a__center[0] * a__bottom[0])),
-                  ((a__bottomleft[1] * a__center[1]) + (a__center[0] * a__bottomleft[0])),
-                  ((a__left[1] * a__center[1]) + (a__center[0] * a__left[0]))
+                  ((a__bottom[1]      * a__center[1]) + (a__center[0] * a__bottom[0])),
+                  ((a__bottomleft[1]  * a__center[1]) + (a__center[0] * a__bottomleft[0])),
+                  ((a__left[1]        * a__center[1]) + (a__center[0] * a__left[0]))
                 ))
         '''
         8-tuple of cosine matches per direction:
@@ -170,8 +190,6 @@ def comp_r(dert__, fig, root_fcr):
 
 def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack dert__
 
-    dert__ = shape_check(dert__)  # remove derts of incomplete kernels
-
     g__, dy__, dx__ = dert__[[3, 4, 5]]  # g, dy, dx -> local i, idy, idx
     g__[ma.where(g__ == 0)] = 1  # replace 0 values with 1 to avoid error, not needed in high-g blobs?
 
@@ -186,7 +204,7 @@ def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack
     sin3__ = dy3__ / g3__;  cos3__ = dx3__ / g3__
 
     '''
-    cosine of difference between diagonally opposed angles, in vector representation
+    cosine of difference between diagonally opposite angles, in vector representation
     print(cos_da1__.shape, type(cos_da1__))
     '''
     cos_da0__ = (cos2__ * cos0__) + (sin2__ * sin0__)  # top left to bottom right
@@ -215,7 +233,7 @@ def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack
     return ma.stack((g__, dy__, dx__, gg__, dgy__, dgx__, mg__))
 
 
-def shape_check(dert__):
+def shape_check(dert__):  # deprecated
     # remove derts of 2x2 kernels that are missing some other derts
 
     if dert__[0].shape[0] % 2 != 0:
@@ -232,3 +250,33 @@ def normalization(array):
     width = end - start
     res = (array - array.min()) / (array.max() - array.min()) * width + start
     return res
+
+
+def mask_SUM(list_of_arrays):  # sum of masks converted to int
+
+    sum = functools.reduce(lambda x1, x2: x1.astype('int') + x2.astype('int'), list_of_arrays)
+    mask = sum > 1  # mask output if more than 1 input is masked
+
+    return mask
+'''
+Unpack in code:
+        a__center.mask = a__topleft.mask = a__top.mask = a__topright.mask = a__right.mask = a__bottomright.mask = \
+        a__bottom.mask = a__bottomleft.mask = a__left.mask = \
+        functools.reduce(lambda x1, x2:
+                         x1.astype('int') + x2.astype('int'),
+                         [a__center, a__topleft, a__top,
+                         a__topright, a__right, a__bottomright,
+                         a__bottom, a__bottomleft, a__left]
+                         ) > 1
+                         
+cos_da = np.stack((  # wrong
+          ((a__center[0] * a__center[1]) + (a__topleft[0]     * a__topleft[1])),
+          ((a__center[0] * a__center[1]) + (a__top[0]         * a__top[1])),
+          ((a__center[0] * a__center[1]) + (a__topright[0]    * a__topright[1])),
+          ((a__center[0] * a__center[1]) + (a__right[0]       * a__right[1])),
+          ((a__center[0] * a__center[1]) + (a__bottomright[0] * a__bottomright[1])),
+          ((a__center[0] * a__center[1]) + (a__bottom[0]      * a__bottom[1])),
+          ((a__center[0] * a__center[1]) + (a__bottomleft[0]  * a__bottomleft[1])),
+          ((a__center[0] * a__center[1]) + (a__left[0]        * a__left[1]))
+          ))                   
+'''

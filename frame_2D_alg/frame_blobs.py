@@ -514,25 +514,13 @@ if __name__ == '__main__':
             '''
             Blob G: -|+ predictive value, positive value of -G blobs is lent to the value of their adjacent +G blobs. 
             +G "edge" blobs are low-match, they are only valuable as contrast: to the extent that 
-            their negative value cancels the value of adjacent -G "flat" blobs:
+            their negative value cancels positive value of adjacent -G "flat" blobs:
             '''
             G = blob.Dert['G']; adj_G = blob.adj_blobs[2]
-            borrow_G = min(abs(G), abs(adj_G))  # comp(G,_G): only value present in both parties can be borrowed from one to another
-            if blob.sign:
-                borrow_G /= len(blob.adj_blobs[0])  # borrow by blob from adj_blobs /= n_adj_blobs: each lends to multiple blobs
-            '''
-            Negative adj_G lends to other blobs non-exclusively. 
-            So, exact total lend allocation may not be feasible, number of adj_blobs above could be the best proxy.  
-             
-            if blob.sign:  # borrow by blob from adj_blobs, which may lend to multiple blobs, so borrow_G /= summed borrow requests:
-                Min_G = 0
-                for (adj_blob, _) in blob.adj_blobs[0]:  # adj_blob_
-                    for (adjj_blob, _) in adj_blob.adj_blobs[0]:  # adj_adj_blob_
-                        Min_G += min( abs( adjj_blob.Dert['G']), abs( adj_G))  
-                        # all adj_adj_blobs borrow from blob.adj_blobs[2], but it is recomposed in their adj_G?
-                        
-                borrow_G *= borrow_G / Min_G  # borrow_G = min_G / Min_G: total borrowing requested from adj_blobs
-                '''
+            borrow_G = min(abs(G), abs(adj_G))
+            # comp(G,_G): only value present in both parties can be borrowed from one to another
+            # although borrowing may be reduced by some inductive leaking across external blob?
+
             blob = CDeepBlob(Dert=blob.Dert, box=blob.box, stack_=blob.stack_,
                              sign=blob.sign, root_dert__=frame['dert__'],
                              dert__=blob.dert__, adj_blobs=blob.adj_blobs,
