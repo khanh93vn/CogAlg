@@ -10,6 +10,8 @@ import functools
 
 YCOEFs = np.array([-1, -2, -1, 0, 1, 2, 1, 0])
 XCOEFs = np.array([-1, 0, 1, 2, 1, 0, -1, -2])
+# YCOEFs = np.array([-47, -162, -47, 0, 47, 162, 47, 0])
+# XCOEFs = np.array([-47, 0, 47, 162, 47, 0, -47, -162])
 ''' 
     |--(clockwise)--+  |--(clockwise)--+
     YCOEF: -1  -2  -1  ¦   XCOEF: -1   0   1  ¦
