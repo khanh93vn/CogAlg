@@ -21,16 +21,21 @@ OUTPUT_PATH = "./images/intra_comp0/"
 def draw_g(img_out, g_):
     endy = min(img_out.shape[0], g_.shape[0])
     endx = min(img_out.shape[1], g_.shape[1])
-    img_out[:endy, :endx] = normalization(g_[:endy, :endx])
+    img_out[:endy, :endx] = (g_[:endy, :endx] * 255) / g_.max()  # scale to max=255, less than max / 255 is 0
+
+    # was: img_out[:endy, :endx] = normalization(g_[:endy, :endx])
+    # assert array.min() >= 0
     # for y in range(g_.shape[0]):  # loop rows, skip last row
     #     for x in range(g_.shape[1]):  # loop columns, skip last column
     #         img_out[y,x] = g_[y,x]
-
     # return img_out.astype('uint8')
+
     return img_out
 
 def draw_gr(img_out, g_, rng):
-    img_out[:] = cv2.resize(normalization(g_) ,(img_out.shape[1], img_out.shape[0]),
+
+    img_out[:] = cv2.resize((g_[:] * 255) / g_.max(),  # normalize g to uint
+                            (img_out.shape[1], img_out.shape[0]),
                             interpolation=cv2.INTER_NEAREST)
     # for y in range(g_.shape[0]):
     #     for x in range(g_.shape[1]):
@@ -180,4 +185,3 @@ def add_colour(img_comp,size_y,size_x):
     img_colour = np.rollaxis(img_colour,0,3).astype('uint8')
 
     return img_colour
-
