@@ -19,7 +19,6 @@ from collections import deque
 from pathlib import Path
 import sys
 import numpy as np
-import numpy.ma as ma
 
 from class_cluster import ClusterStructure, NoneType
 from class_bind import AdjBinder
@@ -101,6 +100,7 @@ class CBlob(ClusterStructure):
     open_stacks = int
     root_dert__ = object
     dert__ = object
+    mask = object
     adj_blobs = list
     fopen = bool
     margin = list
@@ -123,7 +123,7 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge d
 
     G__ = np.hypot(Gy__, Gx__)  # central gradient per kernel, between its four vertex pixels
 
-    return ma.stack((topleft__, G__, Gy__, Gx__))  # tuple of 2D arrays per param of dert (derivatives' tuple)
+    return (topleft__, G__, Gy__, Gx__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
     # renamed as dert__ = (p__, g__, dy__, dx__) for readability in functions below
 
 
@@ -137,7 +137,7 @@ def image_to_blobs(image, verbose=False, render=False):
 
     frame = dict(rng=1, dert__=dert__, mask=None, I=0, G=0, Dy=0, Dx=0, blob__=[])
     stack_ = deque()  # buffer of running vertical stacks of Ps
-    height, width = dert__.shape[1:]
+    height, width = dert__[0].shape
 
     if render:
         def output_path(input_path, suffix):
@@ -152,14 +152,14 @@ def image_to_blobs(image, verbose=False, render=False):
         start_time = time()
         print("Converting to image to blobs...")
 
-    for y in range(height):  # first and last row are discarded
+    for y, dert_ in enumerate(zip(*dert__)):  # first and last row are discarded
         if verbose:
             print(f"\rProcessing line {y+1}/{height}, ", end="")
             print(f"{len(frame['blob__'])} blobs converted", end="")
             sys.stdout.flush()
 
         P_binder = AdjBinder(CP)  # binder needs data about clusters of the same level
-        P_ = form_P_(dert__[:, y].T, P_binder)  # horizontal clustering
+        P_ = form_P_(zip(*dert_), P_binder)  # horizontal clustering
 
         if render:
             streamer.update(y, P_)
@@ -214,10 +214,10 @@ def form_P_(dert__, binder):  # horizontal clustering and summation of dert para
     # P is a segment of same-sign derts in horizontal slice of a blob
 
     P_ = deque()  # row of Ps
-    I, G, Dy, Dx, L, x0 = *dert__[0], 1, 0  # initialize P params with 1st dert params
+    I, G, Dy, Dx, L, x0 = *next(dert__), 1, 0  # initialize P params with 1st dert params
     G = int(G) - ave
     _s = G > 0  # sign
-    for x, (p, g, dy, dx) in enumerate(dert__[1:], start=1):
+    for x, (p, g, dy, dx) in enumerate(dert__, start=1):    # dert__ is now a generator/iterator, no need for [1:]
         vg = int(g) - ave  # deviation of g
         s = vg > 0
         if s != _s:
@@ -400,21 +400,18 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
                 x_stop = x_start + P.L
                 mask[y, x_start:x_stop] = False
 
-        dert__ = (frame['dert__'][:, y0:yn, x0:xn]).copy()  # copy mask as dert.mask
-        dert__.mask[:] = True
-        dert__.mask[:] = mask  # overwrite default mask 0s
-        frame['dert__'][:, y0:yn, x0:xn] = dert__.copy()  # assign mask back to frame dert__
+        dert__ = tuple(derts[y0:yn, x0:xn] for derts in frame['dert__'])  # slice each dert array of the whole frame
 
         fopen = 0  # flag: blob on frame boundary
-        if x0 == 0 or xn == frame['dert__'].shape[2] or y0 == 0 or yn == frame['dert__'].shape[1]:
+        if x0 == 0 or xn == frame['dert__'][0].shape[1] or y0 == 0 or yn == frame['dert__'][0].shape[0]:
             fopen = 1
 
-        blob.root_dert__=frame['dert__']
+        blob.root_dert__ = frame['dert__']
         blob.box=(y0, yn, x0, xn)
-        blob.dert__=dert__
-        blob.adj_blobs= [[], 0, 0]
-        blob.fopen=fopen
-        # blob.margin=[blob_map, margin]
+        blob.dert__ = dert__
+        blob.mask = mask
+        blob.adj_blobs = [[], 0, 0]
+        blob.fopen = fopen
 
         frame.update(I=frame['I'] + blob.Dert['I'],
                      G=frame['G'] + blob.Dert['G'],
@@ -460,7 +457,8 @@ def accum_Dert(Dert: dict, **params) -> None:
 
 
 def update_dert(blob):  # add idy, idx, m to dert__
-
+    '''
+    old code
     new_dert__ = np.zeros((7, blob.dert__.shape[1], blob.dert__.shape[2])) # initialize with 0
     new_dert__ = ma.array(new_dert__, mask=True)  # create masked array
     new_dert__.mask = blob.dert__[0].mask
@@ -472,10 +470,15 @@ def update_dert(blob):  # add idy, idx, m to dert__
     new_dert__[4] = blob.dert__[2]  # dy
     new_dert__[5] = blob.dert__[3]  # dx
     # new_dert__[6] = m
+    '''
+    i, g, dy, dx = blob.dert__
+    blob.dert__ = (i,
+                   np.zeros(i.shape),  # idy
+                   np.zeros(i.shape),  # idx
+                   g, dy, dx,
+                   np.zeros(i.shape))  # m
 
-    blob.dert__ = new_dert__.copy()
-
-    return blob
+    # no need to return, changes are applied to blob
 
 # -----------------------------------------------------------------------------
 # Main
@@ -525,15 +528,15 @@ if __name__ == '__main__':
             '''
             blob = CDeepBlob(Dert=blob.Dert, box=blob.box, stack_=blob.stack_,
                              sign=blob.sign, root_dert__=frame['dert__'],
-                             dert__=blob.dert__, adj_blobs=blob.adj_blobs,
-                             fopen=blob.fopen, margin=blob.margin)
+                             dert__=blob.dert__, mask=blob.mask,
+                             adj_blobs=blob.adj_blobs, fopen=blob.fopen) #, margin=blob.margin)
             if blob.sign:
-                if G + borrow_G > aveB and blob.dert__.shape[1] > 3 and blob.dert__.shape[2] > 3:  # min blob dimensions
-                    blob = update_dert(blob)
+                if G + borrow_G > aveB and blob.dert__[0].shape[0] > 3 and blob.dert__[0].shape[1] > 3:  # min blob dimensions
+                    update_dert(blob)
                     deep_layers[i] = intra_blob(blob, rdn=1, rng=.0, fig=0, fcr=0)  # +G blob' dert__' comp_g
 
-            elif -G - borrow_G > aveB and blob.dert__.shape[1] > 3 and blob.dert__.shape[2] > 3:  # min blob dimensions
-                blob = update_dert(blob)
+            elif -G - borrow_G > aveB and blob.dert__[0].shape[0] > 3 and blob.dert__[0].shape[1] > 3:  # min blob dimensions
+                update_dert(blob)
                 deep_layers[i] = intra_blob(blob, rdn=1, rng=1, fig=0, fcr=1)  # -G blob' dert__' comp_r in 3x3 kernels
 
             if deep_layers[i]:  # if there are deeper layers

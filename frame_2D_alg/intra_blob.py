@@ -74,6 +74,7 @@ class CDeepBlob(ClusterStructure):
     open_stacks = int
     root_dert__ = object
     dert__ = object
+    mask = object
     adj_blobs = list
     fopen = bool
     margin = list
@@ -86,7 +87,7 @@ class CDeepBlob(ClusterStructure):
 
 # --------------------------------------------------------------------------------------------------------------
 # functions, ALL WORK-IN-PROGRESS:
-
+```````
 def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-comp within blob
 
     # fig: flag input is g | p, fcr: flag comp over rng+ | der+
@@ -96,7 +97,7 @@ def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-c
     if fcr:
         dert__ = comp_r(ext_dert__, fig, fcr)  # -> m sub_blobs
     else:
-        dert__ = comp_g(ext_dert__)  # -> g sub_blobs:
+        dert__, mask = comp_g(ext_dert__)  # -> g sub_blobs:
 
     if dert__.shape[1] >2 and dert__.shape[2] >2 and False in dert__.mask:  # min size in y and x, least one dert in dert__
         sub_blobs = cluster_derts(dert__, ave*rdn, fcr, fig)
@@ -508,8 +509,9 @@ def form_margin(blob_map, diag):  # get 1-pixel margin of blob, in 4 or 8 direct
 def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
 
     y0, yn, x0, xn = blob.box  # extend dert box:
-    _, rY, rX = blob.root_dert__.shape  # higher dert size
-    cP, cY, cX = blob.dert__.shape  # current dert params and size
+    rY, rX = blob.root_dert__[0].shape  # higher dert size
+    cP = len(blob.dert__)
+    cY, cX = blob.dert__[0].shape  # current dert params and size
 
     y0e = y0 - 1; yne = yn + 1; x0e = x0 - 1; xne = xn + 1  # e is for extended
     # prevent boundary <0 or >image size:
@@ -522,15 +524,13 @@ def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
     if xne > rX: xne = rX; xend = xstart + cX
     else:        xend = xstart + cX
 
-    ini_dert = blob.root_dert__[:, y0e:yne, x0e:xne]  # extended dert where boundary is masked
+    ini_dert = tuple(derts[y0e:yne, x0e:xne] for derts in blob.root_dert__)  # extended dert where boundary is masked
 
-    ext_dert__ = ma.array(np.zeros((cP, ini_dert.shape[1], ini_dert.shape[2])))
-    ext_dert__.mask = True
-    ext_dert__[0, ystart:yend, xstart:xend] = blob.dert__[0].copy() # update i
-    ext_dert__[3, ystart:yend, xstart:xend] = blob.dert__[1].copy() # update g
-    ext_dert__[4, ystart:yend, xstart:xend] = blob.dert__[2].copy() # update dy
-    ext_dert__[5, ystart:yend, xstart:xend] = blob.dert__[3].copy() # update dx
-    ext_dert__.mask = ext_dert__[0].mask # set all masks to blob dert mask
+    ext_dert__ = tuple(np.zeros(ini_dert[0].shape) for _ in range(cP))
+    ext_dert__[0][ystart:yend, xstart:xend] = blob.dert__[0] # update i
+    ext_dert__[3][ystart:yend, xstart:xend] = blob.dert__[1] # update g
+    ext_dert__[4][ystart:yend, xstart:xend] = blob.dert__[2] # update dy
+    ext_dert__[5][ystart:yend, xstart:xend] = blob.dert__[3] # update dx
 
     return ext_dert__
 
