@@ -152,7 +152,6 @@ def comp_r(dert__, fig, root_fcr):
         a__bottom.mask = a__bottomleft.mask = a__left.mask = majority_mask_a
 
         assert (majority_mask_a[0] == majority_mask_a[1]).all()
-        # what does that do?
         dy__.mask = dx__.mask = m__.mask = majority_mask_a[0]
 
         '''
