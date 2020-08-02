@@ -87,19 +87,19 @@ class CDeepBlob(ClusterStructure):
 
 # --------------------------------------------------------------------------------------------------------------
 # functions, ALL WORK-IN-PROGRESS:
-```````
+
 def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-comp within blob
 
     # fig: flag input is g | p, fcr: flag comp over rng+ | der+
 
     spliced_layers = []  # to extend root_blob sub_layers
-    ext_dert__ = extend_dert(blob)
+    ext_dert__, ext_mask = extend_dert(blob)
     if fcr:
-        dert__ = comp_r(ext_dert__, fig, fcr)  # -> m sub_blobs
+        dert__, mask = comp_r(ext_dert__, fig, fcr, ext_mask)  # -> m sub_blobs
     else:
-        dert__, mask = comp_g(ext_dert__)  # -> g sub_blobs:
+        dert__, mask = comp_g(ext_dert__, ext_mask)  # -> g sub_blobs:
 
-    if dert__.shape[1] >2 and dert__.shape[2] >2 and False in dert__.mask:  # min size in y and x, least one dert in dert__
+    if dert__[0].shape[0] > 2 and dert__[0].shape[1] > 2 and False in dert__.mask:  # min size in y and x, least one dert in dert__
         sub_blobs = cluster_derts(dert__, ave*rdn, fcr, fig)
 
         blob.fcr = fcr  # this should be
@@ -510,29 +510,44 @@ def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
 
     y0, yn, x0, xn = blob.box  # extend dert box:
     rY, rX = blob.root_dert__[0].shape  # higher dert size
-    cP = len(blob.dert__)
-    cY, cX = blob.dert__[0].shape  # current dert params and size
+    # cP = len(blob.dert__)
+    # cY, cX = blob.dert__[0].shape  # current dert params and size
 
-    y0e = y0 - 1; yne = yn + 1; x0e = x0 - 1; xne = xn + 1  # e is for extended
+    # y0e = y0 - 1; yne = yn + 1; x0e = x0 - 1; xne = xn + 1  # e is for extended
     # prevent boundary <0 or >image size:
-    if y0e < 0:  y0e = 0; ystart = 0
-    else:        ystart = 1
-    if yne > rY: yne = rY; yend = ystart + cY
-    else:        yend = ystart + cY
-    if x0e < 0:  x0e = 0; xstart = 0
-    else:        xstart = 1
-    if xne > rX: xne = rX; xend = xstart + cX
-    else:        xend = xstart + cX
+    # if y0e < 0:  y0e = 0; ystart = 0
+    # else:        ystart = 1
+    # if yne > rY: yne = rY; yend = ystart + cY
+    # else:        yend = ystart + cY
+    # if x0e < 0:  x0e = 0; xstart = 0
+    # else:        xstart = 1
+    # if xne > rX: xne = rX; xend = xstart + cX
+    # else:        xend = xstart + cX
 
-    ini_dert = tuple(derts[y0e:yne, x0e:xne] for derts in blob.root_dert__)  # extended dert where boundary is masked
+    # No need for ini_dert?
+    # ini_dert = tuple(derts[y0e:yne, x0e:xne] for derts in blob.root_dert__)  # extended dert where boundary is masked
 
-    ext_dert__ = tuple(np.zeros(ini_dert[0].shape) for _ in range(cP))
-    ext_dert__[0][ystart:yend, xstart:xend] = blob.dert__[0] # update i
-    ext_dert__[3][ystart:yend, xstart:xend] = blob.dert__[1] # update g
-    ext_dert__[4][ystart:yend, xstart:xend] = blob.dert__[2] # update dy
-    ext_dert__[5][ystart:yend, xstart:xend] = blob.dert__[3] # update dx
+    # shape = (yne - y0e, xne - x0e)
+    # ext_dert__ = tuple(np.zeros(shape) for _ in range(cP))
+    # ext_dert__[0][ystart:yend, xstart:xend] = blob.dert__[0] # update i
+    # ext_dert__[3][ystart:yend, xstart:xend] = blob.dert__[1] # update g
+    # ext_dert__[4][ystart:yend, xstart:xend] = blob.dert__[2] # update dy
+    # ext_dert__[5][ystart:yend, xstart:xend] = blob.dert__[3] # update dx
+    # why are ext_dert__[1], ext_dert__[2], ext_dert__[3] zeroes?
 
-    return ext_dert__
+    # determine padded size
+    y0e = max(0, y0 - 1)
+    yne = min(rY, yn + 1)
+    x0e = max(0, x0 - 1)
+    xne = min(xX, xn + 1)  # e is for extended
+
+    # take ext_dert__ from part of root_dert__
+    ext_dert__ = [derts[y0e:yne, x0e:xne] for derts in blob.root_dert__]
+
+    # pad mask: top, btm, left, right. 1 or 0 at boundaries
+    mask = np.pad(blob.mask, ((y0 - y0e, yne - yn), (x0 - x0e, xne - xn)))
+
+    return ext_dert__, mask
 
 
 def extend_dert_diag(blob, ext_num=1, unmask_ext=1, diag=1):
