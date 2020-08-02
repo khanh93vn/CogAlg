@@ -511,7 +511,14 @@ if __name__ == '__main__':
         deep_frame = frame, frame  # 1st frame initializes summed representation of hierarchy, 2nd is individual top layer
         deep_blob_i_ = []  # index of a blob with deep layers
         deep_layers = [[]]*len(frame['blob__'])  # for visibility only
-        deep_root_dert__ = frame['dert__'][0], None, None, *frame['dert__'][1:], None       # update root dert__
+        empty = np.zeros_like(frame['dert__'][0])
+        deep_root_dert__ = (  # update root dert__
+            frame['dert__'][0],    # i
+            empty,                 # idy
+            empty,                 # idx
+            *frame['dert__'][1:],  # g, dy, dx
+            empty,                 # m
+        )
 
         for i, blob in enumerate(frame['blob__']):  # print('Processing blob number ' + str(bcount))
             '''

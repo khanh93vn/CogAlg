@@ -129,10 +129,10 @@ def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-c
 def cluster_derts(dert__, mask, Ave, fcr, fig):  # similar to frame_to_blobs
 
     if fcr:  # comp_r output;  form clustering criterion:
-        if fig: crit__ = dert__[0] + dert__[4] - Ave  # eval by i + m, accum in rng; dert__[:,:,0] if not transposed
-        else:   crit__ = Ave - dert__[1]  # eval by -g, accum in rng
+        if fig: crit__ = dert__[0] + dert__[6] - Ave  # eval by i + m, accum in rng; dert__[:,:,0] if not transposed
+        else:   crit__ = Ave - dert__[3]  # eval by -g, accum in rng
     else:    # comp_g output
-        crit__ = dert__[4] - Ave  # comp_g output eval by m, or clustering is always by m?
+        crit__ = dert__[6] - Ave  # comp_g output eval by m, or clustering is always by m?
 
     root_dert__ = dert__ # derts after the comps operation, which is the root_dert__
     dert__ = [*zip(*dert__)]  # transpose dert__ into shape [y, params, x]
@@ -153,7 +153,7 @@ def cluster_derts(dert__, mask, Ave, fcr, fig):  # similar to frame_to_blobs
     while stack_:  # frame ends, last-line stacks are merged into their blobs:
         sub_blobs.append ( form_blob(stack_.popleft(),root_dert__))
 
-    sub_blobs = find_adjacent(sub_blobs)
+    # sub_blobs = find_adjacent(sub_blobs)
 
     return sub_blobs
 
