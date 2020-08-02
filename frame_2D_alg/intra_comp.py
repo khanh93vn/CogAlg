@@ -69,14 +69,19 @@ def comp_r(dert__, fig, root_fcr, mask=None):
     else:
         majority_mask = None
     # majority_mask is returned at the end of function
-
-    idy__, idx__ = dert__[1][1:-1:2, 1:-1:2], dert__[2][1:-1:2, 1:-1:2]
+    try:
+        idy__, idx__ = dert__[1][1:-1:2, 1:-1:2], dert__[2][1:-1:2, 1:-1:2]
+    except TypeError:  # no idy, idx (input is pixel)
+        idy__, idx__ = None, None
 
     if root_fcr:  # root fork is comp_r, accumulate derivatives:
 
         dy__ = dert__[4][1:-1:2, 1:-1:2].copy()  # sparse to align with i__center
         dx__ = dert__[5][1:-1:2, 1:-1:2].copy()
-        m__ = dert__[6][1:-1:2, 1:-1:2].copy()
+        try:
+            m__ = dert__[6][1:-1:2, 1:-1:2].copy()
+        except TypeError:  # no m (input is pixel)
+            m__ = np.zeros_like(dy__)
     else:
         dy__ = np.zeros_like(i__center)  # sparse to align with i__center
         dx__ = np.zeros_like(dy__)

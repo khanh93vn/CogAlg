@@ -176,9 +176,9 @@ def image_to_blobs(image, verbose=False, render=False):
 
     blob_binder = AdjBinder(CBlob)
     blob_binder.bind_from_lower(stack_binder)
-    assign_adjacent(blob_binder)  # add adj_blobs to each blob
+    # assign_adjacent(blob_binder)  # add adj_blobs to each blob
 
-    if verbose:
+    if verbose:  # print infos at the end
         nblobs = len(frame['blob__'])
         print(f"\rImage has been successfully converted to "
               f"{nblobs} blob{'s' if nblobs != 1 else 0} in "
@@ -187,7 +187,7 @@ def image_to_blobs(image, verbose=False, render=False):
         merged_percentage = len([*filter(lambda bid: CBlob.get_instance(bid) is None, blob_ids)]) / len(blob_ids)
         print(f"\nPercentage of merged blobs: {merged_percentage}")
 
-    if render:
+    if render:  # rendering mode after blob conversion
         streamer.update(y)
         streamer.writeframe(output_path(arguments['image'],
                                         suffix='.im2blobs.jpg'))
