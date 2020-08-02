@@ -511,6 +511,7 @@ if __name__ == '__main__':
         deep_frame = frame, frame  # 1st frame initializes summed representation of hierarchy, 2nd is individual top layer
         deep_blob_i_ = []  # index of a blob with deep layers
         deep_layers = [[]]*len(frame['blob__'])  # for visibility only
+        deep_root_dert__ = frame['dert__'][0], None, None, *frame['dert__'][1:], None       # update root dert__
 
         for i, blob in enumerate(frame['blob__']):  # print('Processing blob number ' + str(bcount))
             '''
@@ -526,7 +527,7 @@ if __name__ == '__main__':
             Also borrow_G -= inductive leaking across external blob?
             '''
             blob = CDeepBlob(Dert=blob.Dert, box=blob.box, stack_=blob.stack_,
-                             sign=blob.sign, root_dert__=frame['dert__'],
+                             sign=blob.sign, root_dert__=deep_root_dert__,
                              dert__=blob.dert__, mask=blob.mask,
                              adj_blobs=blob.adj_blobs, fopen=blob.fopen) #, margin=blob.margin)
             if blob.sign:

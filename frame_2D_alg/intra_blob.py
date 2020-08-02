@@ -5,7 +5,6 @@ from intra_comp import comp_g, comp_r
 from itertools import zip_longest
 from utils import pairwise
 import numpy as np
-import numpy.ma as ma
 # from comp_P_draft import comp_P_blob
 
 '''
@@ -99,8 +98,8 @@ def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-c
     else:
         dert__, mask = comp_g(ext_dert__, ext_mask)  # -> g sub_blobs:
 
-    if dert__[0].shape[0] > 2 and dert__[0].shape[1] > 2 and False in dert__.mask:  # min size in y and x, least one dert in dert__
-        sub_blobs = cluster_derts(dert__, ave*rdn, fcr, fig)
+    if dert__[0].shape[0] > 2 and dert__[0].shape[1] > 2 and False in mask:  # min size in y and x, least one dert in dert__
+        sub_blobs = cluster_derts(dert__, mask, ave*rdn, fcr, fig, blob.box[0])  # insert y0
 
         blob.fcr = fcr  # this should be
         blob.fig = fig
@@ -127,7 +126,7 @@ def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-c
     return spliced_layers
 
 
-def cluster_derts(dert__, Ave, fcr, fig):  # similar to frame_to_blobs
+def cluster_derts(dert__, mask, Ave, fcr, fig, y0):  # similar to frame_to_blobs
 
     if fcr:  # comp_r output;  form clustering criterion:
         if fig: crit__ = dert__[0] + dert__[4] - Ave  # eval by i + m, accum in rng; dert__[:,:,0] if not transposed
@@ -135,21 +134,24 @@ def cluster_derts(dert__, Ave, fcr, fig):  # similar to frame_to_blobs
     else:    # comp_g output
         crit__ = dert__[4] - Ave  # comp_g output eval by m, or clustering is always by m?
 
-    root_dert__ = dert__.copy() # derts after the comps operation, which is the root_dert__
-    dert__ = ma.transpose(dert__, axes=(1, 2, 0))  # transpose dert__ into shape [y,x,params]
+    root_dert__ = dert__ # derts after the comps operation, which is the root_dert__
+    root_mask = mask
+    dert__ = [*zip(*dert__)]  # transpose dert__ into shape [y, params, x]
+    mask = mask.T
+
 
     stack_ = deque()  # buffer of running vertical stacks of Ps
     stack_binder = AdjBinder(CDeepStack)
 
-    for y in range(dert__.shape[0]):  # in height, first and last row are discarded;  print(f'Processing intra line {y}...')
-        if False in dert__[y, :, :].mask:  # [y,x,params], there is at least one dert in line
+    for y, dert_ in enumerate(dert__, start=y0):  # in height, first and last row are discarded;  print(f'Processing intra line {y}...')
+        if False in mask:  # [y,x,params], there is at least one dert in line
             P_binder = AdjBinder(CDeepP)  # binder needs data about clusters of the same level
-            P_ = form_P_(dert__[y,:,:], crit__[y, :], P_binder)  # horizontal clustering, adds a row of Ps
+            P_ = form_P_([*zip(*dert_)], crit__[y, :], mask[y], P_binder)  # horizontal clustering, adds a row of Ps
             P_ = scan_P_(P_, stack_,root_dert__, P_binder)  # vertical clustering, adds up_connects per P and down_connect_cnt per stack
             stack_ = form_stack_(P_, root_dert__, y)
             # stack_binder.bind_from_lower(P_binder)
 
-    sub_blobs =[]  # from form_blob:
+    sub_blobs = []  # from form_blob:
 
     while stack_:  # frame ends, last-line stacks are merged into their blobs:
         sub_blobs.append ( form_blob(stack_.popleft(),root_dert__))
@@ -161,10 +163,9 @@ def cluster_derts(dert__, Ave, fcr, fig):  # similar to frame_to_blobs
 # clustering functions:
 #-------------------------------------------------------------------------------------------------------------------
 
-def form_P_(dert_, crit_, binder):  # segment dert__ into P__, in horizontal ) vertical order
+def form_P_(dert_, crit_, mask_, binder):  # segment dert__ into P__, in horizontal ) vertical order
 
     P_ = deque()  # row of Ps
-    mask_ = dert_[:,0].mask
     sign_ = crit_ > 0
     x0 = 0
     for x in range(len(dert_)):
@@ -175,7 +176,7 @@ def form_P_(dert_, crit_, binder):  # segment dert__ into P__, in horizontal ) v
     _sign = sign_[x0]
     _mask = True  # mask bit per dert
 
-    for x in range(x0+1, dert_.shape[0]):  # loop left to right in each row of derts
+    for x, (i, idy, idx, g, dy, dx, m) in enumerate(dert_, start=x0+1):  # loop left to right in each row of derts
         mask = mask_[x]
         if ~mask:  # current dert is not masked
             sign = sign_[x]
@@ -194,13 +195,13 @@ def form_P_(dert_, crit_, binder):  # segment dert__ into P__, in horizontal ) v
             I, iDy, iDx, G, Dy, Dx, M, L, x0 = 0, 0, 0, 0, 0, 0, 0, 0, x+1
 
         if ~mask:  # accumulate P params:
-            I += dert_[x][0]
-            iDy += dert_[x][1]
-            iDx += dert_[x][2]
-            G += dert_[x][3]
-            Dy += dert_[x][4]
-            Dx += dert_[x][5]
-            M += dert_[x][6]
+            I += i
+            iDy += idy
+            iDx += idx
+            G += g
+            Dy += dy
+            Dx += dx
+            M += m
             L += 1
             _sign = sign  # prior sign
         _mask = mask
@@ -539,13 +540,15 @@ def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
     y0e = max(0, y0 - 1)
     yne = min(rY, yn + 1)
     x0e = max(0, x0 - 1)
-    xne = min(xX, xn + 1)  # e is for extended
+    xne = min(rX, xn + 1)  # e is for extended
 
     # take ext_dert__ from part of root_dert__
-    ext_dert__ = [derts[y0e:yne, x0e:xne] for derts in blob.root_dert__]
+    ext_dert__ = [derts[y0e:yne, x0e:xne] if derts is not None else None
+                  for derts in blob.root_dert__]
 
     # pad mask: top, btm, left, right. 1 or 0 at boundaries
-    mask = np.pad(blob.mask, ((y0 - y0e, yne - yn), (x0 - x0e, xne - xn)))
+    mask = np.pad(blob.mask, ((y0 - y0e, yne - yn), (x0 - x0e, xne - xn)),
+                  mode='constant', constant_values=True)
 
     return ext_dert__, mask
 
