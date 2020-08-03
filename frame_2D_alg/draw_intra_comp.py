@@ -23,13 +23,6 @@ def draw_g(img_out, g_):
     endx = min(img_out.shape[1], g_.shape[1])
     img_out[:endy, :endx] = (g_[:endy, :endx] * 255) / g_.max()  # scale to max=255, less than max / 255 is 0
 
-    # was: img_out[:endy, :endx] = normalization(g_[:endy, :endx])
-    # assert array.min() >= 0
-    # for y in range(g_.shape[0]):  # loop rows, skip last row
-    #     for x in range(g_.shape[1]):  # loop columns, skip last column
-    #         img_out[y,x] = g_[y,x]
-    # return img_out.astype('uint8')
-
     return img_out
 
 def draw_gr(img_out, g_, rng):
@@ -37,12 +30,6 @@ def draw_gr(img_out, g_, rng):
     img_out[:] = cv2.resize((g_[:] * 255) / g_.max(),  # normalize g to uint
                             (img_out.shape[1], img_out.shape[0]),
                             interpolation=cv2.INTER_NEAREST)
-    # for y in range(g_.shape[0]):
-    #     for x in range(g_.shape[1]):
-    #         # project central dert to surrounding rim derts
-    #         img_out[(y*rng)+1:(y*rng)+1+rng,(x*rng)+1:(x*rng)+1+rng] = g_[y,x]
-
-    # return img_out.astype('uint8')
     return img_out
 
 def imread(filename, raise_if_not_read=True):
