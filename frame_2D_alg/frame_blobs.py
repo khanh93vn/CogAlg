@@ -457,19 +457,6 @@ def accum_Dert(Dert: dict, **params) -> None:
 
 
 def update_dert(blob):  # add idy, idx, m to dert__
-    '''
-    old code
-    new_dert__ = np.zeros((7, blob.dert__.shape[1], blob.dert__.shape[2])) # initialize with 0
-    new_dert__ = ma.array(new_dert__, mask=True)  # create masked array
-    new_dert__.mask = blob.dert__[0].mask
-    new_dert__[0] = blob.dert__[0]  # i
-    # new_dert__[1] = idy
-    # new_dert__[2] = idx
-    new_dert__[3] = blob.dert__[1]  # g
-    new_dert__[4] = blob.dert__[2]  # dy
-    new_dert__[5] = blob.dert__[3]  # dx
-    # new_dert__[6] = m
-    '''
     i, g, dy, dx = blob.dert__
     blob.dert__ = (i,
                    np.zeros(i.shape),  # idy

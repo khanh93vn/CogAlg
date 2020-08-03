@@ -140,10 +140,6 @@ def comp_r(dert__, fig, root_fcr, mask=None):
         cos__bottom      = cos__[2::2, 1:-1:2]
         cos__bottomleft  = cos__[2::2, :-2:2]
         cos__left        = cos__[1:-1:2, :-2:2]
-        ''' 
-        only mask kernels with more than one masked dert, for all operations below: 
-        '''
-        # (mask is summed above
 
         '''
         8-tuple of differences between central dert angle and rim dert angle:

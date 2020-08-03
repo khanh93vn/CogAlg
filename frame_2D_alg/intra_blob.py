@@ -373,24 +373,12 @@ def form_blob(stack, root_dert__):  # increment blob with terminated stack, chec
         if x0 == 0 or xn == root_dert__[0].shape[1] or y0 == 0 or yn == root_dert__[0].shape[0]:
             fopen = 1
 
-        # blob_map = np.ones((root_dert__.shape[1], root_dert__.shape[2])).astype('bool')
-        # blob_map[y0:yn, x0:xn] = mask
-        # # unmasked area is false
-        # blob_map_y,blob_map_x = np.where(blob_map==False)
-        # blob_map_yx = [ [y,x] for y,x in zip(blob_map_y,blob_map_x)]  # x and y coordinates of dert__
-        #
-        # margin = form_margin(blob_map, diag=blob.sign)
-        # margin_y,margin_x = np.where(margin==True)  # set margin=true
-        # margin_yx = [[y,x] for y,x in zip(margin_y,margin_x)]  # x and y coordinates of margin
-
         blob.root_dert__ = root_dert__
         blob.box = (y0, yn, x0, xn)
-        # blob.dert__ = dert__
         blob.dert__ = [derts[y0:yn, x0:xn] for derts in root_dert__]
         blob.mask = mask
         blob.adj_blobs = [[], [], 0, 0]
         blob.fopen = fopen
-        # blob.margin = [blob_map_yx, margin_yx]
 
     return blob
 
@@ -510,32 +498,8 @@ def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
 
     y0, yn, x0, xn = blob.box  # extend dert box:
     rY, rX = blob.root_dert__[0].shape  # higher dert size
-    # cP = len(blob.dert__)
-    # cY, cX = blob.dert__[0].shape  # current dert params and size
 
-    # y0e = y0 - 1; yne = yn + 1; x0e = x0 - 1; xne = xn + 1  # e is for extended
-    # prevent boundary <0 or >image size:
-    # if y0e < 0:  y0e = 0; ystart = 0
-    # else:        ystart = 1
-    # if yne > rY: yne = rY; yend = ystart + cY
-    # else:        yend = ystart + cY
-    # if x0e < 0:  x0e = 0; xstart = 0
-    # else:        xstart = 1
-    # if xne > rX: xne = rX; xend = xstart + cX
-    # else:        xend = xstart + cX
-
-    # No need for ini_dert?
-    # ini_dert = tuple(derts[y0e:yne, x0e:xne] for derts in blob.root_dert__)  # extended dert where boundary is masked
-
-    # shape = (yne - y0e, xne - x0e)
-    # ext_dert__ = tuple(np.zeros(shape) for _ in range(cP))
-    # ext_dert__[0][ystart:yend, xstart:xend] = blob.dert__[0] # update i
-    # ext_dert__[3][ystart:yend, xstart:xend] = blob.dert__[1] # update g
-    # ext_dert__[4][ystart:yend, xstart:xend] = blob.dert__[2] # update dy
-    # ext_dert__[5][ystart:yend, xstart:xend] = blob.dert__[3] # update dx
-    # why are ext_dert__[1], ext_dert__[2], ext_dert__[3] zeroes?
-
-    # determine padded size
+    # determine pad size
     y0e = max(0, y0 - 1)
     yne = min(rY, yn + 1)
     x0e = max(0, x0 - 1)
