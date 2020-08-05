@@ -56,15 +56,15 @@ def comp_r(dert__, fig, root_fcr, mask=None):
     unmasked derts were computed due to extend_dert() in intra_blob   
     '''
     if mask is not None:
-        majority_mask = ( mask[1:-1:2, 1:-1:2]
-                        + mask[:-2:2, :-2:2]
-                        + mask[:-2:2, 1:-1: 2]
-                        + mask[:-2:2, 2::2]
-                        + mask[1:-1:2, 2::2]
-                        + mask[2::2, 2::2]
-                        + mask[2::2, 1:-1:2]
-                        + mask[2::2, :-2:2]
-                        + mask[1:-1:2, :-2:2]
+        majority_mask = ( mask[1:-1:2, 1:-1:2].astype(int)
+                        + mask[:-2:2, :-2:2].astype(int)
+                        + mask[:-2:2, 1:-1: 2].astype(int)
+                        + mask[:-2:2, 2::2].astype(int)
+                        + mask[1:-1:2, 2::2].astype(int)
+                        + mask[2::2, 2::2].astype(int)
+                        + mask[2::2, 1:-1:2].astype(int)
+                        + mask[2::2, :-2:2].astype(int)
+                        + mask[1:-1:2, :-2:2].astype(int)
                         ) > 1
     else:
         majority_mask = None
@@ -204,10 +204,10 @@ def comp_g(dert__, mask=None):  # cross-comp of g in 2x2 kernels, between derts 
     for all operations below: only mask kernels with more than one masked dert 
     '''
     if mask is not None:
-        majority_mask = (mask[:-1, :-1] +
-                         mask[:-1, 1:] +
-                         mask[1:, 1:] +
-                         mask[1:, :-1]
+        majority_mask = (mask[:-1, :-1].astype(int) +
+                         mask[:-1, 1:].astype(int) +
+                         mask[1:, 1:].astype(int) +
+                         mask[1:, :-1].astype(int)
                          ) > 1
     else:
         majority_mask = None

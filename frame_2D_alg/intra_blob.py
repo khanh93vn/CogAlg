@@ -1,6 +1,7 @@
 from collections import deque, defaultdict
 from class_cluster import ClusterStructure, NoneType
 from class_bind import AdjBinder
+from frame_blobs import assign_adjacent
 from intra_comp import comp_g, comp_r
 from itertools import zip_longest
 from utils import pairwise
@@ -110,12 +111,12 @@ def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-c
 
         for sub_blob in sub_blobs:  # evaluate for intra_blob comp_g | comp_r:
             if sub_blob.sign:
-                if sub_blob.Dert['M'] - sub_blob.adj_blobs[3] * (sub_blob.adj_blobs[2] / sub_blob.Dert['S']) \
+                if sub_blob.Dert['M'] - sub_blob.adj_blobs[2] * (sub_blob.adj_blobs[1] / sub_blob.Dert['S']) \
                     > aveB * rdn:  # M - (intra_comp value lend to edge blob = adj_G * (area-proportional: adj_S / blob S))
                     # comp_r fork:
                     blob.sub_layers += intra_blob(sub_blob, rdn + 1 + 1 / blob.Ls, rng*2, fig=fig, fcr=1)
                 # else: comp_P_
-            elif sub_blob.Dert['G'] + sub_blob.adj_blobs[3] * (sub_blob.adj_blobs[2] / sub_blob.Dert['S']) \
+            elif sub_blob.Dert['G'] + sub_blob.adj_blobs[2] * (sub_blob.adj_blobs[1] / sub_blob.Dert['S']) \
                 > aveB * rdn:  # G + (intra_comp value borrow from flat blob: adj_M * (area-proportional: adj_S / blob S))
                 # comp_g fork:
                 blob.sub_layers += intra_blob(sub_blob, rdn + 1 + 1 / blob.Ls, rng=rng, fig=1, fcr=0)
@@ -137,22 +138,24 @@ def cluster_derts(dert__, mask, Ave, fcr, fig):  # similar to frame_to_blobs
     root_dert__ = dert__ # derts after the comps operation, which is the root_dert__
     dert__ = [*zip(*dert__)]  # transpose dert__ into shape [y, params, x]
 
+    sub_blobs = []  # from form_blob:
     stack_ = deque()  # buffer of running vertical stacks of Ps
     stack_binder = AdjBinder(CDeepStack)
 
     for y, dert_ in enumerate(dert__):  # in height, first and last row are discarded;  print(f'Processing intra line {y}...')
-        if False in mask:  # [y,x,params], there is at least one dert in line
+        # if False in mask[i]:  # [y,x,params], there is at least one dert in line
             P_binder = AdjBinder(CDeepP)  # binder needs data about clusters of the same level
             P_ = form_P_(zip(*dert_), crit__[y], mask[y], P_binder)  # horizontal clustering, adds a row of Ps
-            P_ = scan_P_(P_, stack_,root_dert__, P_binder)  # vertical clustering, adds up_connects per P and down_connect_cnt per stack
-            stack_ = form_stack_(P_, root_dert__, y)
-            # stack_binder.bind_from_lower(P_binder)
-
-    sub_blobs = []  # from form_blob:
+            P_ = scan_P_(P_, stack_,root_dert__, sub_blobs, P_binder)  # vertical clustering, adds up_connects per P and down_connect_cnt per stack
+            stack_ = form_stack_(P_, root_dert__, sub_blobs, y)
+            stack_binder.bind_from_lower(P_binder)
 
     while stack_:  # frame ends, last-line stacks are merged into their blobs:
-        sub_blobs.append ( form_blob(stack_.popleft(),root_dert__))
+        form_blob(stack_.popleft(),root_dert__, sub_blobs)
 
+    blob_binder = AdjBinder(CDeepBlob)
+    blob_binder.bind_from_lower(stack_binder)
+    assign_adjacent(blob_binder)  # add adj_blobs to each blob
     # sub_blobs = find_adjacent(sub_blobs)
 
     return sub_blobs
@@ -165,9 +168,13 @@ def form_P_(dert_, crit_, mask_, binder):  # segment dert__ into P__, in horizon
     P_ = deque()  # row of Ps
     sign_ = crit_ > 0
     x0 = 0
-    while mask_[x0]:  # skip until not masked
-        next(dert_)
-        x0 += 1
+    try:
+        while mask_[x0]:  # skip until not masked
+            next(dert_)
+            x0 += 1
+    except IndexError:
+        print("Warning: the whole row is masked. Might there be something wrong?")
+        return P_   # the whole line is masked, return an empty P
 
     I, iDy, iDx, G, Dy, Dx, M, L = *next(dert_), 1  # initialize P params
     _sign = sign_[x0]
@@ -214,7 +221,7 @@ def form_P_(dert_, crit_, mask_, binder):  # segment dert__ into P__, in horizon
     return P_
 
 
-def scan_P_(P_, stack_, root_dert__, binder):  # merge P into higher-row stack of Ps with same sign and x_coord overlap
+def scan_P_(P_, stack_, root_dert__, sub_blobs, binder):  # merge P into higher-row stack of Ps with same sign and x_coord overlap
 
     next_P_ = deque()  # to recycle P + up_connect_ that finished scanning _P, will be converted into next_stack_
 
@@ -256,11 +263,11 @@ def scan_P_(P_, stack_, root_dert__, binder):  # merge P into higher-row stack o
                     P = P_.popleft()  # load next P
                 else:  # terminate loop
                     if stack.down_connect_cnt != 1:  # terminate stack, merge it into up_connects' blobs
-                        form_blob(stack, root_dert__)
+                        form_blob(stack, root_dert__, sub_blobs)
                     break
             else:  # no next-P overlap
                 if stack.down_connect_cnt != 1:  # terminate stack, merge it into up_connects' blobs
-                    form_blob(stack, root_dert__)
+                    form_blob(stack, root_dert__, sub_blobs)
                 if stack_:  # load stack with next _P
                     stack = stack_.popleft()
                     _P = stack.Py_[-1]
@@ -271,12 +278,12 @@ def scan_P_(P_, stack_, root_dert__, binder):  # merge P into higher-row stack o
     while P_:  # terminate Ps and stacks that continue at row's end
         next_P_.append((P_.popleft(), []))  # no up_connect
     while stack_:
-        form_blob(stack_.popleft(), root_dert__)  # down_connect_cnt always == 0
+        form_blob(stack_.popleft(), root_dert__, sub_blobs)  # down_connect_cnt always == 0
 
     return next_P_  # each element is P + up_connect_ refs
 
 
-def form_stack_(P_, root_dert__, y):  # Convert or merge every P into its stack of Ps, merge blobs
+def form_stack_(P_, root_dert__, sub_blobs, y):  # Convert or merge every P into its stack of Ps, merge blobs
 
     next_stack_ = deque()  # converted to stack_ in the next run of scan_P_
 
@@ -311,11 +318,11 @@ def form_stack_(P_, root_dert__, y):  # Convert or merge every P into its stack 
 
                 if len(up_connect_) > 1:  # merge blobs of all up_connects
                     if up_connect_[0].down_connect_cnt == 1:  # up_connect is not terminated
-                        form_blob(up_connect_[0], root_dert__)  # merge stack of 1st up_connect into its blob
+                        form_blob(up_connect_[0], root_dert__, sub_blobs)  # merge stack of 1st up_connect into its blob
 
                     for up_connect in up_connect_[1:len(up_connect_)]:  # merge blobs of other up_connects into blob of 1st up_connect
                         if up_connect.down_connect_cnt == 1:
-                            form_blob(up_connect, root_dert__)
+                            form_blob(up_connect, root_dert__, sub_blobs)
 
                         if not up_connect.blob is blob:
                             merged_blob = up_connect.blob
@@ -343,7 +350,7 @@ def form_stack_(P_, root_dert__, y):  # Convert or merge every P into its stack 
     return next_stack_
 
 
-def form_blob(stack, root_dert__):  # increment blob with terminated stack, check for blob termination
+def form_blob(stack, root_dert__, sub_blobs):  # increment blob with terminated stack, check for blob termination
 
     I, G, Dy, Dx, M, iDy, iDx, S, Ly, y0, Py_, blob, down_connect_cnt, sign = stack.unpack()
     accum_Dert(blob.Dert, I=I, G=G, Dy=Dy, Dx=Dx, M=M, iDy=iDy, iDx=iDx, S=S, Ly=Ly)
@@ -364,11 +371,6 @@ def form_blob(stack, root_dert__):  # increment blob with terminated stack, chec
                 x_stop = x_start + P.L
                 mask[y, x_start:x_stop] = False
 
-        # dert__ = (root_dert__[:,y0:yn, x0:xn]).copy()  # copy mask as dert.mask
-        # dert__.mask = True
-        # dert__.mask = mask  # overwrite default mask 0s
-        # root_dert__[:,y0:yn, x0:xn] = dert__.copy()  # no effect
-
         fopen = 0  # flag: blob on frame boundary
         if x0 == 0 or xn == root_dert__[0].shape[1] or y0 == 0 or yn == root_dert__[0].shape[0]:
             fopen = 1
@@ -377,12 +379,12 @@ def form_blob(stack, root_dert__):  # increment blob with terminated stack, chec
         blob.box = (y0, yn, x0, xn)
         blob.dert__ = [derts[y0:yn, x0:xn] for derts in root_dert__]
         blob.mask = mask
-        blob.adj_blobs = [[], [], 0, 0]
+        blob.adj_blobs = [[], 0, 0]
         blob.fopen = fopen
 
-    return blob
+        sub_blobs.append(blob)
 
-
+"""
 def find_adjacent(sub_blobs):  # adjacents are blobs connected to _blob
     '''
     2D version of scan_P_, but primarily vertical and checking for opposite-sign adjacency vs. same-sign overlap
@@ -493,7 +495,7 @@ def form_margin(blob_map, diag):  # get 1-pixel margin of blob, in 4 or 8 direct
         margin = margin + upleft_margin + upright_margin + downleft_margin + downright_margin
 
     return margin
-
+"""
 def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
 
     y0, yn, x0, xn = blob.box  # extend dert box:

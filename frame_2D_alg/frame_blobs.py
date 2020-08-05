@@ -176,7 +176,7 @@ def image_to_blobs(image, verbose=False, render=False):
 
     blob_binder = AdjBinder(CBlob)
     blob_binder.bind_from_lower(stack_binder)
-    # assign_adjacent(blob_binder)  # add adj_blobs to each blob
+    assign_adjacent(blob_binder)  # add adj_blobs to each blob
 
     if verbose:  # print infos at the end
         nblobs = len(frame['blob__'])
@@ -426,8 +426,8 @@ def assign_adjacent(blob_binder):  # adjacents are connected opposite-sign blobs
     '''
     for blob_id1, blob_id2 in blob_binder.adj_pairs:
         assert blob_id1 < blob_id2
-        blob1 = CBlob.get_instance(blob_id1)
-        blob2 = CBlob.get_instance(blob_id2)
+        blob1 = blob_binder.cluster_cls.get_instance(blob_id1)
+        blob2 = blob_binder.cluster_cls.get_instance(blob_id2)
 
         if blob1.box[1] < blob2.box[1]:  # yn1 < yn2: blob1 is potentially internal to blob2
             if blob1.fopen:
