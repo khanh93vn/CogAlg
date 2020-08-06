@@ -37,7 +37,6 @@ import numpy as np
 
 ave  = 50  # fixed cost per dert, from average m, reflects blob definition cost, may be different for comp_a?
 aveB = 50  # fixed cost per intra_blob comp and clustering
-
 class CDeepP(ClusterStructure):
     I = int
     G = int
@@ -173,7 +172,6 @@ def form_P_(dert_, crit_, mask_, binder):  # segment dert__ into P__, in horizon
             next(dert_)
             x0 += 1
     except IndexError:
-        print("Warning: the whole row is masked. Might there be something wrong?")
         return P_   # the whole line is masked, return an empty P
 
     I, iDy, iDx, G, Dy, Dx, M, L = *next(dert_), 1  # initialize P params
@@ -384,118 +382,7 @@ def form_blob(stack, root_dert__, sub_blobs):  # increment blob with terminated 
 
         sub_blobs.append(blob)
 
-"""
-def find_adjacent(sub_blobs):  # adjacents are blobs connected to _blob
-    '''
-    2D version of scan_P_, but primarily vertical and checking for opposite-sign adjacency vs. same-sign overlap
-    '''
-    blob_adj__ = []  # [(blob, adj_blob__)] to replace blob__
-    while sub_blobs:  # outer loop
 
-        _blob = sub_blobs.pop(0)  # pop left outer loop's blob
-        _y0, _yn, _x0, _xn = _blob.box
-        if 'adj_blobs' in _blob:  # reuse adj_blobs if any
-            _adj_blobs = _blob.adj_blobs
-        else:
-            _adj_blobs = [[], []]  # [adj_blobs], [positions]: 0 = internal to current blob, 1 = external, 2 = open
-            # don't we need to initialize adj_S and adj_G?
-        i = 0  # inner loop counter
-        yn = 9999  # > _yn
-        while i <= len(sub_blobs) - 1 and _yn<=yn:  # vertical overlap between _blob and blob + margin
-
-            blob = sub_blobs[i]  # inner loop's blob
-            if 'adj_blobs' in blob:
-                adj_blobs = blob.adj_blobs
-            else:
-                adj_blobs = [[], []]  # [adj_blobs], [positions: 0 = internal to current blob, 1 = external, 2 = open]
-            y0, yn, x0, xn = blob.box
-
-            if y0 <= _yn and blob.sign != _blob.sign:  # adjacent blobs have opposite sign and vertical overlap with _blob + margin
-                _blob_map = _blob.margin[0]
-                margin_map = blob.margin[1]
-                check_overlap = any(margin in _blob_map  for margin in margin_map)  # any of blob's margin is in _blob's derts
-                if check_overlap:  # at least one blob's margin element is in _blob: blob is adjacent
-
-                    check_external = all(margin in _blob_map  for margin in margin_map)  # all of blob's margin is in _blob's dert
-                    if check_external:
-                        # all of blob margin is in _blob: _blob is external
-                        if blob not in _adj_blobs[0]:
-                            _adj_blobs[0].append(blob)
-                            _adj_blobs[2]+=blob.Dert['S'] # sum adjacent blob's S
-                            _adj_blobs[3]+=blob.Dert['G'] # sum adjacent blob's G
-
-                            if blob.fopen == 1:  # this should not happen, internal blob cannot be open?
-                                _adj_blobs[1].append(2)  # 2 for open
-                            else:
-                                _adj_blobs[1].append(0)  # 0 for internal
-                        if _blob not in adj_blobs[0]:
-                            adj_blobs[0].append(_blob)
-                            adj_blobs[1].append(1)  # 1 for external
-                            adj_blobs[2]+=_blob.Dert['S'] # sum adjacent blob's S
-                            adj_blobs[3]+=_blob.Dert['G'] # sum adjacent blob's G
-                    else:
-                        # _blob is internal or open
-                        if blob not in _adj_blobs[0]:
-                            _adj_blobs[0].append(blob)
-                            _adj_blobs[1].append(1)  # 1 for external
-                            _adj_blobs[2]+=blob.Dert['S'] # sum adjacent blob's S
-                            _adj_blobs[3]+=blob.Dert['G'] # sum adjacent blob's G
-                        if _blob not in adj_blobs[0]:
-                            adj_blobs[0].append(_blob)
-                            adj_blobs[2]+=_blob.Dert['S'] # sum adjacent blob's S
-                            adj_blobs[3]+=_blob.Dert['G'] # sum adjacent blob's G
-                            if _blob.fopen == 1:
-                                adj_blobs[1].append(2)  # 2 for open
-                            else:
-                                adj_blobs[1].append(0)  # 0 for internal
-
-            blob.adj_blobs = adj_blobs  # pack adj_blobs to _blob
-            sub_blobs[i] = blob  # reassign blob in inner loop
-            _blob.adj_blobs = _adj_blobs  # pack _adj_blobs into _blob
-            i += 1
-        blob_adj__.append(_blob)  # repack processed _blob into blob__
-
-    sub_blobs = blob_adj__  # update empty sub_blobs
-
-    return sub_blobs
-
-
-def form_margin(blob_map, diag):  # get 1-pixel margin of blob, in 4 or 8 directions, to find adjacent blobs
-
-    up_margin = np.zeros_like(blob_map)
-    up_margin[:-1, :] = np.logical_and(blob_map[:-1, :], ~blob_map[1:, :])
-
-    down_margin = np.zeros_like(blob_map)
-    down_margin[1:, :] = np.logical_and(blob_map[1:, :], ~blob_map[:-1, :])
-
-    left_margin = np.zeros_like(blob_map)
-    left_margin[:, :-1] = np.logical_and(blob_map[:, :-1], ~blob_map[:, 1:])
-
-    right_margin = np.zeros_like(blob_map)
-    right_margin[:, 1:] = np.logical_and(blob_map[:, 1:], ~blob_map[:, :-1])
-
-    # combine margins:
-    margin = up_margin + down_margin + left_margin + right_margin
-
-    if diag:  # add diagonal margins
-
-        upleft_margin = np.zeros_like(blob_map)
-        upleft_margin[:-1, :-1] = np.logical_and(blob_map[:-1, :-1], ~blob_map[1:, 1:])
-
-        upright_margin = np.zeros_like(blob_map)
-        upright_margin[:-1, 1:] = np.logical_and(blob_map[:-1, 1:], ~blob_map[1:, :-1])
-
-        downleft_margin = np.zeros_like(blob_map)
-        downleft_margin[1:, :-1] = np.logical_and(blob_map[1:, :-1], ~blob_map[:-1, 1:])
-
-        downright_margin = np.zeros_like(blob_map)
-        downright_margin[1:, 1:] = np.logical_and(blob_map[1:, 1:], ~blob_map[:-1, :-1])
-
-        # combine margins:
-        margin = margin + upleft_margin + upright_margin + downleft_margin + downright_margin
-
-    return margin
-"""
 def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
 
     y0, yn, x0, xn = blob.box  # extend dert box:
@@ -516,71 +403,6 @@ def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
                   mode='constant', constant_values=True)
 
     return ext_dert__, mask
-
-
-def extend_dert_diag(blob, ext_num=1, unmask_ext=1, diag=1):
-    '''
-        only if unmask more than one dert in mask_SUM: any kernel missing diagonal dert also misses orthogonal derts
-        extend derts
-        input       = blob input
-        ext_num     = number of dert extension
-        unmask_ext  = enable unmasking the extended dert
-        diag        = enable dert extension in diagonal direction
-    '''
-
-    y0, yn, x0, xn = blob.box  # dert box:
-    _, rY, rX = blob.root_dert__.shape  # higher dert size
-    cP, cY, cX = blob.dert__.shape  # current dert params and size
-
-    y0e = y0 - ext_num; yne = yn + ext_num; x0e = x0 - ext_num; xne = xn + ext_num  # e is for extended
-    # prevent boundary <0 or >image size:
-    if y0e < 0:
-        y0e = 0; ystart = 0
-    else:
-        ystart = 1
-    if yne > rY:
-        yne = rY; yend = ystart + cY
-    else:
-        yend = ystart + cY
-    if x0e < 0:
-        x0e = 0; xstart = 0
-    else:
-        xstart = 1
-    if xne > rX:
-        xne = rX; xend = xstart + cX
-    else:
-        xend = xstart + cX
-
-    ini_dert = blob.root_dert__[:, y0e:yne, x0e:xne]  # extended dert where boundary is masked
-    ext_dert__ = ma.array(np.zeros((cP, ini_dert.shape[1], ini_dert.shape[2])))  # initialize extended 2D array
-    ext_dert__.mask = True  # set default mask = true
-    ext_mask = ext_dert__.mask[0].copy()  # get extended mask
-    ext_mask[ystart:yend, xstart:xend] = blob.dert__[0].mask  # get mask from blob's dert and assign it into the new extended mask
-
-    if unmask_ext:  # unmask extended derts, almost similar with previous margin operation
-
-        mask_tem = ext_mask.copy()  # temporary mask for shifting operation
-
-        # orthogonal 4 directions
-        ext_mask[:-1, :] = ext_mask[:-1, :] * ~np.logical_or(~mask_tem[1:, :], ~mask_tem[:-1, :])  # up
-        ext_mask[1:, :] = ext_mask[1:, :] * ~np.logical_or(~mask_tem[:-1, :], ~mask_tem[1:, :])  # down
-        ext_mask[:, :-1] = ext_mask[:, :-1] * ~np.logical_or(~mask_tem[:, 1:], ~mask_tem[:, :-1])  # left
-        ext_mask[:, 1:] = ext_mask[:, 1:] * ~np.logical_or(~mask_tem[:, :-1], ~mask_tem[:, 1:])  # right
-
-        if diag:
-            # diagonal 4 directions
-            ext_mask[:-1, :-1] = ext_mask[:-1, :-1] * ~np.logical_or(~mask_tem[1:, 1:], ~mask_tem[:-1, :-1])  # top left
-            ext_mask[:-1, 1:] = ext_mask[:-1, 1:] * ~np.logical_or(~mask_tem[1:, :-1], ~mask_tem[:-1, 1:])  # top right
-            ext_mask[1:, :-1] = ext_mask[1:, :-1] * ~np.logical_or(~mask_tem[:-1, 1:], ~mask_tem[1:, :-1])  # bottom left
-            ext_mask[1:, 1:] = ext_mask[1:, 1:] * ~np.logical_or(~mask_tem[:-1, :-1], ~mask_tem[1:, 1:])  # bottom left
-
-    ext_dert__[0, ystart:yend, xstart:xend] = blob.dert__[0].copy()  # update i
-    ext_dert__[3, ystart:yend, xstart:xend] = blob.dert__[1].copy()  # update g
-    ext_dert__[4, ystart:yend, xstart:xend] = blob.dert__[2].copy()  # update dy
-    ext_dert__[5, ystart:yend, xstart:xend] = blob.dert__[3].copy()  # update dx
-    ext_dert__.mask = ext_mask  # set all masks to extended mask
-
-    return ext_dert__
 
 
 def accum_Dert(Dert: dict, **params) -> None:
