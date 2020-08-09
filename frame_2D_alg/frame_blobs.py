@@ -23,7 +23,7 @@ import numpy as np
 from class_cluster import ClusterStructure, NoneType
 from class_bind import AdjBinder
 # from comp_pixel import comp_pixel
-from class_stream import Img2BlobStreamer
+from class_stream import BlobStreamer
 from utils import (
     pairwise,
     imread, imwrite, map_frame_binary,
@@ -142,9 +142,9 @@ def image_to_blobs(image, verbose=False, render=False):
     if render:
         def output_path(input_path, suffix):
             return str(Path(input_path).with_suffix(suffix))
-        streamer = Img2BlobStreamer(CBlob, frame,
-                                    record_path=output_path(arguments['image'],
-                                    suffix='.im2blobs.avi'))
+        streamer = BlobStreamer(CBlob, dert__[1],
+                                record_path=output_path(arguments['image'],
+                                                        suffix='.im2blobs.avi'))
 
     stack_binder = AdjBinder(Cstack)
 
@@ -162,11 +162,7 @@ def image_to_blobs(image, verbose=False, render=False):
         P_ = form_P_(zip(*dert_), P_binder)  # horizontal clustering
 
         if render:
-            streamer.update(y, P_)
-            if streamer.render() == 32: # press space to pause
-                while streamer.render() != 32:
-                    streamer.update(y)
-
+            render = streamer.update_blob_conversion(y, P_)
         P_ = scan_P_(P_, stack_, frame, P_binder)  # vertical clustering, adds P up_connects and _P down_connect_cnt
         stack_ = form_stack_(P_, frame, y)
         stack_binder.bind_from_lower(P_binder)
@@ -188,14 +184,9 @@ def image_to_blobs(image, verbose=False, render=False):
         print(f"\nPercentage of merged blobs: {merged_percentage}")
 
     if render:  # rendering mode after blob conversion
-        streamer.update(y)
-        streamer.writeframe(output_path(arguments['image'],
-                                        suffix='.im2blobs.jpg'))
-        print("Press Q to quit...")
-        streamer.init_adj_disp()
-        while streamer.render() != ord('q'):    # press Q key to qut
-            streamer.update_adj_disp()
-        streamer.stop()
+        path = output_path(arguments['image'],
+                           suffix='.im2blobs.jpg')
+        streamer.end_blob_conversion(y, img_out_path=path)
 
     return frame  # frame of blobs
 
@@ -489,7 +480,7 @@ if __name__ == '__main__':
     if intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
 
         if verbose:
-            print("\nRunning intra_blob...")
+            print("\rRunning intra_blob...")
 
         from intra_blob import (
             intra_blob, CDeepBlob, aveB,
@@ -528,21 +519,20 @@ if __name__ == '__main__':
             if blob.sign:
                 if G + borrow_G > aveB and blob.dert__[0].shape[0] > 3 and blob.dert__[0].shape[1] > 3:  # min blob dimensions
                     update_dert(blob)
-                    deep_layers[i] = intra_blob(blob, rdn=1, rng=.0, fig=0, fcr=0)  # +G blob' dert__' comp_g
+                    deep_layers[i] = intra_blob(blob, rdn=1, rng=.0, fig=0, fcr=0, render=render)  # +G blob' dert__' comp_g
 
             elif -G - borrow_G > aveB and blob.dert__[0].shape[0] > 3 and blob.dert__[0].shape[1] > 3:  # min blob dimensions
                 update_dert(blob)
-                deep_layers[i] = intra_blob(blob, rdn=1, rng=1, fig=0, fcr=1)  # -G blob' dert__' comp_r in 3x3 kernels
+                deep_layers[i] = intra_blob(blob, rdn=1, rng=1, fig=0, fcr=1, render=render)  # -G blob' dert__' comp_r in 3x3 kernels
 
             if deep_layers[i]:  # if there are deeper layers
                 deep_blob_i_.append(i)  # indices of blobs with deep layers
 
         if verbose:
-            print("Finished running intra_blob")
+            print("\rFinished running intra_blob")
 
     end_time = time() - start_time
     if verbose:
         print(f"\nSession ended in {end_time:.2} seconds", end="")
     else:
         print(end_time)
-    pass

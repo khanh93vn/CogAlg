@@ -24,7 +24,7 @@ import numpy.ma as ma
 from class_cluster import ClusterStructure, NoneType
 from class_bind import AdjBinder
 # from comp_pixel import comp_pixel
-from class_stream import Img2BlobStreamer
+from class_stream import BlobStreamer
 from utils import (
     pairwise,
     imread, imwrite, map_frame_binary,
@@ -141,8 +141,8 @@ def image_to_blobs(image, verbose=False, render=False):
     if render:
         def output_path(input_path, suffix):
             return str(Path(input_path).with_suffix(suffix))
-        streamer = Img2BlobStreamer(CBlob, frame,
-                                    record_path=output_path(arguments['image'],
+        streamer = BlobStreamer(CBlob, frame,
+                                record_path=output_path(arguments['image'],
                                     suffix='.out.avi'))
 
     stack_binder = AdjBinder(Cstack)

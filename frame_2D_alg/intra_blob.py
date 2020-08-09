@@ -4,6 +4,7 @@ from class_bind import AdjBinder
 from frame_blobs import assign_adjacent
 from intra_comp import comp_g, comp_r
 from itertools import zip_longest
+from class_stream import BlobStreamer
 from utils import pairwise
 import numpy as np
 # from comp_P_draft import comp_P_blob
@@ -87,8 +88,10 @@ class CDeepBlob(ClusterStructure):
 # --------------------------------------------------------------------------------------------------------------
 # functions, ALL WORK-IN-PROGRESS:
 
-def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-comp within blob
-
+def intra_blob(blob, rdn, rng, fig, fcr, **kwargs):  # recursive input rng+ | der+ cross-comp within blob
+    if kwargs.get('render', None) is not None:  # stop rendering sub-blobs when blob is too small
+        if blob.Dert['S'] < 100:
+            kwargs['render'] = False
     # fig: flag input is g | p, fcr: flag comp over rng+ | der+
 
     spliced_layers = []  # to extend root_blob sub_layers
@@ -99,7 +102,7 @@ def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-c
         dert__, mask = comp_g(ext_dert__, ext_mask)  # -> g sub_blobs:
 
     if dert__[0].shape[0] > 2 and dert__[0].shape[1] > 2 and False in mask:  # min size in y and x, least one dert in dert__
-        sub_blobs = cluster_derts(dert__, mask, ave*rdn, fcr, fig)
+        sub_blobs = cluster_derts(dert__, mask, ave*rdn, fcr, fig, **kwargs)
 
         blob.fcr = fcr  # this should be
         blob.fig = fig
@@ -113,12 +116,12 @@ def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-c
                 if sub_blob.Dert['M'] - sub_blob.adj_blobs[2] * (sub_blob.adj_blobs[1] / sub_blob.Dert['S']) \
                     > aveB * rdn:  # M - (intra_comp value lend to edge blob = adj_G * (area-proportional: adj_S / blob S))
                     # comp_r fork:
-                    blob.sub_layers += intra_blob(sub_blob, rdn + 1 + 1 / blob.Ls, rng*2, fig=fig, fcr=1)
+                    blob.sub_layers += intra_blob(sub_blob, rdn + 1 + 1 / blob.Ls, rng*2, fig=fig, fcr=1, **kwargs)
                 # else: comp_P_
             elif sub_blob.Dert['G'] + sub_blob.adj_blobs[2] * (sub_blob.adj_blobs[1] / sub_blob.Dert['S']) \
                 > aveB * rdn:  # G + (intra_comp value borrow from flat blob: adj_M * (area-proportional: adj_S / blob S))
                 # comp_g fork:
-                blob.sub_layers += intra_blob(sub_blob, rdn + 1 + 1 / blob.Ls, rng=rng, fig=1, fcr=0)
+                blob.sub_layers += intra_blob(sub_blob, rdn + 1 + 1 / blob.Ls, rng=rng, fig=1, fcr=0, **kwargs)
             # else: comp_P_
 
         spliced_layers = [spliced_layers + sub_layers for spliced_layers, sub_layers in
@@ -126,7 +129,7 @@ def intra_blob(blob, rdn, rng, fig, fcr):  # recursive input rng+ | der+ cross-c
     return spliced_layers
 
 
-def cluster_derts(dert__, mask, Ave, fcr, fig):  # similar to frame_to_blobs
+def cluster_derts(dert__, mask, Ave, fcr, fig, render=False):  # similar to frame_to_blobs
 
     if fcr:  # comp_r output;  form clustering criterion:
         if fig: crit__ = dert__[0] + dert__[6] - Ave  # eval by i + m, accum in rng; dert__[:,:,0] if not transposed
@@ -141,10 +144,14 @@ def cluster_derts(dert__, mask, Ave, fcr, fig):  # similar to frame_to_blobs
     stack_ = deque()  # buffer of running vertical stacks of Ps
     stack_binder = AdjBinder(CDeepStack)
 
+    if render:
+        streamer = BlobStreamer(CDeepBlob, crit__, mask)
     for y, dert_ in enumerate(dert__):  # in height, first and last row are discarded;  print(f'Processing intra line {y}...')
         # if False in mask[i]:  # [y,x,params], there is at least one dert in line
             P_binder = AdjBinder(CDeepP)  # binder needs data about clusters of the same level
             P_ = form_P_(zip(*dert_), crit__[y], mask[y], P_binder)  # horizontal clustering, adds a row of Ps
+            if render:
+                render = streamer.update_blob_conversion(y, P_)  # if return False, stop rendering
             P_ = scan_P_(P_, stack_,root_dert__, sub_blobs, P_binder)  # vertical clustering, adds up_connects per P and down_connect_cnt per stack
             stack_ = form_stack_(P_, root_dert__, sub_blobs, y)
             stack_binder.bind_from_lower(P_binder)
@@ -156,6 +163,9 @@ def cluster_derts(dert__, mask, Ave, fcr, fig):  # similar to frame_to_blobs
     blob_binder.bind_from_lower(stack_binder)
     assign_adjacent(blob_binder)  # add adj_blobs to each blob
     # sub_blobs = find_adjacent(sub_blobs)
+
+    if render:  # rendering mode after blob conversion
+        streamer.end_blob_conversion(y)
 
     return sub_blobs
 
