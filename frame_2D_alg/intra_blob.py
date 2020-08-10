@@ -186,7 +186,7 @@ def form_P_(dert_, crit_, mask_, binder):  # segment dert__ into P__, in horizon
 
     I, iDy, iDx, G, Dy, Dx, M, L = *next(dert_), 1  # initialize P params
     _sign = sign_[x0]
-    _mask = True  # mask bit per dert
+    _mask = mask_[x0]  # mask bit per dert
 
     for x, (i, idy, idx, g, dy, dx, m) in enumerate(dert_, start=x0+1):  # loop left to right in each row of derts
         mask = mask_[x]
@@ -198,13 +198,15 @@ def form_P_(dert_, crit_, mask_, binder):  # segment dert__ into P__, in horizon
                 P_.append(P)
                 # initialize P params:
                 I, iDy, iDx, G, Dy, Dx, M, L, x0 = 0, 0, 0, 0, 0, 0, 0, 0, x
+            elif _mask:
+                # initialize P params:
+                I, iDy, iDx, G, Dy, Dx, M, L, x0 = 0, 0, 0, 0, 0, 0, 0, 0, x
+
          # current dert is masked
         elif ~_mask: # prior dert is not masked
             # pack P
             P = CDeepP(I=I, G=G, Dy=Dy, Dx=Dx, M=M, iDy=iDy, iDx=iDx, L=L,x0=x0, sign=_sign)
             P_.append(P)
-            # initialize P params:
-            I, iDy, iDx, G, Dy, Dx, M, L, x0 = 0, 0, 0, 0, 0, 0, 0, 0, x+1
 
         if ~mask:  # accumulate P params:
             I += i
