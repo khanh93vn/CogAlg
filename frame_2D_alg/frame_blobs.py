@@ -172,7 +172,7 @@ def image_to_blobs(image, verbose=False, render=False):
 
     blob_binder = AdjBinder(CBlob)
     blob_binder.bind_from_lower(stack_binder)
-    assign_adjacent(blob_binder)  # add adj_blobs to each blob
+    assign_adjacents(blob_binder)  # add adj_blobs to each blob
 
     if verbose:  # print infos at the end
         nblobs = len(frame['blob__'])
@@ -411,7 +411,7 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
         frame['blob__'].append(blob)
 
 
-def assign_adjacent(blob_binder):  # adjacents are connected opposite-sign blobs
+def assign_adjacents(blob_binder):  # adjacents are connected opposite-sign blobs
     '''
     Assign adjacent blobs bilaterally according to adjacent pairs' ids in blob_finder.
     '''
@@ -420,16 +420,26 @@ def assign_adjacent(blob_binder):  # adjacents are connected opposite-sign blobs
         blob1 = blob_binder.cluster_cls.get_instance(blob_id1)
         blob2 = blob_binder.cluster_cls.get_instance(blob_id2)
 
-        if blob1.box[1] < blob2.box[1]:  # yn1 < yn2: blob1 is potentially internal to blob2
-            if blob1.fopen:
-                pose1 = pose2 = 2  # 2 for open
-            else:
-                pose1, pose2 = 0, 1  # 0 for internal, 1 for external
-        else:  # blob2 is potentially internal to blob1
-            if blob2.fopen:
-                pose1 = pose2 = 2
-            else:
-                pose1, pose2 = 1, 0
+        y01, yn1, x01, xn1 = blob1.box
+        y02, yn2, x02, xn2 = blob2.box
+        if y01 < y02 and x01 < x02 and yn1 > yn2 and xn1 > xn2:
+            pose1, pose2 = 0, 1  # 0 for internal, 1 for external
+        elif y01 > y02 and x01 > x02 and yn1 < yn2 and xn1 < xn2:
+            pose1, pose2 = 1, 0
+        else:
+            pose1 = pose2 = 2
+        # no need for fopen?
+
+        # if blob1.box[1] < blob2.box[1]:  # yn1 < yn2: blob1 is potentially internal to blob2
+        #     if blob1.fopen:
+        #         pose1 = pose2 = 2  # 2 for open
+        #     else:
+        #         pose1, pose2 = 0, 1  # 0 for internal, 1 for external
+        # else:  # blob2 is potentially internal to blob1
+        #     if blob2.fopen:
+        #         pose1 = pose2 = 2
+        #     else:
+        #         pose1, pose2 = 1, 0
 
         # bilateral assignments
         blob1.adj_blobs[0].append((blob2, pose2))
