@@ -1,34 +1,3 @@
-"""
-usage: frame_blobs_find_adj.py [-h] [-i IMAGE] [-v VERBOSE] [-n INTRA] [-r RENDER]
-                      [-z ZOOM]
-optional arguments:
-  -h, --help            show this help message and exit
-  -i IMAGE, --image IMAGE
-                        path to image file
-  -v VERBOSE, --verbose VERBOSE
-                        print details, useful for debugging
-  -n INTRA, --intra INTRA
-                        run intra_blobs after frame_blobs
-  -r RENDER, --render RENDER
-                        render the process
-  -z ZOOM, --zoom ZOOM  zooming ratio when rendering
-"""
-
-from time import time
-from collections import deque
-from pathlib import Path
-import sys
-import numpy as np
-
-from class_cluster import ClusterStructure, NoneType
-from class_bind import AdjBinder
-# from comp_pixel import comp_pixel
-from class_stream import BlobStreamer
-from utils import (
-    pairwise,
-    imread, imwrite, map_frame_binary,
-    WHITE, BLACK,
-)
 '''
     2D version of first-level core algorithm will have frame_blobs, intra_blob (recursive search within blobs), and comp_P.
     frame_blobs() forms parameterized blobs: contiguous areas of positive or negative deviation of gradient per pixel.    
@@ -67,6 +36,37 @@ from utils import (
     predictive on a blob level, and should be cross-compared between blobs on the next level of search and composition.
     Please see diagrams of frame_blobs on https://kwcckw.github.io/CogAlg/
 '''
+"""
+usage: frame_blobs_find_adj.py [-h] [-i IMAGE] [-v VERBOSE] [-n INTRA] [-r RENDER]
+                      [-z ZOOM]
+optional arguments:
+  -h, --help            show this help message and exit
+  -i IMAGE, --image IMAGE
+                        path to image file
+  -v VERBOSE, --verbose VERBOSE
+                        print details, useful for debugging
+  -n INTRA, --intra INTRA
+                        run intra_blobs after frame_blobs
+  -r RENDER, --render RENDER
+                        render the process
+  -z ZOOM, --zoom ZOOM  zooming ratio when rendering
+"""
+
+from time import time
+from collections import deque
+from pathlib import Path
+import sys
+import numpy as np
+
+from class_cluster import ClusterStructure, NoneType
+from class_bind import AdjBinder
+# from comp_pixel import comp_pixel
+from class_stream import BlobStreamer
+from utils import (
+    pairwise,
+    imread, imwrite, map_frame_binary,
+    WHITE, BLACK,
+)
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 
@@ -145,7 +145,6 @@ def image_to_blobs(image, verbose=False, render=False):
         streamer = BlobStreamer(CBlob, dert__[1],
                                 record_path=output_path(arguments['image'],
                                                         suffix='.im2blobs.avi'))
-
     stack_binder = AdjBinder(Cstack)
 
     if verbose:
@@ -413,7 +412,7 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
 
 def assign_adjacents(blob_binder):  # adjacents are connected opposite-sign blobs
     '''
-    Assign adjacent blobs bilaterally according to adjacent pairs' ids in blob_finder.
+    Assign adjacent blobs bilaterally according to adjacent pairs' ids in blob_binder.
     '''
     for blob_id1, blob_id2 in blob_binder.adj_pairs:
         assert blob_id1 < blob_id2
@@ -422,24 +421,13 @@ def assign_adjacents(blob_binder):  # adjacents are connected opposite-sign blob
 
         y01, yn1, x01, xn1 = blob1.box
         y02, yn2, x02, xn2 = blob2.box
-        if y01 < y02 and x01 < x02 and yn1 > yn2 and xn1 > xn2:
-            pose1, pose2 = 0, 1  # 0 for internal, 1 for external
-        elif y01 > y02 and x01 > x02 and yn1 < yn2 and xn1 < xn2:
-            pose1, pose2 = 1, 0
-        else:
-            pose1 = pose2 = 2
-        # no need for fopen?
 
-        # if blob1.box[1] < blob2.box[1]:  # yn1 < yn2: blob1 is potentially internal to blob2
-        #     if blob1.fopen:
-        #         pose1 = pose2 = 2  # 2 for open
-        #     else:
-        #         pose1, pose2 = 0, 1  # 0 for internal, 1 for external
-        # else:  # blob2 is potentially internal to blob1
-        #     if blob2.fopen:
-        #         pose1 = pose2 = 2
-        #     else:
-        #         pose1, pose2 = 1, 0
+        if y01 < y02 and x01 < x02 and yn1 > yn2 and xn1 > xn2:
+            pose1, pose2 = 0, 1  # 0: internal, 1: external
+        elif y01 > y02 and x01 > x02 and yn1 < yn2 and xn1 < xn2:
+            pose1, pose2 = 1, 0  # 1: external, 0: internal
+        else:
+            pose1 = pose2 = 2  # open, no need for fopen?
 
         # bilateral assignments
         blob1.adj_blobs[0].append((blob2, pose2))
@@ -475,9 +463,9 @@ if __name__ == '__main__':
 
     argument_parser = argparse.ArgumentParser()
     argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon_eye.jpeg')
-    argument_parser.add_argument('-v', '--verbose', help='print details, useful for debugging', type=int, default=0)
+    argument_parser.add_argument('-v', '--verbose', help='print details, useful for debugging', type=int, default=1)
     argument_parser.add_argument('-n', '--intra', help='run intra_blobs after frame_blobs', type=int, default=0)
-    argument_parser.add_argument('-r', '--render', help='render the process', type=int, default=0)
+    argument_parser.add_argument('-r', '--render', help='render the process', type=int, default=1)
     arguments = vars(argument_parser.parse_args())
     image = imread(arguments['image'])
     verbose = arguments['verbose']

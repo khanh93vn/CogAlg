@@ -1,5 +1,5 @@
 '''
-line_PPs is a 2nd level 1D algorithm.
+line_PPs is a 2nd-level 1D algorithm.
 
 It cross-compares line_patterns output Ps (s, L, I, D, M, dert_, layers) and evaluates them for deeper cross-comparison.
 Depth of cross-comparison: range+ and deriv+, is increased in lower-recursion element_,
@@ -23,65 +23,95 @@ Comparison between two Ps is of variable-depth P hierarchy, with sign at the top
 This is vertical induction: results of higher-layer comparison predict results of next-layer comparison,
 similar to lateral induction: variable-range comparison among Ps, until first match or max prior-Ps miss.
 
-Resulting PPs will be more like graphs (in 1D), with explicit distances between nearest element Ps.
+Resulting PPs will be more like 1D graphs, with explicit distances between nearest element Ps.
 This is different from 1st level connectivity clustering, where all distances between nearest elements = 1.
 '''
 
 ave_dI = 20
-div_ave = 50
-ave_mP = 50
-max_miss = 50
+ave_div = 50
+ave_rM = .7   # average relative match per input magnitude, at rl=1 or .5?
+ave_net_M = 20  # search stop
+# no ave_mP: deviation computed via rM  # ave_mP = ave*3: comp cost, or n vars per P: rep cost?
+
 
 def comp_P(P_):
     dert_P_ = []  # array of alternating-sign Ps with derivatives from comp_P
 
-    for i, P in enumerate(P_, start=2):
-        sign, L, I, D, M, dert_, sub_H = P
-        oL = omP = 0
-        for _P in (P_[i+1 :]):  # no last-P displacement, just shifting first _P for variable-range comp
-            _sign, _L, _I, _D, _M, _dert_, _sub_H = _P
-            roL = oL / L  # relative distance to _P
-            roM = omP / (abs(M)+1)  # relative miss or contrast between _P: also search blocker, roD for dPP
+    for i, P in enumerate(P_):
+        sign, L, I, D, M, dert_, sub_H, _smP = P  # _smP = 0 in line_patterns, M: deviation even if min
+        neg_M = vmP = smP = neg_L = 0  # initialization
 
-            if roL * roM > max_miss:  # accumulated from all net-negative comparisons before first match,
-                # selective by combined Pm, not M sign alone?
+        for j, _P in enumerate(P_[i+1 :]):  # no last-P displacement, just shifting first _P for variable-range comp
+            _sign, _L, _I, _D, _M, _dert_, _sub_H, __smP = _P
+
+            if M - neg_M > ave_net_M:  # search continues while net_M > ave, True for 1st _P, no selection by M sign
                 dL = L - _L
-                mL = min(L, _L)  # L: positions / sign, dderived: magnitude-proportional value
-                dI = I - _I
-                mI = abs(dI) - ave_dI
-                dD = abs(D) - abs(_D)
-                mD = min(abs(D), abs(_D))  # same-sign D in dP?
-                dM = M - _M;  mM = min(M, _M)
+                mL = min(L, _L)  # - ave_rM * L?  L: positions / sign, derived: magnitude-proportional value
+                dI = I - _I      # proportional to distance, not I?
+                mI = ave_dI - abs(dI)  # I is not derived, match is inverse deviation of miss
+                dD = D - _D      # sum if opposite-sign
+                mD = min(D, _D)  # - ave_rM * D?  same-sign D in dP?
+                dM = M - _M      # sum if opposite-sign
+                mM = min(M, _M)  # - ave_rM * M?  negative if x-sign, M += adj_M + deep_M: P value before layer value?
 
-                mP = mL + mM + mD  # Pm *= roL * decay: contrast to global decay rate?
-                ms = 1 if mP > ave_mP * 7 > 0 else 0  # comp cost = ave * 7, or rep cost: n vars per P?
-                if ms:
-                    # add comp over deeper layers, adjust and evaluate updated mP
-                    dert_P_.append( (ms, mP, roL, roM, mL, dL, mI, dI, mD, dD, mM, dM, P))
-                    break  # nearest-neighbour search, until first match
+                mP = mL + mM + mD  # match(P, _P) for derived vars, mI is already a deviation
+                proj_mP = (L + M + D) * (ave_rM ** (1 + neg_L/L))  # projected mP at current relative distance
+                vmP = mI + (mP - proj_mP)  # deviation from projected mP, ~ I*rM contrast value, +|-? replaces mP?
+                smP = vmP > 0
+
+                if smP:  # dert_P sign is positive if forward match is found, else negative
+                    P_[i+1+j][-1] = True  # backward match per P: __smP = True
+                    # add deeper comp
+                    dert_P_.append( (smP, vmP, neg_M, neg_L, mL, dL, mI, dI, mD, dD, mM, dM, P))
+                    break  # nearest-neighbour search, terminated by first match
                 else:
-                    oL += _L
-                    omP += mP  # other derivatives and oP_ are not significant if neg mP, optional in dert_P?
+                    # accumulate negative-mP params:
+                    neg_M += mP  # accumulate contiguous miss: negative mP  # roD / dPP?
+                    neg_L += _L  # distance to match, if any
+
+                    if _P is P_[-1]:  # pack last dert_P in line
+                        dert_P_.append((smP or _smP, vmP, neg_M, neg_L, 0, 0, 0, 0, 0, 0, 0, 0, P))
+                    '''                     
+                    no contrast value in neg dert_Ps and PPs: initial opposite-sign P miss is expected
+                    neg dert_P derivatives are not significant;  actual decay = neg_M obviates distance * decay '''
             else:
-                dert_P_.append((ms, mP, roL, roM, mL, dL, mI, dI, mD, dD, mM, dM, P))
-                # at least one comp per loop, derivatives preserved if +mP only
-                break  # reached maximal accumulated miss, stop search
+                dert_P_.append((smP or _smP, vmP, neg_M, neg_L, 0, 0, 0, 0, 0, 0, 0, 0, P))  # ignore 0s if ~smP
+                # smP is ORed bilaterally, negative for single (weak) dert_Ps only
+                break  # neg net_M: stop search
 
     return dert_P_
 
 
-def form_PPm(dert_P_):  # cluster dert_Ps by mP sign
-
+def form_PPm(dert_P_):  # cluster dert_Ps by mP sign, positive only: no contrast in overlapping comp?
     PPm_ = []
-    for ms, mP, roL, roM, mL, dL, mI, dI, mD, dD, mM, dM, P in dert_P_:
-        # in form_PPd:
-        # dP = dL + dM + dD  # -> directional PPd, equal-weight params, no rdn?
-        # ds = 1 if Pd > 0 else 0
+    # initialize PPm with first dert_P:
+    _smP, MP, Neg_M, Neg_L, ML, DL, MI, DI, MD, DD, MM, DM, _P = dert_P_[0]  # positive only, no contrast?
+    P_ = [_P]
+
+    for i, dert_P in enumerate(dert_P_, start=1):
+        smP = dert_P[0]
+        if smP != _smP:
+            PPm_.append([_smP, MP, Neg_M, Neg_L, ML, DL, MI, DI, MD, DD, MM, DM, P_])
+            # initialize PPm with current dert_P:
+            _smP, MP, Neg_M, Neg_L, ML, DL, MI, DI, MD, DD, MM, DM, _P = dert_P
+            P_ = [_P]
+        else:
+            # accumulate PPm with current dert_P:
+            smP, mP, neg_M, neg_L, mL, dL, mI, dI, mD, dD, mM, dM, P = dert_P
+            MP+=mP; Neg_M+=neg_M; Neg_L+=neg_L; ML+=mL; DL+=dL; MI+=mI; DI+=dI; MD+=mD; DD+=dD; MM+=mM; DM+=dM
+            P_.append(P)
+        _smP = smP
+
+    PPm_.append([_smP, MP, Neg_M, Neg_L, ML, DL, MI, DI, MD, DD, MM, DM, P_])  # pack last PP
+
+    # in form_PPd:
+    # dP = dL + dM + dD  # -> directional PPd, equal-weight params, no rdn?
+    # ds = 1 if Pd > 0 else 0
 
     ''' evaluation for comp by division is per PP, not per P: results must be comparable between consecutive Ps  
 
         fdiv = 0, nvars = []
-        if M + abs(dL + dI + dD + dM) > div_ave:  
+        if M + abs(dL + dI + dD + dM) > ave_div:  
             
             rL = L / _L  # DIV comp L, SUB comp (summed param * rL) -> scale-independent d, neg if cross-sign:
             norm_D = D * rL
