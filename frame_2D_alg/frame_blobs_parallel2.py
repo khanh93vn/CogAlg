@@ -35,6 +35,7 @@ def frame_blobs_parallel(dert__):
                              Dy=dert__[2][y, x], Dx=dert__[3][y, x],
                              sign=dert__[1][y, x] - ave > 0, root_dert__=dert__)
                 blob_.append(blob)
+                id_map[y, x] = blob.id
 
                 # flood fill the blob, start from current position
                 unfilled_derts = deque([(y, x)])
@@ -43,7 +44,6 @@ def frame_blobs_parallel(dert__):
 
                     # add dert to blob
                     blob.dert_coord_.add((y1, x1))  # add dert coordinate to blob
-                    id_map[y1, x1] = blob.id  # add blob ID to each dert
                     blob.I += dert__[0][y1, x1]
                     blob.G += dert__[1][y1, x1] - ave
                     blob.Dy += dert__[2][y1, x1]
@@ -67,13 +67,15 @@ def frame_blobs_parallel(dert__):
                             x2 < 0 or x2 >= width):
                             blob.fopen = True
                         # check if same-signed
-                        elif blob.sign == dert__[1][y2, x2] - ave > 0:
-                            assert id_map[y2, x2] == -1  # should be unfilled
-                            unfilled_derts.append((y2, x2))
-                        # else assign adjacents
-                        else:
-                            # TODO: assign adjacents
-                            pass
+                        elif id_map[y2, x2] == -1:
+                            # check if same-signed
+                            if blob.sign == (dert__[1][y2, x2] - ave > 0):
+                                id_map[y2, x2] = blob.id  # add blob ID to each dert
+                                unfilled_derts.append((y2, x2))
+                            # else assign adjacents
+                            else:
+                                # TODO: assign adjacents
+                                pass
                 # terminate blob
                 y_coords, x_coords = zip(*blob.dert_coord_)
                 y0, yn = minmax(y_coords)
@@ -107,7 +109,7 @@ if __name__ == "__main__":
     dert__ = comp_pixel(image)
     blob_ = frame_blobs_parallel(dert__)
     bmap = np.full_like(image, 127, 'uint8')
-    print(f"Ended in {time() - start_time} seconds")
+    print(f"{len(blob_)} blobs formed in {time() - start_time} seconds")
 
     for blob in blob_:
         for y, x in blob.dert_coord_:
