@@ -1,24 +1,56 @@
-import ctypes
+from ctypes import *
 import numpy as np
 import matplotlib.pyplot as plt
 from time import time
 from frame_blobs_yx import comp_pixel, ave
 from utils import imread
 
-frame_blobs_parallel = ctypes.CDLL("frame_blobs.so").frame_blobs_parallel
+class DertRef(Structure):
+    _fields_ = [
+        ('x', c_int),
+        ('y', c_int),
+    ]
 
-img = imread('./images/raccoon.jpg')
-dert__ = [*map(lambda a: a.astype('float32'),
-               comp_pixel(img))]
-start_time = time()
-height, width = dert__[0].shape
-i = dert__[0].ctypes.data
-g = dert__[1].ctypes.data
-dy = dert__[2].ctypes.data
-dx = dert__[3].ctypes.data
-bmap = np.empty((height, width), 'uint8')
-nblobs = frame_blobs_parallel(i, g, dy, dx, height, width, ave,
-                              bmap.ctypes.data)
-print(f"{nblobs} blobs formed in {time() - start_time} seconds")
-plt.imshow(bmap, 'gray')
-plt.show()
+class Blob(Structure):
+    _fields_ = [
+        ('I', c_double),
+        ('G', c_double),
+        ('Dy', c_double),
+        ('Dx', c_double),
+        ('S', c_ulonglong),
+        ('sign', c_byte),
+        ('fopen', c_byte),
+        ('dert_ref', POINTER(DertRef)),
+    ]
+
+class FrameOfBlobs(Structure):
+    _fields_ = [('blobs', POINTER(Blob)),
+                ('nblobs', c_ulong)]
+
+derts2blobs = CDLL("frame_blobs.so").derts2blobs
+derts2blobs.restype = FrameOfBlobs
+
+if __name__ == "__main__":
+    import argparse
+    argument_parser = argparse.ArgumentParser()
+    argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon_eye.jpg')
+    argument_parser.add_argument('-v', '--verbose', help='print details, useful for debugging', type=int, default=1)
+    argument_parser.add_argument('-n', '--intra', help='run intra_blobs after frame_blobs', type=int, default=0)
+    argument_parser.add_argument('-r', '--render', help='render the process', type=int, default=1)
+    arguments = vars(argument_parser.parse_args())
+    image = imread(arguments['image'])
+    verbose = arguments['verbose']
+    intra = arguments['intra']
+    render = arguments['render']
+
+    start_time = time()
+    dert__ = [*map(lambda a: a.astype('float64'),
+                   comp_pixel(image))]
+    height, width = dert__[0].shape
+    idmap = np.empty((height, width), 'uint32')
+    frame = derts2blobs(*map(lambda d: d.ctypes.data, dert__),
+                        height, width, ave, idmap.ctypes.data)
+
+    print(f"{frame.nblobs} blobs formed in {time() - start_time} seconds")
+    plt.imshow(idmap, 'gray')
+    plt.show()
