@@ -3,8 +3,6 @@
 #include <malloc.h>
 #include <string.h>
 
-#define QUEUE_MAX_LEN   2000    /* max queue length */
-
 typedef struct {
     float I, G, Dy, Dx, S;
     char sign, fopen;
@@ -24,13 +22,14 @@ int adj_offset[8][2] = {
 int frame_blobs_parallel(float *i_, float *g_, float *dy_, float *dx_,
                          int height, int width, int ave,
                          uint8_t *bmap) {
-    static int queue[QUEUE_MAX_LEN],    /* a queue for FIFO data */
-               qbeg, qend;
     int nblobs = 0,                     /* total number of blobs */
+        *queue, qlen, qbeg, qend,       /* a queue for FIFO data */
         size = height * width;          /* total number of derts */
     char *fill_map;                     /* id_map to track flood fill */
 
     // initialize fill_map
+    qlen = height<width?width:height + 1;
+    queue = (int*) malloc(qlen * sizeof(int));
     fill_map = (char*) malloc(size * sizeof(char));
     memset(fill_map, 0, sizeof(fill_map));
 
@@ -49,7 +48,7 @@ int frame_blobs_parallel(float *i_, float *g_, float *dy_, float *dx_,
             queue[qbeg] = i;
             while(qbeg != qend) {
                 int j = queue[qbeg++];           /* pop last dert's index */
-                if(qbeg >= QUEUE_MAX_LEN) qbeg = 0;
+                if(qbeg >= qlen) qbeg = 0;
                 // TODO: add coordinate container
                 I += i_[j];
                 G += g_[j];
@@ -75,7 +74,7 @@ int frame_blobs_parallel(float *i_, float *g_, float *dy_, float *dx_,
                         if(sign == (g_[k] - ave > 0)) {
                             fill_map[k] = 1;
                             queue[qend++] = k;  /* append this hash */
-                            if(qend >= QUEUE_MAX_LEN) qend = 0;
+                            if(qend >= qlen) qend = 0;
                         }
                         // else assign adjacents
                         else {
@@ -86,6 +85,7 @@ int frame_blobs_parallel(float *i_, float *g_, float *dy_, float *dx_,
             }
         }
     free(fill_map);
+    free(queue);
 
     return nblobs;
 }

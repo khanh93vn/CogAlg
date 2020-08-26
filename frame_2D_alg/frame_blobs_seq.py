@@ -1,11 +1,12 @@
+'''
+Another draft of blob-parallel version of frame_blobs
+'''
 import numpy as np
+
 from collections import deque
 from class_cluster import ClusterStructure, NoneType
+from frame_blobs_yx import ave
 from utils import minmax
-'''
-Khanh's version
-'''
-ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 
 class CBlob(ClusterStructure):
     # Derts
