@@ -1,41 +1,31 @@
-'''
-Another draft of blob-parallel version of frame_blobs
-'''
+import sys
 import numpy as np
 
 from collections import deque
-from class_cluster import ClusterStructure, NoneType
-from frame_blobs_yx import ave
+from frame_blobs_defs import CBlob, FrameOfBlobs
+from frame_blobs_seq_cwrapper import cwrapped_derts2blobs
 from utils import minmax
 
-class CBlob(ClusterStructure):
-    # Derts
-    I = int
-    G = int
-    Dy = int
-    Dx = int
-    S = int
-    # other data
-    box = list
-    sign = NoneType
-    dert_coord_ = set  # let derts' id be their coords
-    root_dert__ = object
-    adj_blobs = list
-    fopen = bool
+def derts2blobs(dert__, verbose=False):
 
-def frame_blobs_parallel(dert__):
     height, width = dert__[0].shape
-    id_map = np.full((height, width), -1, 'int64')  # blob's id per dert, initialized with -1
-    blob_ = []
+    idmap = np.full((height, width), -1, 'int64')  # blob's id per dert, initialized with -1
+
+    if verbose:
+        step = 100 / height / width     # progress % percent per pixel
+        progress = 0.0
+        print(f"\rClustering... {round(progress)} %", end="")
+        sys.stdout.flush()
+
+    adj_pairs = set()
+    I = 0; G = 0; Dy = 0; Dx = 0; blob_ = []
     for y in range(height):
         for x in range(width):
-            if id_map[y, x] == -1:  # ignore filled/clustered derts (blob id != -1)
+            if idmap[y, x] == -1:  # ignore filled/clustered derts (blob id != -1)
                 # initialize new blob
-                blob = CBlob(I=dert__[0][y, x], G=dert__[1][y, x] - ave,
-                             Dy=dert__[2][y, x], Dx=dert__[3][y, x],
-                             sign=dert__[1][y, x] - ave > 0, root_dert__=dert__)
+                blob = CBlob(sign=dert__[1][y, x] - ave > 0, root_dert__=dert__)
                 blob_.append(blob)
-                id_map[y, x] = blob.id
+                idmap[y, x] = blob.id
 
                 # flood fill the blob, start from current position
                 unfilled_derts = deque([(y, x)])
@@ -66,16 +56,16 @@ def frame_blobs_parallel(dert__):
                         if (y2 < 0 or y2 >= height or
                             x2 < 0 or x2 >= width):
                             blob.fopen = True
-                        # check if same-signed
-                        elif id_map[y2, x2] == -1:
+                        # check if filled
+                        elif idmap[y2, x2] == -1:
                             # check if same-signed
                             if blob.sign == (dert__[1][y2, x2] - ave > 0):
-                                id_map[y2, x2] = blob.id  # add blob ID to each dert
+                                idmap[y2, x2] = blob.id  # add blob ID to each dert
                                 unfilled_derts.append((y2, x2))
-                            # else assign adjacents
-                            else:
-                                # TODO: assign adjacents
-                                pass
+                        # else check if same-signed
+                        elif blob.sign != (dert__[1][y2, x2] - ave > 0):
+                            adj_pairs.add((idmap[y2, x2], blob.id))     # blob.id always bigger
+
                 # terminate blob
                 y_coords, x_coords = zip(*blob.dert_coord_)
                 y0, yn = minmax(y_coords)
@@ -85,34 +75,81 @@ def frame_blobs_parallel(dert__):
                     x0, xn + 1,  # x0, xn
                 )
                 # got a set of coordinates, no need for mask?
-    return blob_
+                blob.adj_blobs = [[], 0, 0]
+
+                I += blob.I
+                G += blob.G
+                Dy += blob.Dy
+                Dx += blob.Dx
+                if verbose:
+                    progress += blob.S * step
+                    print(f"\rClustering... {round(progress)} %", end="")
+                    sys.stdout.flush()
+    if verbose:
+        print("")
+
+    frame = FrameOfBlobs(I=I, G=G, Dy=Dy, Dx=Dx, blob_=blob_, dert__=dert__)
+    return frame, idmap, adj_pairs
+
+def assign_adjacents(adj_pairs):  # adjacents are connected opposite-sign blobs
+    '''
+    Assign adjacent blobs bilaterally according to adjacent pairs' ids in blob_binder.
+    '''
+    for blob_id1, blob_id2 in adj_pairs:
+        assert blob_id1 < blob_id2
+        blob1 = CBlob.get_instance(blob_id1)
+        blob2 = CBlob.get_instance(blob_id2)
+
+        y01, yn1, x01, xn1 = blob1.box
+        y02, yn2, x02, xn2 = blob2.box
+
+        if y01 < y02 and x01 < x02 and yn1 > yn2 and xn1 > xn2:
+            pose1, pose2 = 0, 1  # 0: internal, 1: external
+        elif y01 > y02 and x01 > x02 and yn1 < yn2 and xn1 < xn2:
+            pose1, pose2 = 1, 0  # 1: external, 0: internal
+        else:
+            pose1 = pose2 = 2  # open, no need for fopen?
+
+        # bilateral assignments
+        blob1.adj_blobs[0].append((blob2, pose2))
+        blob2.adj_blobs[0].append((blob1, pose1))
+        blob1.adj_blobs[1] += blob2.S
+        blob2.adj_blobs[1] += blob1.S
+        blob1.adj_blobs[2] += blob2.S
+        blob2.adj_blobs[2] += blob1.S
+
 
 if __name__ == "__main__":
+    # Imports
     import argparse
-    import matplotlib.pyplot as plt
+    from frame_blobs_yx import comp_pixel, ave
     from time import time
-    from frame_2D_alg.frame_blobs import comp_pixel
-    from frame_2D_alg.utils import imread
+    from utils import imread
 
+    # Parse arguments
     argument_parser = argparse.ArgumentParser()
     argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon_eye.jpg')
     argument_parser.add_argument('-v', '--verbose', help='print details, useful for debugging', type=int, default=1)
     argument_parser.add_argument('-n', '--intra', help='run intra_blobs after frame_blobs', type=int, default=0)
     argument_parser.add_argument('-r', '--render', help='render the process', type=int, default=1)
-    arguments = vars(argument_parser.parse_args())
-    image = imread(arguments['image'])
-    verbose = arguments['verbose']
-    intra = arguments['intra']
-    render = arguments['render']
+    argument_parser.add_argument('-c', '--clib', help='use C shared library', type=int, default=0)
+    args = argument_parser.parse_args()
+    image = imread(args.image)
+    # verbose = args.verbose
+    # intra = args.intra
+    # render = args.render
 
+    # frame-blobs start here
     start_time = time()
     dert__ = comp_pixel(image)
-    blob_ = frame_blobs_parallel(dert__)
-    bmap = np.full_like(image, 127, 'uint8')
-    print(f"{len(blob_)} blobs formed in {time() - start_time} seconds")
+    if args.clib:
+        frame, idmap, adj_pairs = cwrapped_derts2blobs(dert__)
+    else:
+        frame, idmap, adj_pairs = derts2blobs(dert__, verbose=args.verbose)
+    assign_adjacents(adj_pairs)
+    print(f"{len(frame.blob_)} blobs formed in {time() - start_time} seconds")
 
-    for blob in blob_:
-        for y, x in blob.dert_coord_:
-            bmap[y, x] = blob.sign * 255
-    plt.imshow(bmap, 'gray')
-    plt.show()
+    if args.render:  # will be replaced with interactive adjacent blobs display
+        import matplotlib.pyplot as plt
+        plt.imshow(idmap, 'gray')
+        plt.show()

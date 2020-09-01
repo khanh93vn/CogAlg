@@ -7,9 +7,8 @@
 from ctypes import *
 import numpy as np
 
-from collections import namedtuple
+from frame_blobs_defs import CBlob, FrameOfBlobs
 from frame_blobs_yx import ave
-from class_cluster import ClusterStructure, NoneType
 from utils import imread
 
 class SDertRef(Structure):
@@ -25,6 +24,7 @@ class SBlob(Structure):
         ('Dy', c_double),
         ('Dx', c_double),
         ('S', c_ulonglong),
+        ('box', c_uint * 4),
         ('sign', c_byte),
         ('fopen', c_byte),
         ('dert_ref', POINTER(SDertRef)),
@@ -43,22 +43,6 @@ class SFrameOfBlobs(Structure):
 # Load derts2blobs function from C library
 derts2blobs = CDLL("frame_blobs.so").derts2blobs
 derts2blobs.restype = SFrameOfBlobs
-
-class CBlob(ClusterStructure):
-    I = int
-    G = int
-    Dy = int
-    Dx = int
-    S = int
-    # other data
-    box = list
-    sign = NoneType
-    dert_coord_ = set  # let derts' id be their coords
-    root_dert__ = object
-    adj_blobs = list
-    fopen = bool
-
-FrameOfBlobs = namedtuple('FrameOfBlobs', 'I, G, Dy, Dx, blob_, dert__')
 
 def transfer_data(sframe, dert__):
     """Transfer data from C structures to custom objects."""
@@ -81,10 +65,12 @@ def transfer_data(sframe, dert__):
             sign=bool(sblob.sign),
             root_dert__=ntframe.dert__,
             fopen=bool(sblob.fopen),
+            box=list(sblob.box[:4]),
         )
-        # TODO: add box, dert_coord_, adj_blobs
+        # TODO: add box
         cblob.dert_coord_.update(((sblob.dert_ref[i].y, sblob.dert_ref[i].x)
                                   for i in range(sblob.S)))
+
 
         ntframe.blob_.append(cblob)
 
@@ -100,4 +86,4 @@ def cwrapped_derts2blobs(dert__):
 
     ntframe = transfer_data(sframe, dert__)
 
-    return ntframe, idmap
+    return ntframe, idmap, set()

@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <malloc.h>
+#include <limits.h>
 #include "bitarray.h"
 
 typedef struct {
@@ -9,6 +10,7 @@ typedef struct {
 typedef struct {
     double I, G, Dy, Dx;
     unsigned long long S;
+    unsigned int box[4];
     char sign, fopen;
     DertRef *dert_ref;
 } Blob;
@@ -126,6 +128,7 @@ FrameOfBlobs derts2blobs(double *i_, double *g_, double *dy_, double *dx_,
             blobs[nblobs].dert_ref = &dert_refs[nfilled];  /* save pointer, length is S */
 
             double I = 0, G = 0, Dy = 0, Dx = 0, S = 0;
+            int box[4] = {INT_MAX, 0, INT_MAX, 0};
             char sign = g_[i] - ave > 0,
                  fopen = 0;
             unsigned long long id2hash = nblobs*(nblobs - 1) / 2;
@@ -152,6 +155,10 @@ FrameOfBlobs derts2blobs(double *i_, double *g_, double *dy_, double *dx_,
                 dert_refs[nfilled].x = x;  /* save filled dert position */
                 dert_refs[nfilled].y = y;
                 nfilled++;
+                if(y < box[0]) box[0] = y;
+                if(y > box[1]) box[1] = y;
+                if(y < box[2]) box[2] = x;
+                if(y > box[3]) box[3] = x;
 
                 // loop through adjacent coordinates, 8 if sign else 4
                 for(int dir = 0; dir < (sign?8:4); dir++) {
@@ -163,17 +170,19 @@ FrameOfBlobs derts2blobs(double *i_, double *g_, double *dy_, double *dx_,
                     else {
                         int k = y2 * width + x2;  /* hash coordinate */
                         // ignore filled
-                        if(testbit(fill_map, k)) continue;
+                        if(testbit(fill_map, k)) {
+                            if(sign != (g_[k] - ave > 0)) {
+                                // assign adjacents
+                                // unsigned long long adj_hash = idmap[k] + id2hash;
+                                // setbit(adj_table, adj_hash);
+                            }
+                            continue;
+                        }
                         // check if same-signed
                         if(sign == (g_[k] - ave > 0)) {
                             setbit(fill_map, k);    /* set current dert as filled */
                             queue[qend++] = k;  /* append this hash */
                             if(qend >= qlen) qend = 0;
-                        }
-                        // else assign adjacents
-                        else {
-                            // unsigned long long adj_hash = idmap[k] + id2hash;
-                            // setbit(adj_table, adj_hash);
                         }
                     }
                 }
