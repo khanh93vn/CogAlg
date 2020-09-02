@@ -4,7 +4,28 @@ import numpy as np
 from collections import deque
 from frame_blobs_defs import CBlob, FrameOfBlobs
 from frame_blobs_seq_cwrapper import cwrapped_derts2blobs
+from frame_blobs_seq_imaging import visualize_blobs
 from utils import minmax
+
+ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
+
+def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge detection operators
+    # see comp_pixel_versions file for other versions and more explanation
+
+    # input slices into sliding 2x2 kernel, each slice is a shifted 2D frame of grey-scale pixels:
+    topleft__ = image[:-1, :-1]
+    topright__ = image[:-1, 1:]
+    bottomleft__ = image[1:, :-1]
+    bottomright__ = image[1:, 1:]
+
+    Gy__ = ((bottomleft__ + bottomright__) - (topleft__ + topright__))  # same as decomposition of two diagonal differences into Gy
+    Gx__ = ((topright__ + bottomright__) - (topleft__ + bottomleft__))  # same as decomposition of two diagonal differences into Gx
+
+    G__ = np.hypot(Gy__, Gx__) - ave  # central gradient per kernel, between its four vertex pixels
+
+    return (topleft__, G__, Gy__, Gx__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
+    # renamed dert__ = (p__, g__, dy__, dx__) for readability in functions below
+
 
 def derts2blobs(dert__, verbose=False):
 
@@ -23,7 +44,7 @@ def derts2blobs(dert__, verbose=False):
         for x in range(width):
             if idmap[y, x] == -1:  # ignore filled/clustered derts (blob id != -1)
                 # initialize new blob
-                blob = CBlob(sign=dert__[1][y, x] - ave > 0, root_dert__=dert__)
+                blob = CBlob(sign=dert__[1][y, x] > 0, root_dert__=dert__)
                 blob_.append(blob)
                 idmap[y, x] = blob.id
 
@@ -35,7 +56,7 @@ def derts2blobs(dert__, verbose=False):
                     # add dert to blob
                     blob.dert_coord_.add((y1, x1))  # add dert coordinate to blob
                     blob.I += dert__[0][y1, x1]
-                    blob.G += dert__[1][y1, x1] - ave
+                    blob.G += dert__[1][y1, x1]
                     blob.Dy += dert__[2][y1, x1]
                     blob.Dx += dert__[3][y1, x1]
                     blob.S += 1
@@ -59,11 +80,11 @@ def derts2blobs(dert__, verbose=False):
                         # check if filled
                         elif idmap[y2, x2] == -1:
                             # check if same-signed
-                            if blob.sign == (dert__[1][y2, x2] - ave > 0):
+                            if blob.sign == (dert__[1][y2, x2] > 0):
                                 idmap[y2, x2] = blob.id  # add blob ID to each dert
                                 unfilled_derts.append((y2, x2))
                         # else check if same-signed
-                        elif blob.sign != (dert__[1][y2, x2] - ave > 0):
+                        elif blob.sign != (dert__[1][y2, x2] > 0):
                             adj_pairs.add((idmap[y2, x2], blob.id))     # blob.id always bigger
 
                 # terminate blob
@@ -91,6 +112,7 @@ def derts2blobs(dert__, verbose=False):
     frame = FrameOfBlobs(I=I, G=G, Dy=Dy, Dx=Dx, blob_=blob_, dert__=dert__)
     return frame, idmap, adj_pairs
 
+
 def assign_adjacents(adj_pairs):  # adjacents are connected opposite-sign blobs
     '''
     Assign adjacent blobs bilaterally according to adjacent pairs' ids in blob_binder.
@@ -103,26 +125,27 @@ def assign_adjacents(adj_pairs):  # adjacents are connected opposite-sign blobs
         y01, yn1, x01, xn1 = blob1.box
         y02, yn2, x02, xn2 = blob2.box
 
-        if y01 < y02 and x01 < x02 and yn1 > yn2 and xn1 > xn2:
+        if blob1.fopen and blob2.fopen:
+            pose1 = pose2 = 2
+        elif y01 < y02 and x01 < x02 and yn1 > yn2 and xn1 > xn2:
             pose1, pose2 = 0, 1  # 0: internal, 1: external
         elif y01 > y02 and x01 > x02 and yn1 < yn2 and xn1 < xn2:
             pose1, pose2 = 1, 0  # 1: external, 0: internal
         else:
-            pose1 = pose2 = 2  # open, no need for fopen?
+            raise ValueError("something is wrong with pose")
 
         # bilateral assignments
         blob1.adj_blobs[0].append((blob2, pose2))
         blob2.adj_blobs[0].append((blob1, pose1))
         blob1.adj_blobs[1] += blob2.S
         blob2.adj_blobs[1] += blob1.S
-        blob1.adj_blobs[2] += blob2.S
-        blob2.adj_blobs[2] += blob1.S
+        blob1.adj_blobs[2] += blob2.G
+        blob2.adj_blobs[2] += blob1.G
 
 
 if __name__ == "__main__":
     # Imports
     import argparse
-    from frame_blobs_yx import comp_pixel, ave
     from time import time
     from utils import imread
 
@@ -150,6 +173,4 @@ if __name__ == "__main__":
     print(f"{len(frame.blob_)} blobs formed in {time() - start_time} seconds")
 
     if args.render:  # will be replaced with interactive adjacent blobs display
-        import matplotlib.pyplot as plt
-        plt.imshow(idmap, 'gray')
-        plt.show()
+        visualize_blobs(idmap, CBlob)

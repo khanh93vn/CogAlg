@@ -33,8 +33,7 @@ int adj_offset[8][2] = {
 };
 
 FrameOfBlobs derts2blobs(double *i_, double *g_, double *dy_, double *dx_,
-                         int height, int width, int ave,
-                         unsigned int *idmap) {
+                         int height, int width, unsigned int *idmap) {
 
     long size = height * width;  /* total number of derts */
     FrameOfBlobs *frame;         /* Container for the array of blobs */
@@ -129,7 +128,7 @@ FrameOfBlobs derts2blobs(double *i_, double *g_, double *dy_, double *dx_,
 
             double I = 0, G = 0, Dy = 0, Dx = 0, S = 0;
             int box[4] = {INT_MAX, 0, INT_MAX, 0};
-            char sign = g_[i] - ave > 0,
+            char sign = g_[i] > 0,
                  fopen = 0;
             unsigned long long id2hash = nblobs*(nblobs - 1) / 2;
 
@@ -171,7 +170,7 @@ FrameOfBlobs derts2blobs(double *i_, double *g_, double *dy_, double *dx_,
                         int k = y2 * width + x2;  /* hash coordinate */
                         // ignore filled
                         if(testbit(fill_map, k)) {
-                            if(sign != (g_[k] - ave > 0)) {
+                            if(sign != (g_[k] > 0)) {
                                 // assign adjacents
                                 // unsigned long long adj_hash = idmap[k] + id2hash;
                                 // setbit(adj_table, adj_hash);
@@ -179,7 +178,7 @@ FrameOfBlobs derts2blobs(double *i_, double *g_, double *dy_, double *dx_,
                             continue;
                         }
                         // check if same-signed
-                        if(sign == (g_[k] - ave > 0)) {
+                        if(sign == (g_[k] > 0)) {
                             setbit(fill_map, k);    /* set current dert as filled */
                             queue[qend++] = k;  /* append this hash */
                             if(qend >= qlen) qend = 0;

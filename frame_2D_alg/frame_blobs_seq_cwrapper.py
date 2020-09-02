@@ -8,7 +8,6 @@ from ctypes import *
 import numpy as np
 
 from frame_blobs_defs import CBlob, FrameOfBlobs
-from frame_blobs_yx import ave
 from utils import imread
 
 class SDertRef(Structure):
@@ -62,12 +61,12 @@ def transfer_data(sframe, dert__):
             Dy=sblob.Dy,
             Dx=sblob.Dx,
             S=sblob.S,
+            box=list(sblob.box[:4]),
             sign=bool(sblob.sign),
             root_dert__=ntframe.dert__,
+            adj_blobs=[[], 0, 0],
             fopen=bool(sblob.fopen),
-            box=list(sblob.box[:4]),
         )
-        # TODO: add box
         cblob.dert_coord_.update(((sblob.dert_ref[i].y, sblob.dert_ref[i].x)
                                   for i in range(sblob.S)))
 
@@ -82,7 +81,7 @@ def cwrapped_derts2blobs(dert__):
     height, width = dert__[0].shape
     idmap = np.empty((height, width), 'uint32')
     sframe = derts2blobs(*map(lambda d: d.ctypes.data, dert__),
-                         height, width, ave, idmap.ctypes.data)
+                         height, width, idmap.ctypes.data)
 
     ntframe = transfer_data(sframe, dert__)
 
