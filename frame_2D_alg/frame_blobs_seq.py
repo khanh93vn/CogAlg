@@ -8,6 +8,9 @@ from frame_blobs_seq_imaging import visualize_blobs
 from utils import minmax
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
+UNFILLED = -1
+EXCLUDED_ID = -2
+
 
 def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge detection operators
     # see comp_pixel_versions file for other versions and more explanation
@@ -29,8 +32,26 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge d
 
 def derts2blobs(dert__, verbose=False):
 
+    blob_, idmap, adj_pairs = flood_fill(dert__,
+                                         sign__=dert__[1] > 0,
+                                         verbose=verbose)
+    I = 0; G = 0; Dy = 0; Dx = 0
+    for blob in blob_:
+        I += blob.I
+        G += blob.G
+        Dy += blob.Dy
+        Dx += blob.Dx
+
+    frame = FrameOfBlobs(I=I, G=G, Dy=Dy, Dx=Dx, blob_=blob_, dert__=dert__)
+
+    return frame, idmap, adj_pairs
+
+def flood_fill(dert__, sign__, verbose=False, exluded_derts=None):
+
     height, width = dert__[0].shape
-    idmap = np.full((height, width), -1, 'int64')  # blob's id per dert, initialized with -1
+    idmap = np.full((height, width), UNFILLED, 'int64')  # blob's id per dert, initialized UNFILLED
+    if exluded_derts is not None:
+        idmap[[*zip(*exluded_derts)]] = EXCLUDED_ID
 
     if verbose:
         step = 100 / height / width     # progress % percent per pixel
@@ -38,13 +59,13 @@ def derts2blobs(dert__, verbose=False):
         print(f"\rClustering... {round(progress)} %", end="")
         sys.stdout.flush()
 
+    blob_ = []
     adj_pairs = set()
-    I = 0; G = 0; Dy = 0; Dx = 0; blob_ = []
     for y in range(height):
         for x in range(width):
-            if idmap[y, x] == -1:  # ignore filled/clustered derts (blob id != -1)
+            if idmap[y, x] == UNFILLED:  # ignore filled/clustered derts
                 # initialize new blob
-                blob = CBlob(sign=dert__[1][y, x] > 0, root_dert__=dert__)
+                blob = CBlob(sign=sign__[y, x], root_dert__=dert__)
                 blob_.append(blob)
                 idmap[y, x] = blob.id
 
@@ -55,10 +76,7 @@ def derts2blobs(dert__, verbose=False):
 
                     # add dert to blob
                     blob.dert_coord_.add((y1, x1))  # add dert coordinate to blob
-                    blob.I += dert__[0][y1, x1]
-                    blob.G += dert__[1][y1, x1]
-                    blob.Dy += dert__[2][y1, x1]
-                    blob.Dx += dert__[3][y1, x1]
+                    accum_blob_Dert(blob, dert__, y1, x1)
                     blob.S += 1
 
                     # determine neighbors' coordinates, 4 for -, 8 for +
@@ -75,16 +93,17 @@ def derts2blobs(dert__, verbose=False):
                     for y2, x2 in adj_dert_coords:
                         # check if image boundary is reached
                         if (y2 < 0 or y2 >= height or
-                            x2 < 0 or x2 >= width):
+                            x2 < 0 or x2 >= width or
+                            idmap[y2, x2] == EXCLUDED_ID):
                             blob.fopen = True
                         # check if filled
-                        elif idmap[y2, x2] == -1:
+                        elif idmap[y2, x2] == UNFILLED:
                             # check if same-signed
-                            if blob.sign == (dert__[1][y2, x2] > 0):
+                            if blob.sign == sign__[y2, x2]:
                                 idmap[y2, x2] = blob.id  # add blob ID to each dert
                                 unfilled_derts.append((y2, x2))
                         # else check if same-signed
-                        elif blob.sign != (dert__[1][y2, x2] > 0):
+                        elif blob.sign != sign__[y2, x2]:
                             adj_pairs.add((idmap[y2, x2], blob.id))     # blob.id always bigger
 
                 # terminate blob
@@ -95,13 +114,8 @@ def derts2blobs(dert__, verbose=False):
                     y0, yn + 1,  # y0, yn
                     x0, xn + 1,  # x0, xn
                 )
-                # got a set of coordinates, no need for mask?
                 blob.adj_blobs = [[], 0, 0]
 
-                I += blob.I
-                G += blob.G
-                Dy += blob.Dy
-                Dx += blob.Dx
                 if verbose:
                     progress += blob.S * step
                     print(f"\rClustering... {round(progress)} %", end="")
@@ -109,8 +123,7 @@ def derts2blobs(dert__, verbose=False):
     if verbose:
         print("")
 
-    frame = FrameOfBlobs(I=I, G=G, Dy=Dy, Dx=Dx, blob_=blob_, dert__=dert__)
-    return frame, idmap, adj_pairs
+    return blob_, idmap, adj_pairs
 
 
 def assign_adjacents(adj_pairs):  # adjacents are connected opposite-sign blobs
@@ -141,6 +154,13 @@ def assign_adjacents(adj_pairs):  # adjacents are connected opposite-sign blobs
         blob2.adj_blobs[1] += blob1.S
         blob1.adj_blobs[2] += blob2.G
         blob2.adj_blobs[2] += blob1.G
+
+
+def accum_blob_Dert(blob, dert__, y, x):
+    blob.I += dert__[0][y, x]
+    blob.G += dert__[1][y, x]
+    blob.Dy += dert__[2][y, x]
+    blob.Dx += dert__[3][y, x]
 
 
 if __name__ == "__main__":
@@ -174,3 +194,30 @@ if __name__ == "__main__":
 
     if args.render:  # will be replaced with interactive adjacent blobs display
         visualize_blobs(idmap, CBlob)
+
+
+    # # Test if the two versions give identical results
+    # from itertools import zip_longest
+    # frame, idmap, adj_pairs = cwrapped_derts2blobs(dert__)
+    # frame1, idmap1, adj_pairs1 = derts2blobs(dert__, verbose=args.verbose)
+    # did = 0
+    # dI = 0
+    # dG = 0
+    # dDy = 0
+    # dDx = 0
+    # dbox = 0
+    # dfopen = 0
+    # dsign = 0
+    # for blob, blob1 in zip_longest(frame.blob_, frame1.blob_):
+    #     did += abs(blob.id - blob1.id)
+    #     dI += abs(blob.I - blob1.I)
+    #     dG += abs(blob.G - blob1.G)
+    #     dDy += abs(blob.Dy - blob1.Dy)
+    #     dDx += abs(blob.Dx - blob1.Dx)
+    #     dfopen += abs(blob.fopen - blob1.fopen)
+    #     dsign += abs(int(blob.sign) - int(blob1.sign))
+    #     dbox += abs(blob.box[0] - blob1.box[0])
+    #     dbox += abs(blob.box[1] - blob1.box[1])
+    #     dbox += abs(blob.box[2] - blob1.box[2])
+    #     dbox += abs(blob.box[3] - blob1.box[3])
+    # print(np.array([did, dI, dG, dDy, dDx, dbox, dfopen, dsign]) / len(frame.blob_))
