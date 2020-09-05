@@ -26,7 +26,7 @@
 from collections import deque, defaultdict
 from frame_blobs_defs import CDeepBlobs
 from class_bind import AdjBinder
-from frame_blobs_seq import assign_adjacents
+from frame_blobs_seq import assign_adjacents, flood_fill
 from intra_comp import comp_g, comp_r
 from itertools import zip_longest
 from utils import pairwise
@@ -83,6 +83,29 @@ def intra_blob(blob, rdn, rng, fig, fcr, **kwargs):  # recursive input rng+ | de
     return spliced_layers
 
 
+def cluster_derts(dert__, mask, Ave, fcr, fig, **kwargs):
+
+    if fcr:  # comp_r output;  form clustering criterion:
+        if fig:
+            crit__ = dert__[0] + dert__[6] - Ave  # eval by i + m, accum in rng; dert__[:,:,0] if not transposed
+        else:
+            crit__ = Ave - dert__[3]  # eval by -g, accum in rng
+    else:  # comp_g output
+        crit__ = dert__[6] - Ave  # comp_g output eval by m, or clustering is always by m?
+
+    excluded_derts = set(zip(*mask.nonzero()))
+
+    blob_, idmap, adj_pairs = flood_fill(dert__,
+                                         sign__=crit__ > 0,
+                                         verbose=verbose,
+                                         excluded_derts=excluded_derts,
+                                         blob_cls=CDeepBlobs,
+                                         accum_func=accum_blob_Dert,
+                                         **kwargs)
+
+    return blob_
+
+
 def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
 
     y0, yn, x0, xn = blob.box  # extend dert box:
@@ -98,8 +121,17 @@ def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
     ext_dert__ = [derts[y0e:yne, x0e:xne] if derts is not None else None
                   for derts in blob.root_dert__]
 
-    return ext_dert__
+    # TODO: build mask
+    mask = None
+
+    return ext_dert__, mask
 
 
-def accum_Dert(Dert: dict, **params) -> None:
-    Dert.update({param: Dert[param] + value for param, value in params.items()})
+def accum_blob_Dert(blob, dert__, y, x):
+    blob.I += dert__[0][y, x]
+    blob.iDy += dert__[1][y, x]
+    blob.iDx += dert__[2][y, x]
+    blob.G += dert__[3][y, x]
+    blob.Dy += dert__[4][y, x]
+    blob.Dx += dert__[5][y, x]
+    blob.M += dert__[6][y, x]

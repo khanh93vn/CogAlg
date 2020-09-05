@@ -11,6 +11,12 @@ ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedba
 UNFILLED = -1
 EXCLUDED_ID = -2
 
+def accum_blob_Dert(blob, dert__, y, x):
+    blob.I += dert__[0][y, x]
+    blob.G += dert__[1][y, x]
+    blob.Dy += dert__[2][y, x]
+    blob.Dx += dert__[3][y, x]
+
 
 def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge detection operators
     # see comp_pixel_versions file for other versions and more explanation
@@ -46,7 +52,10 @@ def derts2blobs(dert__, verbose=False):
 
     return frame, idmap, adj_pairs
 
-def flood_fill(dert__, sign__, verbose=False, exluded_derts=None):
+def flood_fill(dert__, sign__, verbose=False,
+               exluded_derts=None,
+               blob_cls=CBlob,
+               accum_func=accum_blob_Dert):
 
     height, width = dert__[0].shape
     idmap = np.full((height, width), UNFILLED, 'int64')  # blob's id per dert, initialized UNFILLED
@@ -65,7 +74,7 @@ def flood_fill(dert__, sign__, verbose=False, exluded_derts=None):
         for x in range(width):
             if idmap[y, x] == UNFILLED:  # ignore filled/clustered derts
                 # initialize new blob
-                blob = CBlob(sign=sign__[y, x], root_dert__=dert__)
+                blob = blob_cls(sign=sign__[y, x], root_dert__=dert__)
                 blob_.append(blob)
                 idmap[y, x] = blob.id
 
@@ -76,7 +85,7 @@ def flood_fill(dert__, sign__, verbose=False, exluded_derts=None):
 
                     # add dert to blob
                     blob.dert_coord_.add((y1, x1))  # add dert coordinate to blob
-                    accum_blob_Dert(blob, dert__, y1, x1)
+                    accum_func(blob, dert__, y1, x1)
                     blob.S += 1
 
                     # determine neighbors' coordinates, 4 for -, 8 for +
@@ -126,14 +135,14 @@ def flood_fill(dert__, sign__, verbose=False, exluded_derts=None):
     return blob_, idmap, adj_pairs
 
 
-def assign_adjacents(adj_pairs):  # adjacents are connected opposite-sign blobs
+def assign_adjacents(adj_pairs, blob_cls=CBlob):  # adjacents are connected opposite-sign blobs
     '''
     Assign adjacent blobs bilaterally according to adjacent pairs' ids in blob_binder.
     '''
     for blob_id1, blob_id2 in adj_pairs:
         assert blob_id1 < blob_id2
-        blob1 = CBlob.get_instance(blob_id1)
-        blob2 = CBlob.get_instance(blob_id2)
+        blob1 = blob_cls.get_instance(blob_id1)
+        blob2 = blob_cls.get_instance(blob_id2)
 
         y01, yn1, x01, xn1 = blob1.box
         y02, yn2, x02, xn2 = blob2.box
@@ -154,13 +163,6 @@ def assign_adjacents(adj_pairs):  # adjacents are connected opposite-sign blobs
         blob2.adj_blobs[1] += blob1.S
         blob1.adj_blobs[2] += blob2.G
         blob2.adj_blobs[2] += blob1.G
-
-
-def accum_blob_Dert(blob, dert__, y, x):
-    blob.I += dert__[0][y, x]
-    blob.G += dert__[1][y, x]
-    blob.Dy += dert__[2][y, x]
-    blob.Dx += dert__[3][y, x]
 
 
 if __name__ == "__main__":
@@ -195,6 +197,7 @@ if __name__ == "__main__":
     if args.render:  # will be replaced with interactive adjacent blobs display
         visualize_blobs(idmap, CBlob)
 
+    # TODO: intra_blob initialization
 
     # # Test if the two versions give identical results
     # from itertools import zip_longest
