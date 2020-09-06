@@ -1,10 +1,23 @@
+'''
+    2D version of first-level core algorithm will have frame_blobs, intra_blob (recursive search within blobs), and comp_P.
+    frame_blobs() performs three types of operations:
+    - comp_pixel:
+    Comparison between diagonal pixels in 2x2 kernels of image forms derts: tuples of pixel + derivatives per kernel.
+    The output is dert__: 2D pixel-mapped array of pixel-mapped derts.
+    - dert_blobs:
+    Image dert__ is segmented into blobs: contiguous areas of same-sign G (deviation of gradient per kernel).
+    Each blob is parameterized with summed derivatives of its constituent derts.
+    - assign_adjacents:
+    Each blob is assigned internal and external sets of opposite-sign blobs it is connected to.
+'''
+
 import sys
 import numpy as np
 
 from collections import deque
 from frame_blobs_defs import CBlob, FrameOfBlobs
-from frame_blobs_seq_cwrapper import cwrapped_derts2blobs
-from frame_blobs_seq_imaging import visualize_blobs
+from frame_blobs_cwrapper import cwrapped_derts2blobs
+from frame_blobs_imaging import visualize_blobs
 from utils import minmax
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
@@ -223,4 +236,6 @@ if __name__ == "__main__":
     #     dbox += abs(blob.box[1] - blob1.box[1])
     #     dbox += abs(blob.box[2] - blob1.box[2])
     #     dbox += abs(blob.box[3] - blob1.box[3])
-    # print(np.array([did, dI, dG, dDy, dDx, dbox, dfopen, dsign]) / len(frame.blob_))
+    # print(np.array([did, dI, dG, dDy, dDx, dbox, dfopen, dsign]) / len(frame.blob_))jacent blobs display
+
+        visualize_blobs(idmap, CBlob)
