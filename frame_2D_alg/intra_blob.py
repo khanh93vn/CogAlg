@@ -24,9 +24,9 @@
                 # deeper layers are nested, multiple forks: no single set of fork params?
 '''
 from collections import deque, defaultdict
-from frame_blobs_defs import CDeepBlobs
+from frame_blobs_defs import CDeepBlob
 from class_bind import AdjBinder
-from frame_blobs_seq import assign_adjacents, flood_fill
+from frame_blobs import assign_adjacents, flood_fill
 from intra_comp import comp_g, comp_r
 from itertools import zip_longest
 from utils import pairwise
@@ -43,7 +43,7 @@ aveB = 50  # fixed cost per intra_blob comp and clustering
 def intra_blob(blob, rdn, rng, fig, fcr, **kwargs):  # recursive input rng+ | der+ cross-comp within blob
     # fig: flag input is g | p, fcr: flag comp over rng+ | der+
     if kwargs.get('render', None) is not None:  # stop rendering sub-blobs when blob is too small
-        if blob.Dert['S'] < 100:
+        if blob.S < 100:
             kwargs['render'] = False
 
     spliced_layers = []  # to extend root_blob sub_layers

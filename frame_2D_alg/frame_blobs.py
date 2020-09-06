@@ -205,12 +205,77 @@ if __name__ == "__main__":
     else:
         frame, idmap, adj_pairs = derts2blobs(dert__, verbose=args.verbose)
     assign_adjacents(adj_pairs)
-    print(f"{len(frame.blob_)} blobs formed in {time() - start_time} seconds")
+    if args.verbose:
+        print(f"{len(frame.blob_)} blobs formed in {time() - start_time} seconds")
 
     if args.render:  # will be replaced with interactive adjacent blobs display
         visualize_blobs(idmap, CBlob)
 
-    # TODO: intra_blob initialization
+    if args.intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
+
+        if args.verbose:
+            print("\rRunning intra_blob...")
+
+        from intra_blob import (
+            intra_blob, aveB,
+        )
+        from frame_blobs_defs import CDeepBlob
+
+        deep_frame = frame, frame  # 1st frame initializes summed representation of hierarchy, 2nd is individual top layer
+        deep_blob_i_ = []  # index of a blob with deep layers
+        deep_layers = [[]] * len(frame.blob_)  # for visibility only
+        empty = np.zeros_like(frame.dert__[0])
+        deep_root_dert__ = (  # update root dert__
+            frame.dert__[0],  # i
+            empty,  # idy
+            empty,  # idx
+            *frame.dert__[1:],  # g, dy, dx
+            empty,  # m
+        )
+
+        for i, blob in enumerate(frame.blob_):  # print('Processing blob number ' + str(bcount))
+            '''
+            Blob G: -|+ predictive value, positive value of -G blobs is lent to the value of their adjacent +G blobs. 
+            +G "edge" blobs are low-match, valuable only as contrast: to the extent that their negative value cancels 
+            positive value of adjacent -G "flat" blobs.
+            '''
+            G = blob.G
+            adj_G = blob.adj_blobs[2]
+            borrow_G = min(abs(G), abs(adj_G) / 2)
+            '''
+            int_G / 2 + ext_G / 2, because both borrow or lend bilaterally, 
+            same as pri_M and next_M in line patterns but direction here is radial: inside-out
+            borrow_G = min, ~ comp(G,_G): only value present in both parties can be borrowed from one to another
+            Add borrow_G -= inductive leaking across external blob?
+            '''
+            blob = CDeepBlob(I=blob.I, G=blob.G, Dy=blob.Dy, Dx=blob.Dx,
+                             S=blob.S, box=blob.box, sign=blob.sign,
+                             dert_coord_=blob.dert_coord_, root_dert__=deep_root_dert__,
+                             adj_blobs=blob.adj_blobs, fopen=blob.fopen)
+
+            blob_height = blob.box[1] - blob.box[0]
+            blob_width = blob.box[3] - blob.box[2]
+            if blob.sign:
+                if G + borrow_G > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
+                    deep_layers[i] = intra_blob(blob, rdn=1, rng=.0, fig=0, fcr=0,
+                                                render=args.render)  # +G blob' dert__' comp_g
+
+            elif -G - borrow_G > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
+                deep_layers[i] = intra_blob(blob, rdn=1, rng=1, fig=0, fcr=1,
+                                            render=args.render)  # -G blob' dert__' comp_r in 3x3 kernels
+
+            if deep_layers[i]:  # if there are deeper layers
+                deep_blob_i_.append(i)  # indices of blobs with deep layers
+
+        if verbose:
+            print("\rFinished intra_blob")
+
+    end_time = time() - start_time
+
+    if args.verbose:
+        print(f"\nSession ended in {end_time:.2} seconds", end="")
+    else:
+        print(end_time)
 
     # # Test if the two versions give identical results
     # from itertools import zip_longest
@@ -237,5 +302,3 @@ if __name__ == "__main__":
     #     dbox += abs(blob.box[2] - blob1.box[2])
     #     dbox += abs(blob.box[3] - blob1.box[3])
     # print(np.array([did, dI, dG, dDy, dDx, dbox, dfopen, dsign]) / len(frame.blob_))jacent blobs display
-
-        visualize_blobs(idmap, CBlob)
