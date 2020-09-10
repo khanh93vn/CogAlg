@@ -4,15 +4,11 @@
 #include "bitarray.h"
 
 typedef struct {
-    int x, y;
-} DertRef;
-
-typedef struct {
     double I, G, Dy, Dx;
     unsigned long long S;
+    char sign;
     unsigned int box[4];
-    char sign, fopen;
-    DertRef *dert_ref;
+    char fopen;
 } Blob;
 
 typedef struct {
@@ -33,15 +29,11 @@ int adj_offset[8][2] = {
 };
 
 FrameOfBlobs derts2blobs(double *i_, double *g_, double *dy_, double *dx_,
-                         int height, int width, unsigned int *idmap) {
+                         int height, int width, long long *idmap) {
 
     long size = height * width;  /* total number of derts */
     FrameOfBlobs *frame;         /* Container for the array of blobs */
     Blob    *blobs;              /* The array of blobs */
-
-    // The table of dert coordinates, ordered by their blob ids. Each
-    // blob has a pointer to its first DertRef.
-    DertRef *dert_refs;
 
     // Filled dert counts, serve as tail for dert_refs table
     long nfilled = 0;
@@ -107,7 +99,6 @@ FrameOfBlobs derts2blobs(double *i_, double *g_, double *dy_, double *dx_,
     // Memory allocation
     frame = (FrameOfBlobs*) malloc(sizeof(FrameOfBlobs));
     blobs = (Blob*) malloc(nb_wst * sizeof(Blob));
-    dert_refs = (DertRef*) malloc(size * sizeof(DertRef));
     fill_map = (long*) malloc((size/32 + 1) * sizeof(long));
     //adj_table = (long*) malloc((adj_table_size/32 + 1) * sizeof(long));
     queue = (long*) malloc(qlen * sizeof(long));
@@ -124,7 +115,6 @@ FrameOfBlobs derts2blobs(double *i_, double *g_, double *dy_, double *dx_,
     for(int i = 0; i < size; i++)
         if(!testbit(fill_map, i)) {  /* ignore filled derts */
             setbit(fill_map, i);    /* set current dert as filled */
-            blobs[nblobs].dert_ref = &dert_refs[nfilled];  /* save pointer, length is S */
 
             double I = 0, G = 0, Dy = 0, Dx = 0, S = 0;
             int box[4] = {INT_MAX, 0, INT_MAX, 0};
@@ -151,9 +141,6 @@ FrameOfBlobs derts2blobs(double *i_, double *g_, double *dy_, double *dx_,
 
                 int y = j / width,  /* un-hash coordinate */
                     x = j % width;
-                dert_refs[nfilled].x = x;  /* save filled dert position */
-                dert_refs[nfilled].y = y;
-                nfilled++;
                 if(y < box[0]) box[0] = y;
                 if(y > box[1]) box[1] = y;
                 if(x < box[2]) box[2] = x;

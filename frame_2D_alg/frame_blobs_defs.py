@@ -11,12 +11,14 @@ class CBlob(ClusterStructure):
     Dx = int
     S = int
     # other data
-    box = list
     sign = NoneType
+    box = list
+    mask = object
     dert_coord_ = set  # let derts' id be their coords
     root_dert__ = object
     adj_blobs = list
     fopen = bool
+
 
 class CDeepBlob(ClusterStructure):
     # Derts
@@ -29,10 +31,9 @@ class CDeepBlob(ClusterStructure):
     iDx = int
     S = int
     # other data
-    box = list
     sign = NoneType
-    dert_coord_ = set  # let derts' id be their coords
-    root_dert__ = object
+    box = list
+    mask = object
     adj_blobs = list
     fopen = bool
     fcr = bool

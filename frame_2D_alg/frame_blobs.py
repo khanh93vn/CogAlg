@@ -66,16 +66,13 @@ def derts2blobs(dert__, verbose=False):
     return frame, idmap, adj_pairs
 
 def flood_fill(dert__, sign__, verbose=False,
-               excluded_derts=None,
-               blob_cls=CBlob,
-               accum_func=accum_blob_Dert
-               # add kwargs?
-               ):
+               mask=None, blob_cls=CBlob,
+               accum_func=accum_blob_Dert):
 
     height, width = dert__[0].shape
     idmap = np.full((height, width), UNFILLED, 'int64')  # blob's id per dert, initialized UNFILLED
-    if excluded_derts is not None:
-        idmap[[*zip(*excluded_derts)]] = EXCLUDED_ID
+    if mask is not None:
+        idmap[mask] = EXCLUDED_ID
 
     if verbose:
         step = 100 / height / width     # progress % percent per pixel
@@ -92,6 +89,8 @@ def flood_fill(dert__, sign__, verbose=False,
                 blob = blob_cls(sign=sign__[y, x], root_dert__=dert__)
                 blob_.append(blob)
                 idmap[y, x] = blob.id
+                y0, yn = y, y
+                x0, xn = x, x
 
                 # flood fill the blob, start from current position
                 unfilled_derts = deque([(y, x)])
@@ -99,9 +98,16 @@ def flood_fill(dert__, sign__, verbose=False,
                     y1, x1 = unfilled_derts.popleft()
 
                     # add dert to blob
-                    blob.dert_coord_.add((y1, x1))  # add dert coordinate to blob
                     accum_func(blob, dert__, y1, x1)
                     blob.S += 1
+                    if y1 < y0:
+                        y0 = y1
+                    elif y1 > yn:
+                        yn = y1
+                    if x1 < x0:
+                        x0 = x1
+                    elif x1 > xn:
+                        xn = x1
 
                     # determine neighbors' coordinates, 4 for -, 8 for +
                     if blob.sign:   # include diagonals
@@ -131,13 +137,10 @@ def flood_fill(dert__, sign__, verbose=False,
                             adj_pairs.add((idmap[y2, x2], blob.id))     # blob.id always bigger
 
                 # terminate blob
-                y_coords, x_coords = zip(*blob.dert_coord_)
-                y0, yn = minmax(y_coords)
-                x0, xn = minmax(x_coords)
-                blob.box = (
-                    y0, yn + 1,  # y0, yn
-                    x0, xn + 1,  # x0, xn
-                )
+                yn += 1
+                xn += 1
+                blob.box = y0, yn, x0, xn
+                blob.mask = (idmap[y0:yn, x0:xn] != blob.id)
                 blob.adj_blobs = [[], 0, 0]
 
                 if verbose:
@@ -211,7 +214,7 @@ if __name__ == "__main__":
         print(f"{len(frame.blob_)} blobs formed in {time() - start_time} seconds")
 
     if args.render:  # will be replaced with interactive adjacent blobs display
-        visualize_blobs(idmap, CBlob)
+        visualize_blobs(idmap, frame.blob_)
 
     if args.intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
 

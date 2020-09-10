@@ -10,12 +10,6 @@ import numpy as np
 from frame_blobs_defs import CBlob, FrameOfBlobs
 from utils import imread
 
-class SDertRef(Structure):
-    _fields_ = [
-        ('x', c_int),
-        ('y', c_int),
-    ]
-
 class SBlob(Structure):
     _fields_ = [
         ('I', c_double),
@@ -23,10 +17,9 @@ class SBlob(Structure):
         ('Dy', c_double),
         ('Dx', c_double),
         ('S', c_ulonglong),
-        ('box', c_uint * 4),
         ('sign', c_byte),
+        ('box', c_uint * 4),
         ('fopen', c_byte),
-        ('dert_ref', POINTER(SDertRef)),
     ]
 
 class SFrameOfBlobs(Structure):
@@ -43,7 +36,7 @@ class SFrameOfBlobs(Structure):
 derts2blobs = CDLL("frame_blobs.so").derts2blobs
 derts2blobs.restype = SFrameOfBlobs
 
-def transfer_data(sframe, dert__):
+def transfer_data(sframe, dert__, idmap):
     """Transfer data from C structures to custom objects."""
     ntframe = FrameOfBlobs(
         I=sframe.I,
@@ -55,20 +48,20 @@ def transfer_data(sframe, dert__):
     )
     for i in range(sframe.nblobs):
         sblob = sframe.blobs[i]
+        y0, yn, x0, xn = sblob.box[:4]
         cblob = CBlob(
             I=sblob.I,
             G=sblob.G,
             Dy=sblob.Dy,
             Dx=sblob.Dx,
             S=sblob.S,
-            box=list(sblob.box[:4]),
             sign=bool(sblob.sign),
+            box=(y0, yn, x0, xn),
             root_dert__=ntframe.dert__,
             adj_blobs=[[], 0, 0],
             fopen=bool(sblob.fopen),
         )
-        cblob.dert_coord_.update(((sblob.dert_ref[i].y, sblob.dert_ref[i].x)
-                                  for i in range(sblob.S)))
+        cblob.mask = (idmap[y0:yn, x0:xn] != i)  # or blob.id
 
 
         ntframe.blob_.append(cblob)
@@ -79,10 +72,11 @@ def cwrapped_derts2blobs(dert__):
     dert__ = [*map(lambda a: a.astype('float64'),
                    dert__)]
     height, width = dert__[0].shape
-    idmap = np.empty((height, width), 'uint32')
+    idmap = np.empty((height, width), 'int64')
+
     sframe = derts2blobs(*map(lambda d: d.ctypes.data, dert__),
                          height, width, idmap.ctypes.data)
 
-    ntframe = transfer_data(sframe, dert__)
+    ntframe = transfer_data(sframe, dert__, idmap)
 
     return ntframe, idmap, set()
