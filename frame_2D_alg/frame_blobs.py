@@ -4,7 +4,7 @@
     - comp_pixel:
     Comparison between diagonal pixels in 2x2 kernels of image forms derts: tuples of pixel + derivatives per kernel.
     The output is dert__: 2D pixel-mapped array of pixel-mapped derts.
-    - dert_blobs:
+    - derts2blobs:
     Image dert__ is segmented into blobs: contiguous areas of same-sign G (deviation of gradient per kernel).
     Each blob is parameterized with summed derivatives of its constituent derts.
     - assign_adjacents:
@@ -66,14 +66,16 @@ def derts2blobs(dert__, verbose=False):
     return frame, idmap, adj_pairs
 
 def flood_fill(dert__, sign__, verbose=False,
-               exluded_derts=None,
+               excluded_derts=None,
                blob_cls=CBlob,
-               accum_func=accum_blob_Dert):
+               accum_func=accum_blob_Dert
+               # add kwargs?
+               ):
 
     height, width = dert__[0].shape
     idmap = np.full((height, width), UNFILLED, 'int64')  # blob's id per dert, initialized UNFILLED
-    if exluded_derts is not None:
-        idmap[[*zip(*exluded_derts)]] = EXCLUDED_ID
+    if excluded_derts is not None:
+        idmap[[*zip(*excluded_derts)]] = EXCLUDED_ID
 
     if verbose:
         step = 100 / height / width     # progress % percent per pixel

@@ -1,22 +1,21 @@
 '''
     2D version of 1st-level algorithm is a combination of frame_blobs, intra_blob, and comp_P: optional raster-to-vector conversion.
     intra_blob recursively evaluates each blob for two forks of extended internal cross-comparison and sub-clustering:
-    
-    der+: incremental derivation cross-comp in high-variation edge areas of +vg: positive deviation of gradient triggers comp_g, 
+
+    der+: incremental derivation cross-comp in high-variation edge areas of +vg: positive deviation of gradient triggers comp_g,
     rng+: incremental range cross-comp in low-variation flat areas of +v--vg: positive deviation of negated -vg triggers comp_r.
-    Each adds a layer of sub_blobs per blob.  
+    Each adds a layer of sub_blobs per blob.
     Please see diagram: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_blob_2_fork_scheme.png
-    
+
     Blob structure, for all layers of blob hierarchy:
-    root_dert__,  
+    root_dert__,
     Dert = I, iDy, iDx, G, Dy, Dx, M, S (area), Ly (vertical dimension)
-    # I: input, (iDy, iDx): angle of input gradient, G: gradient, (Dy, Dx): vertical and lateral Ds, M: match  
-    sign, 
+    # I: input, (iDy, iDx): angle of input gradient, G: gradient, (Dy, Dx): vertical and lateral Ds, M: match
+    sign,
     box,  # y0, yn, x0, xn
     dert__,  # box of derts, each = i, idy, idx, g, dy, dx, m
-    stack_[ stack_params, Py_ [(P_params, dert_)]]: refs down blob formation tree, in vertical (horizontal) order
     # next fork:
-    fcr,  # flag comp rng, also clustering criterion in dert and Dert: g in der+ fork, i+m in rng+ fork? 
+    fcr,  # flag comp rng, also clustering criterion in dert and Dert: g in der+ fork, i+m in rng+ fork?
     fig,  # flag input is gradient
     rdn,  # redundancy to higher layers
     rng,  # comp range
@@ -54,7 +53,7 @@ def intra_blob(blob, rdn, rng, fig, fcr, **kwargs):  # recursive input rng+ | de
         dert__, mask = comp_g(ext_dert__, ext_mask)  # -> g sub_blobs:
 
     if dert__[0].shape[0] > 2 and dert__[0].shape[1] > 2 and False in mask:  # min size in y and x, least one dert in dert__
-        sub_blobs = cluster_derts(dert__, mask, ave * rdn, fcr, fig, **kwargs)
+        sub_blobs = cluster_derts(dert__, mask, ave * rdn, fcr, fig, False, **kwargs)
         # fork params:
         blob.fcr = fcr
         blob.fig = fig
@@ -83,7 +82,7 @@ def intra_blob(blob, rdn, rng, fig, fcr, **kwargs):  # recursive input rng+ | de
     return spliced_layers
 
 
-def cluster_derts(dert__, mask, Ave, fcr, fig, **kwargs):
+def cluster_derts(dert__, mask, Ave, fcr, fig, verbose=False, **kwargs):
 
     if fcr:  # comp_r output;  form clustering criterion:
         if fig:
@@ -99,7 +98,7 @@ def cluster_derts(dert__, mask, Ave, fcr, fig, **kwargs):
                                          sign__=crit__ > 0,
                                          verbose=verbose,
                                          excluded_derts=excluded_derts,
-                                         blob_cls=CDeepBlobs,
+                                         blob_cls=CDeepBlob,
                                          accum_func=accum_blob_Dert,
                                          **kwargs)
 
