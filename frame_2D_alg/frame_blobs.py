@@ -65,6 +65,7 @@ def derts2blobs(dert__, verbose=False):
 
     return frame, idmap, adj_pairs
 
+
 def flood_fill(dert__, sign__, verbose=False,
                mask=None, blob_cls=CBlob,
                accum_func=accum_blob_Dert):
@@ -255,7 +256,7 @@ if __name__ == "__main__":
             '''
             blob = CDeepBlob(I=blob.I, G=blob.G, Dy=blob.Dy, Dx=blob.Dx,
                              S=blob.S, box=blob.box, sign=blob.sign,
-                             dert_coord_=blob.dert_coord_, root_dert__=deep_root_dert__,
+                             mask=blob.mask, root_dert__=deep_root_dert__,
                              adj_blobs=blob.adj_blobs, fopen=blob.fopen)
 
             blob_height = blob.box[1] - blob.box[0]
@@ -272,7 +273,7 @@ if __name__ == "__main__":
             if deep_layers[i]:  # if there are deeper layers
                 deep_blob_i_.append(i)  # indices of blobs with deep layers
 
-        if verbose:
+        if args.verbose:
             print("\rFinished intra_blob")
 
     end_time = time() - start_time

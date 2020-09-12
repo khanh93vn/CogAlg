@@ -22,7 +22,7 @@ POSE2COLOR = {
 }
 
 
-def visualize_blobs(idmap, blob_, window_size=None, winname="blobs"):
+def visualize_blobs(idmap, blob_, window_size=None, winname="Blobs"):
     """
     Visualize blobs after clustering.
     Highlight the blob the mouse is hovering on and its
@@ -91,3 +91,4 @@ def visualize_blobs(idmap, blob_, window_size=None, winname="blobs"):
         if cv.waitKey(1) == ord('q'):
             break
     cv.destroyAllWindows()
+    print()

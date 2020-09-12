@@ -14,7 +14,6 @@ class CBlob(ClusterStructure):
     sign = NoneType
     box = list
     mask = object
-    dert_coord_ = set  # let derts' id be their coords
     root_dert__ = object
     adj_blobs = list
     fopen = bool
@@ -34,6 +33,7 @@ class CDeepBlob(ClusterStructure):
     sign = NoneType
     box = list
     mask = object
+    root_dert__ = object
     adj_blobs = list
     fopen = bool
     fcr = bool
