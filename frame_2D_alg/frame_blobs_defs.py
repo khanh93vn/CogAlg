@@ -22,12 +22,12 @@ class CBlob(ClusterStructure):
 class CDeepBlob(ClusterStructure):
     # Derts
     I = int
+    iDy = int
+    iDx = int
     G = int
     Dy = int
     Dx = int
     M = int
-    iDy = int
-    iDx = int
     S = int
     # other data
     sign = NoneType

@@ -92,13 +92,17 @@ def cluster_derts(dert__, mask, Ave, fcr, fig, verbose=False, **kwargs):
             crit__ = Ave - dert__[3]  # eval by -g, accum in rng
     else:  # comp_g output
         crit__ = dert__[6] - Ave  # comp_g output eval by m, or clustering is always by m?
+    if kwargs.get('use_c'):
+        raise NotImplementedError
+        (_, _, _, blob_, _), idmap, adj_pairs = flood_fill()
+    else:
+        blob_, idmap, adj_pairs = flood_fill(dert__,
+                                             sign__=crit__ > 0,
+                                             verbose=verbose,
+                                             mask=mask,
+                                             blob_cls=CDeepBlob,
+                                             accum_func=accum_blob_Dert)
 
-    blob_, idmap, adj_pairs = flood_fill(dert__,
-                                         sign__=crit__ > 0,
-                                         verbose=verbose,
-                                         mask=mask,
-                                         blob_cls=CDeepBlob,
-                                         accum_func=accum_blob_Dert)
     assign_adjacents(adj_pairs, CDeepBlob)
     if kwargs.get('render', False):
         visualize_blobs(idmap, blob_,

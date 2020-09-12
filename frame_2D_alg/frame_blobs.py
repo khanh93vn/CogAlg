@@ -16,7 +16,7 @@ import numpy as np
 
 from collections import deque
 from frame_blobs_defs import CBlob, FrameOfBlobs
-from frame_blobs_cwrapper import cwrapped_derts2blobs
+from frame_blobs_wrapper import wrapped_flood_fill
 from frame_blobs_imaging import visualize_blobs
 from utils import minmax
 
@@ -49,21 +49,35 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge d
     # renamed dert__ = (p__, g__, dy__, dx__) for readability in functions below
 
 
-def derts2blobs(dert__, verbose=False):
+def derts2blobs(dert__, verbose=False, render=False, use_c=False):
 
-    blob_, idmap, adj_pairs = flood_fill(dert__,
-                                         sign__=dert__[1] > 0,
-                                         verbose=verbose)
-    I = 0; G = 0; Dy = 0; Dx = 0
-    for blob in blob_:
-        I += blob.I
-        G += blob.G
-        Dy += blob.Dy
-        Dx += blob.Dx
+    if verbose:
+        start_time = time()
 
-    frame = FrameOfBlobs(I=I, G=G, Dy=Dy, Dx=Dx, blob_=blob_, dert__=dert__)
+    if use_c:
+        dert__ = dert__[0], np.empty(0), np.empty(0), *dert__[1:], np.empty(0)
+        frame, idmap, adj_pairs = wrapped_flood_fill(dert__)
+    else:
+        blob_, idmap, adj_pairs = flood_fill(dert__,
+                                             sign__=dert__[1] > 0,
+                                             verbose=verbose)
+        I = 0; G = 0; Dy = 0; Dx = 0
+        for blob in blob_:
+            I += blob.I
+            G += blob.G
+            Dy += blob.Dy
+            Dx += blob.Dx
+        frame = FrameOfBlobs(I=I, G=G, Dy=Dy, Dx=Dx, blob_=blob_, dert__=dert__)
 
-    return frame, idmap, adj_pairs
+    assign_adjacents(adj_pairs)
+
+    if verbose:
+        print(f"{len(frame.blob_)} blobs formed in {time() - start_time} seconds")
+
+    if render:
+        visualize_blobs(idmap, frame.blob_)
+
+    return frame
 
 
 def flood_fill(dert__, sign__, verbose=False,
@@ -206,16 +220,10 @@ if __name__ == "__main__":
     # frame-blobs start here
     start_time = time()
     dert__ = comp_pixel(image)
-    if args.clib:
-        frame, idmap, adj_pairs = cwrapped_derts2blobs(dert__)
-    else:
-        frame, idmap, adj_pairs = derts2blobs(dert__, verbose=args.verbose)
-    assign_adjacents(adj_pairs)
-    if args.verbose:
-        print(f"{len(frame.blob_)} blobs formed in {time() - start_time} seconds")
-
-    if args.render:  # will be replaced with interactive adjacent blobs display
-        visualize_blobs(idmap, frame.blob_)
+    frame = derts2blobs(dert__,
+                        verbose=args.verbose,
+                        render=args.render,
+                        use_c=args.clib)
 
     if args.intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
 

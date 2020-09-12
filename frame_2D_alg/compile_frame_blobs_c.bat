@@ -1,1 +1,1 @@
-gcc -std=c99 -shared -o frame_blobs.so frame_blobs.c
+gcc -std=c99 -fPIC -shared -o frame_blobs.so frame_blobs.c
