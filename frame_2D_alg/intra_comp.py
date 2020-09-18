@@ -249,3 +249,59 @@ def comp_g(dert__, mask=None):  # cross-comp of g in 2x2 kernels, between derts 
     next comp_gg will use gg, dgy, dgx
     '''
     return (ig__, idy__, idx__, gg__, dgy__, dgx__, mg__), majority_mask  # return new dert, along with summed mask
+
+def comp_a(dert__, fga):  # cross-comp of a or aga in 2x2 kernels
+    '''
+    if fga: dert = (g, gg, dgy, dgx, gm, ?(iga, iday, idax)
+    else:   dert = (i, g, dy, dx, ?m)
+    '''
+
+    i__, g__, dy__, dx__ = dert__[0:4]
+
+    if fga:  # input is adert
+        ga__, day__, dax__ = dert__[4], dert__[5:7], dert__[7:9]
+        a__ = [day__[0], day__[1], dax__[0], dax__[1]] / ga__
+    else:
+        a__ = [dy__, dx__] / g__  # similar to calc_a
+
+    # each shifted a in 2x2 kernel
+    a__topleft = a__[:, :-1, :-1]
+    a__topright = a__[:, :-1, 1:]
+    a__botright = a__[:, 1:, 1:]
+    a__botleft = a__[:, 1:, :-1]
+
+    # diagonal angle differences:
+    sin_da0__, cos_da0__ = angle_diff(a__topleft, a__botright, fga)
+    sin_da1__, cos_da1__ = angle_diff(a__topright, a__botleft, fga)
+
+    ma__ = np.hypot(sin_da0__ + 1, cos_da0__ + 1) + np.hypot(sin_da1__ + 1, cos_da1__ + 1)
+    # ma = inverse angle match = SAD: covert sin and cos da to 0->2 range
+
+    day__ = (-sin_da0__ - sin_da1__), (cos_da0__ + cos_da1__)
+    # angle change in y, sines are sign-reversed because da0 and da1 are top-down, no reversal in cosines
+
+    dax__ = (-sin_da0__ + sin_da1__), (cos_da0__ + cos_da1__)
+    # angle change in x, positive sign is right-to-left, so only sin_da0__ is sign-reversed
+    '''
+    sin(-θ) = -sin(θ), cos(-θ) = cos(θ): 
+    sin(da) = -sin(-da), cos(da) = cos(-da) => (sin(-da), cos(-da)) = (-sin(da), cos(da))
+    '''
+    ga__ = np.hypot(np.arctan2(*day__), np.arctan2(*dax__))
+    # angle gradient, a scalar, to evaluate for comp_aga
+
+    adert__ = ma.stack((i__[:-1, :-1],  # for summation in Dert
+                        g__[:-1, :-1],  # for summation in Dert
+                        dy__[:-1, :-1],  # passed on as idy
+                        dx__[:-1, :-1],  # passed on as idx  # no use for m__[:-1, :-1]?
+                        ga__,
+                        *day__,
+                        *dax__,
+                        ma__,
+                        cos_da0__,
+                        cos_da1__
+                        ))
+    '''
+    next comp_g will use g, cos_da0__, cos_da1__, dy, dx (passed to comp_rg as idy, idx)
+    next comp_a will use ga, day, dax  # comp_aga
+    '''
+    return adert__
