@@ -5,7 +5,7 @@
     Comparison between diagonal pixels in 2x2 kernels of image forms derts: tuples of pixel + derivatives per kernel.
     The output is dert__: 2D pixel-mapped array of pixel-mapped derts.
     - derts2blobs:
-    Image dert__ is segmented into blobs: contiguous areas of same-sign G (deviation of gradient per kernel).
+    Image dert__ is segmented into blobs: contiguous areas of positive | negative deviation of gradient per kernel.
     Each blob is parameterized with summed derivatives of its constituent derts.
     - assign_adjacents:
     Each blob is assigned internal and external sets of opposite-sign blobs it is connected to.
