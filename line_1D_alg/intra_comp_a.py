@@ -308,7 +308,7 @@ def comp_a(dert__, fga, mask=None):  # cross-comp of a or aga in 2x2 kernels
     dy__ = dy__[:-1, :-1]  # passed on as idy
     dx__ = dx__[:-1, :-1]  # passed on as idx
 
-    return (i__,g__,dy__,dx__,ga__,day__,dax__,ma__,cos_da0__,cos_da1__), majority_mask
+    return (i__, g__, dy__, dx__, ga__, day__, dax__, ma__, cos_da0__, cos_da1__), majority_mask
 
 
 def angle_diff(a2, a1):  # compare angle_1 to angle_2
@@ -318,6 +318,6 @@ def angle_diff(a2, a1):  # compare angle_1 to angle_2
     # sine and cosine of difference between angles:
 
     sin_da = (cos_1 * sin_2) - (sin_1 * cos_2)
-    cos_da = (sin_1 * cos_1) + (sin_2 * cos_2)
+    cos_da = (cos_2 * cos_1) + (sin_2 * sin_1)
 
     return sin_da, cos_da
