@@ -26,9 +26,10 @@ EXCLUDED_ID = -2
 
 def accum_blob_Dert(blob, dert__, y, x):
     blob.I += dert__[0][y, x]
-    blob.G += dert__[1][y, x]
-    blob.Dy += dert__[2][y, x]
-    blob.Dx += dert__[3][y, x]
+    blob.Dy += dert__[1][y, x]
+    blob.Dx += dert__[2][y, x]
+    blob.G += dert__[3][y, x]
+    blob.M += dert__[4][y, x]
 
 
 def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge detection operators
@@ -43,10 +44,11 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge d
     Gy__ = ((bottomleft__ + bottomright__) - (topleft__ + topright__))  # same as decomposition of two diagonal differences into Gy
     Gx__ = ((topright__ + bottomright__) - (topleft__ + bottomleft__))  # same as decomposition of two diagonal differences into Gx
 
-    G__ = (np.hypot(Gy__, Gx__) - ave).astype('int')  # central gradient per kernel, between its four vertex pixels
+    G__ = (np.hypot(Gy__, Gx__) - ave).astype('int')  # deviation of central gradient per kernel, between four vertex pixels
+    M__ = ave - (abs(topleft__ - bottomright__) + abs(topright__ - bottomleft__))  # inverse deviation of SAD: variation in kernel
 
-    return (topleft__, G__, Gy__, Gx__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
-    # renamed dert__ = (p__, g__, dy__, dx__) for readability in functions below
+    return (topleft__, Gy__, Gx__, G__, M__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
+    # renamed dert__ = (p__, dy__, dx__, g__, m__) for readability in functions below
 
 
 def derts2blobs(dert__, verbose=False, render=False, use_c=False):
@@ -59,15 +61,17 @@ def derts2blobs(dert__, verbose=False, render=False, use_c=False):
         frame, idmap, adj_pairs = wrapped_flood_fill(dert__)
     else:
         blob_, idmap, adj_pairs = flood_fill(dert__,
-                                             sign__=dert__[1] > 0,
+                                             sign__=dert__[3] > 0,  # sign of deviation of gradient
+                                             # g__ was not signed, we used dy__ sign instead
                                              verbose=verbose)
-        I = 0; G = 0; Dy = 0; Dx = 0
+        I = Dy = Dx = G = M = 0
         for blob in blob_:
             I += blob.I
-            G += blob.G
             Dy += blob.Dy
             Dx += blob.Dx
-        frame = FrameOfBlobs(I=I, G=G, Dy=Dy, Dx=Dx, blob_=blob_, dert__=dert__)
+            G += blob.G
+            M += blob.M
+        frame = FrameOfBlobs(I=I, Dy=Dy, Dx=Dx, G=G, M=M, blob_=blob_, dert__=dert__)
 
     assign_adjacents(adj_pairs)
 
@@ -204,6 +208,7 @@ def assign_adjacents(adj_pairs, blob_cls=CBlob):  # adjacents are connected oppo
         blob2.adj_blobs[2] += blob1.G
 
 
+
 if __name__ == "__main__":
     # Imports
     import argparse
@@ -212,7 +217,7 @@ if __name__ == "__main__":
 
     # Parse arguments
     argument_parser = argparse.ArgumentParser()
-    argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon_head.jpg')
+    argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon.jpg')
     argument_parser.add_argument('-v', '--verbose', help='print details, useful for debugging', type=int, default=1)
     argument_parser.add_argument('-n', '--intra', help='run intra_blobs after frame_blobs', type=int, default=1)
     argument_parser.add_argument('-r', '--render', help='render the process', type=int, default=0)
@@ -247,11 +252,11 @@ if __name__ == "__main__":
         empty = np.zeros_like(frame.dert__[0])
         deep_root_dert__ = (  # update root dert__
             frame.dert__[0],  # i
-            empty,  # idy
-            empty,  # idx
-            *frame.dert__[1:],  # g, dy, dx
-            empty,  # m
-        )
+            frame.dert__[1],  # dy
+            frame.dert__[2],  # dx
+            frame.dert__[3],  # g
+            frame.dert__[4],  # m
+            )
 
         for i, blob in enumerate(frame.blob_):  # print('Processing blob number ' + str(bcount))
             '''
@@ -260,6 +265,7 @@ if __name__ == "__main__":
             positive value of adjacent -G "flat" blobs.
             '''
             G = blob.G
+            M = blob.M
             adj_G = blob.adj_blobs[2]
             borrow_G = min(abs(G), abs(adj_G) / 2)
             '''
@@ -268,7 +274,7 @@ if __name__ == "__main__":
             borrow_G = min, ~ comp(G,_G): only value present in both parties can be borrowed from one to another
             Add borrow_G -= inductive leaking across external blob?
             '''
-            blob = CDeepBlob(I=blob.I, G=blob.G, Dy=blob.Dy, Dx=blob.Dx,
+            blob = CDeepBlob(I=blob.I, Dy=blob.Dy, Dx=blob.Dx, G=blob.G, M=blob.M,
                              S=blob.S, box=blob.box, sign=blob.sign,
                              mask=blob.mask, root_dert__=deep_root_dert__,
                              adj_blobs=blob.adj_blobs, fopen=blob.fopen)
@@ -278,13 +284,13 @@ if __name__ == "__main__":
 
             if blob.sign:
                 # +G on first fork
-                if G + borrow_G > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
-                    blob.rdn = 1;blob.fca = 1 # +G blob' dert' comp_a
+                if min(G, borrow_G) > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
+                    blob.rdn = 1; blob.fca = 1 # +G blob' dert' comp_a
                     deep_layers[i] = intra_blob(blob, render=args.render)
 
-            # +M on first fork (+M is represented by -G?)
-            elif -G - borrow_G > aveB > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
-                blob.rdn = 1;blob.rng = 1;blob.fcr = 1
+            # +M on first fork
+            elif M - borrow_G > aveB and blob_height > 3 and blob_width  > 3:  # min blob dimensions
+                blob.rdn = 1; blob.rng = 1; blob.fia = 0
                 deep_layers[i] = intra_blob(blob, render=args.render)  # -G blob' dert__' comp_r in 3x3 kernels
 
             if deep_layers[i]:  # if there are deeper layers
@@ -300,28 +306,30 @@ if __name__ == "__main__":
     else:
         print(end_time)
 
-    # # Test if the two versions give identical results
-    # from itertools import zip_longest
-    # frame, idmap, adj_pairs = cwrapped_derts2blobs(dert__)
-    # frame1, idmap1, adj_pairs1 = derts2blobs(dert__, verbose=args.verbose)
-    # did = 0
-    # dI = 0
-    # dG = 0
-    # dDy = 0
-    # dDx = 0
-    # dbox = 0
-    # dfopen = 0
-    # dsign = 0
-    # for blob, blob1 in zip_longest(frame.blob_, frame1.blob_):
-    #     did += abs(blob.id - blob1.id)
-    #     dI += abs(blob.I - blob1.I)
-    #     dG += abs(blob.G - blob1.G)
-    #     dDy += abs(blob.Dy - blob1.Dy)
-    #     dDx += abs(blob.Dx - blob1.Dx)
-    #     dfopen += abs(blob.fopen - blob1.fopen)
-    #     dsign += abs(int(blob.sign) - int(blob1.sign))
-    #     dbox += abs(blob.box[0] - blob1.box[0])
-    #     dbox += abs(blob.box[1] - blob1.box[1])
-    #     dbox += abs(blob.box[2] - blob1.box[2])
-    #     dbox += abs(blob.box[3] - blob1.box[3])
-    # print(np.array([did, dI, dG, dDy, dDx, dbox, dfopen, dsign]) / len(frame.blob_))jacent blobs display
+# Test if the two versions give identical results:
+'''
+from itertools import zip_longest
+frame, idmap, adj_pairs = cwrapped_derts2blobs(dert__)
+frame1, idmap1, adj_pairs1 = derts2blobs(dert__, verbose=args.verbose)
+did = 0
+dI = 0
+dG = 0
+dDy = 0
+dDx = 0
+dbox = 0
+dfopen = 0
+dsign = 0
+for blob, blob1 in zip_longest(frame.blob_, frame1.blob_):
+    did += abs(blob.id - blob1.id)
+    dI += abs(blob.I - blob1.I)
+    dG += abs(blob.G - blob1.G)
+    dDy += abs(blob.Dy - blob1.Dy)
+    dDx += abs(blob.Dx - blob1.Dx)
+    dfopen += abs(blob.fopen - blob1.fopen)
+    dsign += abs(int(blob.sign) - int(blob1.sign))
+    dbox += abs(blob.box[0] - blob1.box[0])
+    dbox += abs(blob.box[1] - blob1.box[1])
+    dbox += abs(blob.box[2] - blob1.box[2])
+    dbox += abs(blob.box[3] - blob1.box[3])
+print(np.array([did, dI, dG, dDy, dDx, dbox, dfopen, dsign]) / len(frame.blob_))jacent blobs display
+'''
