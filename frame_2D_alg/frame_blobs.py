@@ -16,8 +16,6 @@ import numpy as np
 
 from collections import deque
 from frame_blobs_defs import CBlob, FrameOfBlobs
-from frame_blobs_wrapper import wrapped_flood_fill
-from frame_blobs_imaging import visualize_blobs
 from utils import minmax
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
@@ -51,35 +49,28 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge d
     # renamed dert__ = (p__, dy__, dx__, g__, m__) for readability in functions below
 
 
-def derts2blobs(dert__, verbose=False, render=False, use_c=False):
+def derts2blobs(dert__, verbose=False):
 
     if verbose:
         start_time = time()
 
-    if use_c:
-        dert__ = dert__[0], np.empty(0), np.empty(0), *dert__[1:], np.empty(0)
-        frame, idmap, adj_pairs = wrapped_flood_fill(dert__)
-    else:
-        blob_, idmap, adj_pairs = flood_fill(dert__,
-                                             sign__=dert__[3] > 0,  # sign of deviation of gradient
-                                             # g__ was not signed, we used dy__ sign instead
-                                             verbose=verbose)
-        I = Dy = Dx = G = M = 0
-        for blob in blob_:
-            I += blob.I
-            Dy += blob.Dy
-            Dx += blob.Dx
-            G += blob.G
-            M += blob.M
-        frame = FrameOfBlobs(I=I, Dy=Dy, Dx=Dx, G=G, M=M, blob_=blob_, dert__=dert__)
+    blob_, idmap, adj_pairs = flood_fill(dert__,
+                                         sign__=dert__[3] > 0,  # sign of deviation of gradient
+                                         # g__ was not signed, we used dy__ sign instead
+                                         verbose=verbose)
+    I = Dy = Dx = G = M = 0
+    for blob in blob_:
+        I += blob.I
+        Dy += blob.Dy
+        Dx += blob.Dx
+        G += blob.G
+        M += blob.M
+    frame = FrameOfBlobs(I=I, Dy=Dy, Dx=Dx, G=G, M=M, blob_=blob_, dert__=dert__)
 
     assign_adjacents(adj_pairs)
 
     if verbose:
         print(f"{len(frame.blob_)} blobs formed in {time() - start_time} seconds")
-
-    if render:
-        visualize_blobs(idmap, frame.blob_)
 
     return frame
 
@@ -220,18 +211,13 @@ if __name__ == "__main__":
     argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon.jpg')
     argument_parser.add_argument('-v', '--verbose', help='print details, useful for debugging', type=int, default=0)
     argument_parser.add_argument('-n', '--intra', help='run intra_blobs after frame_blobs', type=int, default=0)
-    argument_parser.add_argument('-r', '--render', help='render the process', type=int, default=0)
-    argument_parser.add_argument('-c', '--clib', help='use C shared library', type=int, default=0)
     args = argument_parser.parse_args()
     image = imread(args.image)
 
     # frame-blobs start here
     start_time = time()
     dert__ = comp_pixel(image)
-    frame = derts2blobs(dert__,
-                        verbose=args.verbose,
-                        render=args.render,
-                        use_c=args.clib)
+    frame = derts2blobs(dert__, verbose=args.verbose)
 
     if args.intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
 
@@ -302,31 +288,3 @@ if __name__ == "__main__":
         print(f"\nSession ended in {end_time:.2} seconds", end="")
     else:
         print(end_time)
-
-# Test if the two versions give identical results:
-'''
-from itertools import zip_longest
-frame, idmap, adj_pairs = cwrapped_derts2blobs(dert__)
-frame1, idmap1, adj_pairs1 = derts2blobs(dert__, verbose=args.verbose)
-did = 0
-dI = 0
-dG = 0
-dDy = 0
-dDx = 0
-dbox = 0
-dfopen = 0
-dsign = 0
-for blob, blob1 in zip_longest(frame.blob_, frame1.blob_):
-    did += abs(blob.id - blob1.id)
-    dI += abs(blob.I - blob1.I)
-    dG += abs(blob.G - blob1.G)
-    dDy += abs(blob.Dy - blob1.Dy)
-    dDx += abs(blob.Dx - blob1.Dx)
-    dfopen += abs(blob.fopen - blob1.fopen)
-    dsign += abs(int(blob.sign) - int(blob1.sign))
-    dbox += abs(blob.box[0] - blob1.box[0])
-    dbox += abs(blob.box[1] - blob1.box[1])
-    dbox += abs(blob.box[2] - blob1.box[2])
-    dbox += abs(blob.box[3] - blob1.box[3])
-print(np.array([did, dI, dG, dDy, dDx, dbox, dfopen, dsign]) / len(frame.blob_))jacent blobs display
-'''
