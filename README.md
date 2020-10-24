@@ -16,7 +16,7 @@ In the next section, I define atomic comparison and resulting patterns, then des
 
 Proposed algorithm is a comparison-first alternative to deep learning, neither statistical nor neuromorphic. It's a search for patterns of incremental composition in recursively extended pipeline. Each level of this pipeline cross-compares inputs and then clusters them into patterns by proximity and resulting match. So, a pattern is a set of proximate matching inputs. In more common usage, pattern is a matching set of inputs. But that's really a second-order covariance pattern: a set of inputs with matching derivatives, formed by prior comparisons.
 
-First-level comparands are sensory inputs at the limit of resolution: adjacent pixels of video or equivalents in other modalities. All symbolic data is encoded by some prior cognitive process. To discover meaningful patterns in symbols, they must be decoded before being cross-compared. The difficulty of decoding is exponential with the level of encoding, thus starting with raw sensory input is by far the easiest to implement (part 0).
+Please see [whole-system diagram](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/Whole-system%20hierarchy.png). First-level comparands are sensory inputs at the limit of resolution: adjacent pixels of video or equivalents in other modalities. All symbolic data is encoded by some prior cognitive process. To discover meaningful patterns in symbols, they must be decoded before being cross-compared. The difficulty of decoding is exponential with the level of encoding, thus starting with raw sensory input is by far the easiest to implement (part 0).
 
 Basic comparison is inverse arithmetic operation between single-variable comparands, of incremental power: Boolean, subtraction, division, etc. Each order of comparison forms miss or loss: XOR, difference, ratio, etc., and match or similarity, which can be defined directly or as inverse deviation of miss. Direct match is compression of represented magnitude by replacing larger input with corresponding order of miss between the inputs: Boolean AND, min. input in comp by subtraction, integer part of ratio in comp by division, etc. (part 1). 
 
@@ -24,11 +24,9 @@ These direct similarity measures work if input intensity represents some stable 
 
 Comparison forms patterns: proximity clusters of inputs with above-average match to each other. So we have two filters, external: maximal comparison distance, and internal: average match per distance. Both will be updated by higher-level feedback. Value of prediction = precision of what * precision of where. That “where” is pose: Cartesian coordinates and dimensions, which should be represented as separate parameters (part 2). 
     
-Patterns also include parameters derived from individual comparisons: internal and external match and miss, where the external ones are continuity and distance. All parameters are selected for cross-comparison between input patterns, forming match and miss per parameter, then summed into match and miss per pattern, which determine clustering into higher-level patterns. So, the number of parameters per pattern may multiply with each level of search. 
+Patterns also include parameters derived from individual comparisons: internal and external match and miss, where the external ones are continuity and distance. All parameters are selected for cross-comparison between input patterns, forming match and miss per parameter, then summed into match and miss per pattern. Which determine clustering into higher-level patterns (much ballyhooed causality is technically temporal connectivity clustering). So, the number of parameters per pattern may multiply with each level of search. 
 
 Comparison is selectively incremental, depending on induction from prior comparisons. The increments are in distance and derivation among inputs per pattern, then in pattern composition and parameterization per level. There should be a unique set of operations added per increment, hence a singular in “cognitive algorithm”. Resulting hierarchy is a pipeline: terminated patterns are outputted to the next level, and new level is formed for a pattern terminated by current top level. Which continues as long as the system receives novel inputs. 
-
-Please see [whole-system diagram](https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/Whole-system%20hierarchy.png).
 
 Working algorithm will be first level operations plus recursive increment in operations per higher level. This increment is needed to handle incremental syntax (derivatives and dimensions) of outputs relative to inputs.
 Higher levels will discover longer-range spatio-temporal and then conceptual patterns, of indefinite generality. But this process is too complex and slow for simple test problems, its design should be driven by theory rather than experimentation. Which is probably why such schemes are not actively explored.
@@ -41,7 +39,7 @@ Many readers note disconnect between abstractness of this outline and the amount
 
 
 
-All unsupervised learning is some form of pattern discovery, clustering inputs by results from their comparison. My comparison and clustering are primarily lateral: among inputs within a level, while in statistical learning they are between layers of weighted summation. The first step is summation and normalization into centroid, and the second is weight adjustment by feedback from comparison of that centroid. Weight adjustment is effectively a soft clustering: modulated inclusion / exclusion of subsequent inputs into the output.
+All unsupervised learning is some form of pattern discovery, clustering inputs by the results of their comparison. My comparison and clustering are primarily lateral: among inputs within a level, while in statistical learning they are between layers of weighted summation. So, the inputs are summed, the sums are normalized and compared to inputs or template, then resulting "error" adjusts the weights. Weight adjustment is effectively a soft clustering: modulated inclusion / exclusion of subsequent inputs into the output.
 
 I think that makes all statistical learning, including neural nets, some variation of [centroid clustering](https://en.wikipedia.org/wiki/Cluster_analysis#Centroid-based_clustering). Basic ANN is a multi-layer perceptron: each node weighs the inputs at synapses, then sums and thresholds them into output. This normalized sum of inputs is their centroid. Output of top layer is compared to some template, forming an error. With Stochastic Gradient Descent, that error backpropagates, converting initially random weights into functional values. This is a form of learning, but I have basic problems with the process:
 
@@ -115,11 +113,11 @@ Comparison by division forms ratio, which is a magnitude-compressed difference. 
 
 A ratio can be further compressed by converting to a radix | logarithm, and so on. But computational costs may grow even faster. Thus, power of comparison should increase only for inputs sufficiently compressed by lower power: AND for bit inputs, SUB for integer inputs, DIV for pattern inputs, etc. Actual compression depends on input and on resolution of its coordinate: input | derivative summation span. We can’t control the input, so average match is adjusted via coordinate resolution.
 
+But the costs of operations and incidental sign, fraction, irrational fraction, etc. may grow even faster. To justify the costs, the power of comparison should only increase in patterns of above-average match from prior order of comparison: AND for bit inputs, SUB for integer inputs, DIV for pattern inputs, etc. A filter for inclusion into positive or negative pattern is a past match that co-occurs with average higher-level projected match. Relative match is accumulated until it exceeds the cost of updating lower-level filter, which terminates same-filter span.
+
 To filter future inputs, this absolute match should be projected: recombined with co-derived miss projected for a target distance. Filter deviation is accumulated until it exceeds the cost of updating lower-level filter. Which then forms relative match: current match - past match that co-occurs with average higher-level projected match. This relative match: above- or below- average predictive value, determines input inclusion into positive or negative predictive value pattern.
 
 Separate filters are formed for each type of compared variable. Initial input, such as reflected light, is likely to be incidental and very indirectly representative of physical properties in observed objects. Then its filter will increase, reducing number of positive patterns, potentially down to 0. But differences or ratios between inputs represent variation, which is anti-correlated with match. They have negative predictive value, inverted to get incrementally closer to intrinsically predictive properties, such as mass or momentum.
-
-Hence a vision-specific way I define initial match. Predictive visual property is albedo, which means locally stable ratio of brightness / intensity. Since lighting is usually uniform over much larger area than pixel, the difference in brightness between adjacent pixels should also be stable. Relative brightness indicates some underlying property, so it should be cross-compared to form patterns. But it is reflected: only indirectly representative of observed object.
 
 Absent significant correlation between input magnitude and represented physical object magnitude, the only proxy to match in initial comparison is inverse deviation of absolute difference:
 average_|difference| - |difference|. Though less accurate (defined via average diff vs. individual input), this match is also a complementary of diff:
@@ -127,9 +125,17 @@ average_|difference| - |difference|. Though less accurate (defined via average d
 - complementary of |difference| within max input.
 
 
+## quantifying lossy compression
+
+
+There is a general agreement that compression is a measure of similarity, but no one seems to apply it from the bottom up, the bottom being single scalars. Also, any significant compression must be lossy. This is currently evaluated by perceived similarity of reconstructed input to the original input, as well as compression rate. Which is very coarse and subjective. Compression in my level of search is lossless, represented by match on all levels of pattern. All derived representations are redundant, so it’s really an expansion vs. compression overall.  
+
+The lossy part comes after evaluation of resulting patterns on the next level of search. Top level of patterns is cross-compared by default, evaluation is per lower level: of incremental derivation and detail in each pattern. Loss is when low-relative-match buffered inputs or alternative derivatives are not cross-compared. Such loss is quantified as the quantity of representations in these lower levels, not some subjective quality. 
+
+Compression also depends on resolution of coordinate (input summation span), and of input magnitude. Projected match can be kept above system’s average by adjusting corresponding resolution filters: most significant bits and least significant bits of both coordinate and magnitude.
+
 
 ### Implementation
-
 
 
 Any prediction has two components: what and where. We must have both: value of prediction = precision of what * precision of where. That “where” is currently neglected: statistical ML methods represent coordinates much more coarsely than the inputs. Hence, precision of where (spans of and distances between patterns) is degraded, and so is predictive value of combined representations. That's not the case here because my top-level patterns (multi-dimensional blobs) are contiguous.

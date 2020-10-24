@@ -16,6 +16,7 @@ import numpy as np
 
 from collections import deque
 from frame_blobs_defs import CBlob, FrameOfBlobs
+from frame_blobs_imaging import visualize_blobs
 from utils import minmax
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
@@ -49,7 +50,7 @@ def comp_pixel(image):  # 2x2 pixel cross-correlation within image, as in edge d
     # renamed dert__ = (p__, dy__, dx__, g__, m__) for readability in functions below
 
 
-def derts2blobs(dert__, verbose=False):
+def derts2blobs(dert__, verbose=False, render=False):
 
     if verbose:
         start_time = time()
@@ -71,6 +72,9 @@ def derts2blobs(dert__, verbose=False):
 
     if verbose:
         print(f"{len(frame.blob_)} blobs formed in {time() - start_time} seconds")
+
+    if render:
+        visualize_blobs(idmap, frame.blob_)
 
     return frame
 
@@ -157,7 +161,7 @@ def flood_fill(dert__, sign__, verbose=False,
                 xn += 1
                 blob.box = y0, yn, x0, xn
                 blob.mask = (idmap[y0:yn, x0:xn] != blob.id)
-                blob.adj_blobs = [[], 0, 0]
+                blob.adj_blobs = [[], 0, 0, 0, 0]
 
                 if verbose:
                     progress += blob.S * step
@@ -197,6 +201,11 @@ def assign_adjacents(adj_pairs, blob_cls=CBlob):  # adjacents are connected oppo
         blob2.adj_blobs[1] += blob1.S
         blob1.adj_blobs[2] += blob2.G
         blob2.adj_blobs[2] += blob1.G
+        blob1.adj_blobs[3] += blob2.M
+        blob2.adj_blobs[3] += blob1.M
+        if hasattr(blob1,'Ma'): # add Ma to deep blob only
+            blob1.adj_blobs[4] += blob2.Ma
+            blob2.adj_blobs[4] += blob1.Ma
 
 
 
@@ -208,16 +217,20 @@ if __name__ == "__main__":
 
     # Parse arguments
     argument_parser = argparse.ArgumentParser()
-    argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon.jpg')
-    argument_parser.add_argument('-v', '--verbose', help='print details, useful for debugging', type=int, default=0)
-    argument_parser.add_argument('-n', '--intra', help='run intra_blobs after frame_blobs', type=int, default=0)
+    argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon_head.jpg')
+    argument_parser.add_argument('-v', '--verbose', help='print details, useful for debugging', type=int, default=1)
+    argument_parser.add_argument('-n', '--intra', help='run intra_blobs after frame_blobs', type=int, default=1)
+    argument_parser.add_argument('-r', '--render', help='render the process', type=int, default=0)
+    argument_parser.add_argument('-c', '--clib', help='use C shared library', type=int, default=0)
     args = argument_parser.parse_args()
     image = imread(args.image)
 
     # frame-blobs start here
     start_time = time()
     dert__ = comp_pixel(image)
-    frame = derts2blobs(dert__, verbose=args.verbose)
+    frame = derts2blobs(dert__,
+                        verbose=args.verbose,
+                        render=args.render)
 
     if args.intra:  # Tentative call to intra_blob, omit for testing frame_blobs:
 
