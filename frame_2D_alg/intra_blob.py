@@ -27,22 +27,21 @@ from collections import deque, defaultdict
 from frame_blobs_defs import CDeepBlob
 from class_bind import AdjBinder
 from frame_blobs import assign_adjacents, flood_fill
-from intra_comp import comp_r, comp_a
+from intra_comp import comp_r, comp_a, comp_aga
 from frame_blobs_imaging import visualize_blobs
 from itertools import zip_longest
 from utils import pairwise
 import numpy as np
 from P_blobs import P_blobs
-
+from utils_nested import *
 # from comp_P_draft import comp_P_blob
 
 # filters, All *= rdn:
 ave = 50  # fixed cost per dert, from average m, reflects blob definition cost, may be different for comp_a?
 aveB = 50  # fixed cost per intra_blob comp and clustering
 
-
 # --------------------------------------------------------------------------------------------------------------
-# functions, ALL WORK-IN-PROGRESS:
+# functions:
 
 def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp within blob
 
@@ -76,7 +75,7 @@ def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp withi
             elif blob.G / (1 - blob.Ga / (4.45 * blob.S)) - AveB > 0:  # max_ga=4.45, init G is 2nd deviation or borrow value
                 # G increased by relative Ga value,
                 # flatten day and dax?
-                dert__, mask = comp_a(ext_dert__, Ave, ext_mask)  # -> m sub_blobs
+                dert__, mask = comp_aga(ext_dert__, Ave, ext_mask)  # -> m sub_blobs
                 crit__ = dert__[3] / (1 - dert__[7] / 4.45) - Ave  # ~ eval per blob, record separately from g and ga?
                 # ga is not signed, use Ave_ga?
                 blob.fca = 1
@@ -118,7 +117,7 @@ def sub_eval(blob, dert__, crit__, mask, **kwargs):
         blob.sub_layers = [sub_blobs]  # 1st layer of sub_blobs
         print('dert_P fork')
 
-    else:  # comp_r, comp_a, comp_aga  # sub_blobs = cluster_derts(dert__, crit__, mask, verbose=False, **kwargs)  # -> m sub_blobs
+    else:  # comp_r, comp_a, comp_aga
         sub_blobs, idmap, adj_pairs = flood_fill(dert__,
                                                  sign__=crit__ > 0,
                                                  verbose=False,
@@ -164,6 +163,7 @@ def sub_eval(blob, dert__, crit__, mask, **kwargs):
 
 
 def cluster_derts(dert__, crit__, mask, verbose=False, **kwargs):
+    # sub_blobs = cluster_derts(dert__, crit__, mask, verbose=False, **kwargs)  # -> m sub_blobs:
     # replaced by flood_fill
 
     if kwargs.get('use_c'):
@@ -180,7 +180,7 @@ def cluster_derts(dert__, crit__, mask, verbose=False, **kwargs):
     assign_adjacents(adj_pairs, CDeepBlob)
     if kwargs.get('render', False):
         visualize_blobs(idmap, blob_,
-                        winname=f"Deep blobs (fcr = {fcr}, fia = {fia})")
+                        winname=f"Deep blobs (fca = {fca}, fia = {fia})")
 
     return blob_
 
@@ -200,11 +200,10 @@ def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
     ext_dert__ = []
     for derts in blob.root_dert__:
         if derts is not None:
-            if type(derts) == tuple:  # tuple of 2 for day, dax - (Dyy, Dyx) or (Dxy, Dxx)
-                ext_dert__.append(derts[0][y0e:yne, x0e:xne])
-                ext_dert__.append(derts[1][y0e:yne, x0e:xne])
-            else:
-                ext_dert__.append(derts[y0e:yne, x0e:xne])
+
+            params = [y0e,yne,x0e,xne]
+            ext_dert__.append(nested(derts,nested_crop,params))
+
         else:
             ext_dert__.append(None)
     ext_dert__ = tuple(ext_dert__)  # change list to tuple
@@ -226,9 +225,31 @@ def accum_blob_Dert(blob, dert__, y, x):
     blob.M += dert__[4][y, x]
 
     if len(dert__) > 5:  # past comp_a fork
-        blob.Dyy += dert__[5][0][y, x]
-        blob.Dyx += dert__[5][1][y, x]
-        blob.Dxy += dert__[6][0][y, x]
-        blob.Dxx += dert__[6][1][y, x]
-        blob.Ga += dert__[7][y, x]
-        blob.Ma += dert__[8][y, x]
+
+        # this function applicable to conditions if depth = 0 or depth >=1
+        nested(dert__[5][0], nested_accum_blob_Dert, blob.Dyy, y, x)
+        nested(dert__[5][1], nested_accum_blob_Dert, blob.Dyx, y, x)
+        nested(dert__[6][0], nested_accum_blob_Dert, blob.Dxy, y, x)
+        nested(dert__[6][1], nested_accum_blob_Dert, blob.Dxx, y, x)
+        nested(dert__[7], nested_accum_blob_Dert, blob.Ga, y, x)
+        nested(dert__[8], nested_accum_blob_Dert, blob.Ma, y, x)
+
+'''
+    if len(dert__) > 5:  # past comp_a fork
+        if a_depth == 1:
+
+            blob.Dyy += dert__[5][0][y, x]
+            blob.Dyx += dert__[5][1][y, x]
+            blob.Dxy += dert__[6][0][y, x]
+            blob.Dxx += dert__[6][1][y, x]
+            blob.Ga += dert__[7][y, x]
+            blob.Ma += dert__[8][y, x]
+
+        else:  # a_depth > 1:
+            nested_process(dert__[4], nested_accum_blob_Dert, blob.Dyy, y, x)
+            nested_process(dert__[5], nested_accum_blob_Dert, blob.Dyx, y, x)
+            nested_process(dert__[6], nested_accum_blob_Dert, blob.Dxy, y, x)
+            nested_process(dert__[7], nested_accum_blob_Dert, blob.Dxx, y, x)
+            nested_process(dert__[8], nested_accum_blob_Dert, blob.Ga, y, x)
+            nested_process(dert__[9], nested_accum_blob_Dert, blob.Ma, y, x)
+'''

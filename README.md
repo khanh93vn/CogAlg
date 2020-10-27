@@ -24,7 +24,7 @@ These direct similarity measures work if input intensity represents some stable 
 
 Comparison forms patterns: proximity clusters of inputs with above-average match to each other. So we have two filters, external: maximal comparison distance, and internal: average match per distance. Both will be updated by higher-level feedback. Value of prediction = precision of what * precision of where. That “where” is pose: Cartesian coordinates and dimensions, which should be represented as separate parameters (part 2). 
     
-Patterns also include parameters derived from individual comparisons: internal and external match and miss, where the external ones are continuity and distance. All parameters are selected for cross-comparison between input patterns, forming match and miss per parameter, then summed into match and miss per pattern. Which determine clustering into higher-level patterns (much ballyhooed causality is technically temporal connectivity clustering). So, the number of parameters per pattern may multiply with each level of search. 
+Patterns also include parameters derived from individual comparisons: internal and external match and miss, where the external ones are continuity and distance. All parameters are selected for cross-comparison between input patterns, forming match and miss per parameter, then summed into match and miss per pattern. Which determine clustering into higher-level patterns (much ballyhooed causality is technically a temporal connectivity clustering). So, the number of parameters per pattern may multiply with each level of search. 
 
 Comparison is selectively incremental, depending on induction from prior comparisons. The increments are in distance and derivation among inputs per pattern, then in pattern composition and parameterization per level. There should be a unique set of operations added per increment, hence a singular in “cognitive algorithm”. Resulting hierarchy is a pipeline: terminated patterns are outputted to the next level, and new level is formed for a pattern terminated by current top level. Which continues as long as the system receives novel inputs. 
 
@@ -89,11 +89,11 @@ Overall, CapsNet is a variation of ANN, with input summation first and dynamic r
 
 
 
-### Quantifying match and miss between variables
+### Atomic comparison: quantifying match and miss between variables
 
 
 
-The purpose here is prediction, and predictive value is usually defined as [compressibility](https://en.wikipedia.org/wiki/Algorithmic_information_theory). Which is perfectly fine, but existing methods only compute compression per sequence of inputs. To enable more incremental selection and scalable search, I quantify partial match between atomic inputs, vs. binary same | different choice for inputs within sequences. This is similar to the way Bayesian inference improved on classical logic, by quantifying probability vs. binary true | false values.
+First, we need to quantify predictive value. Algorithmic information theory defines it as compressibility of representation, which is perfectly fine. But compression is currently computed only for sequences of inputs, while I think a logical start is analog input digitization: a rock bottom of organic compression hierarchy. The next level is cross-comparison among resulting pixels, commonly known as edge detection, and higher levels will cross-compare resulting patterns. Partial match computed by comparison is a measure of compression.
 
 Partial match between two variables is a complementary of miss, in corresponding power of comparison: 
 - Boolean match is AND and miss is XOR (two zero inputs form zero match and zero miss), 
