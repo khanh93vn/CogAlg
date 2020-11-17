@@ -1,16 +1,18 @@
 '''
-    P_blobs is a terminal fork of intra_blob. It calls comp_g and then comp_P (edge tracing) per terminated stack.
+    This is a terminal fork of intra_blob.
+    slice_blob converts selected smooth-edge blobs (high G, low Ga) into slice_blobs, adding internal P and stack structures.
+    It then calls comp_g and comp_P per stack, to trace and vectorize these edge blobs.
 
     Pixel-level parameters are accumulated in contiguous spans of same-sign gradient, first horizontally then vertically.
-    Horizontal spans are Ps: 1D patterns, and vertical spans are first stacks of Ps, then blobs of stacks.
+    Horizontal spans are Ps: 1D patterns, and vertical spans are first stacks of Ps, then blob of connected stacks.
 
     This processing adds a level of encoding per row y, defined relative to y of current input row, with top-down scan:
     1Le, line y-1: form_P( dert_) -> 1D pattern P: contiguous row segment, a slice of a blob
     2Le, line y-2: scan_P_(P, hP) -> hP, up_connect_, down_connect_count: vertical connections per stack of Ps
     3Le, line y-3: form_stack(hP, stack) -> stack: merge vertically-connected _Ps into non-forking stacks of Ps
     4Le, line y-4+ stack depth: form_blob(stack, blob): merge connected stacks in blobs referred by up_connect_, recursively
-
     Higher-row elements include additional parameters, derived while they were lower-row elements.
+
     Resulting blob structure (fixed set of parameters per blob):
     - Dert: summed pixel-level dert params, Dx, surface area S, vertical depth Ly
     - sign = s: sign of gradient deviation
@@ -19,18 +21,6 @@
     - stack_,  # contains intermediate blob composition structures: stacks and Ps, not meaningful on their own
     ( intra_blob structure extends Dert, adds fork params and sub_layers)
 
-    Blob is 2D pattern: connectivity cluster defined by the sign of gradient deviation. Gradient represents 2D variation
-    per pixel. It is used as inverse measure of partial match (predictive value) because direct match (min intensity)
-    is not meaningful in vision. Intensity of reflected light doesn't correlate with predictive value of observed object
-    (predictive value is physical density, hardness, inertia that represent resistance to change in positional parameters)
-
-    Comparison range is fixed for each layer of search, to enable encoding of input pose parameters: coordinates, dimensions,
-    orientation. These params are essential because value of prediction = precision of what * precision of where.
-    Clustering is by nearest-neighbor connectivity only, to avoid overlap among the blobs.
-
-    frame_blobs is a complex function with a simple purpose: to sum pixel-level params in blob-level params. These params
-    were derived by pixel cross-comparison (cross-correlation) to represent predictive value per pixel, so they are also
-    predictive on a blob level, and should be cross-compared between blobs on the next level of search and composition.
     Old diagrams: https://kwcckw.github.io/CogAlg/
 '''
 """
@@ -57,11 +47,9 @@ import numpy as np
 from operator import attrgetter
 
 from class_cluster import ClusterStructure, NoneType
-from class_bind import AdjBinder
-# from comp_pixel import comp_pixel
-from utils import (
-    pairwise,
-    imread, )
+from class_stream import BlobStreamer
+from frame_blobs import CDeepBlob
+from comp_slice_draft import comp_slice_blob
 
 ave = 30  # filter or hyper-parameter, set as a guess, latter adjusted by feedback
 aveG = 50  # filter for comp_g, assumed constant direction
@@ -86,7 +74,7 @@ class CP(ClusterStructure):
     Dg = int
     Mg = int
 
-class Cstack(ClusterStructure):
+class CStack(ClusterStructure):
     I = int
     Dy = int
     Dx = int
@@ -98,14 +86,14 @@ class Cstack(ClusterStructure):
     Dxx = int
     Ga = int
     Ma = int
-    S = int
+    A = int  # blob area
     Ly = int
     y0 = int
-    Py_ = list
-    blob = NoneType
-    down_connect_cnt = int
+    Py_ = list  # Py_ or dPPy_
     sign = NoneType
-    fPP = bool  # PPy_ if 1, else Py_
+    f_gstack = NoneType  # gPPy_ if 1, else Py_
+    down_connect_cnt = int
+    blob = NoneType
 
 class CBlob(ClusterStructure):
     Dert = dict
@@ -116,27 +104,29 @@ class CBlob(ClusterStructure):
     root_dert__ = object
     dert__ = object
     mask = object
-    adj_blobs = list
     fopen = bool
     margin = list
 
 # Functions:
 # prefix '_' denotes higher-line variable or structure, vs. same-type lower-line variable or structure
-# postfix '_' denotes array name, vs. same-name elements of that array
+# postfix '_' denotes array name, vs. same-name elements of that array. '__' is a 2D array
 
 
-def P_blobs(dert__, mask, crit__, verbose=False, render=False):
+def slice_blob(dert__, mask, crit__, AveB, verbose=False, render=False):
     frame = dict(rng=1, dert__=dert__, mask=None, I=0, Dy=0, Dx=0, G=0, M=0, Dyy=0, Dyx=0, Dxy=0, Dxx=0, Ga=0, Ma=0, blob__=[])
     stack_ = deque()  # buffer of running vertical stacks of Ps
     height, width = dert__[0].shape
 
+    if render:
+        def output_path(input_path, suffix):
+            return str(Path(input_path).with_suffix(suffix))
+        streamer = BlobStreamer(CBlob, dert__[1],
+                                record_path=output_path(arguments['image'],
+                                                        suffix='.im2blobs.avi'))
     if verbose:
         start_time = time()
         print("Converting to image to blobs...")
-    if render:
-        pass  # under revision
 
-    stack_binder = AdjBinder(Cstack)
 
     for y, dert_ in enumerate(zip(*dert__)):  # first and last row are discarded
         if verbose:
@@ -144,22 +134,17 @@ def P_blobs(dert__, mask, crit__, verbose=False, render=False):
             print(f"{len(frame['blob__'])} blobs converted", end="")
             sys.stdout.flush()
 
-        P_binder = AdjBinder(CP)  # binder needs data about clusters of the same level
-        P_ = form_P_(zip(*dert_), crit__[y], mask[y], P_binder)  # horizontal clustering
-
+        P_ = form_P_(zip(*dert_), crit__[y], mask[y])  # horizontal clustering
         if render:
-            pass  # under revision
-
-        P_ = scan_P_(P_, stack_, frame, P_binder)  # vertical clustering, adds P up_connects and _P down_connect_cnt
+            render = streamer.update_blob_conversion(y, P_)
+        P_ = scan_P_(P_, stack_, frame)  # vertical clustering, adds P up_connects and _P down_connect_cnt
         stack_ = form_stack_(P_, frame, y)
-        stack_binder.bind_from_lower(P_binder)
 
     while stack_:  # frame ends, last-line stacks are merged into their blobs
         form_blob(stack_.popleft(), frame)
 
-    blob_binder = AdjBinder(CBlob)
-    blob_binder.bind_from_lower(stack_binder)
-    assign_adjacents(blob_binder)  # add adj_blobs to each blob
+    # evaluate P blobs
+    comp_slice_blob(frame['blob__'], AveB)
 
     if verbose:  # print out at the end
         nblobs = len(frame['blob__'])
@@ -169,8 +154,11 @@ def P_blobs(dert__, mask, crit__, verbose=False, render=False):
         blob_ids = [blob_id for blob_id in range(CBlob.instance_cnt)]
         merged_percentage = len([*filter(lambda bid: CBlob.get_instance(bid) is None, blob_ids)]) / len(blob_ids)
         print(f"\nPercentage of merged blobs: {merged_percentage}")
+
     if render:  # rendering mode after blob conversion
-        pass  # under revision
+        path = output_path(arguments['image'],
+                           suffix='.im2blobs.jpg')
+        streamer.end_blob_conversion(y, img_out_path=path)
 
     return frame  # frame of blobs
 
@@ -185,7 +173,7 @@ dert: tuple of derivatives per pixel, initially (p, dy, dx, g), will be extended
 Dert: params of cluster structures (P, stack, blob): summed dert params + dimensions: vertical Ly and area S
 '''
 
-def form_P_(idert_, crit_, mask_, binder):  # segment dert__ into P__, in horizontal ) vertical order
+def form_P_(idert_, crit_, mask_):  # segment dert__ into P__, in horizontal ) vertical order
 
     P_ = deque()  # row of Ps
     s_ = crit_ > 0
@@ -206,14 +194,14 @@ def form_P_(idert_, crit_, mask_, binder):  # segment dert__ into P__, in horizo
         mask = mask_[x]
         if ~mask:  # current dert is not masked
             s = s_[x]
-            if ~_mask and s != _s:  # prior dert is not masked and sign changed, terminate and pack P:
+            if ~_mask and s != _s:  # prior dert is not masked and sign changed, terminate P:
                 P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, sign=_s, dert_=dert_)
                 P_.append(P)
                 I= Dy= Dx= G= M= Dyy= Dyx= Dxy= Dxx= Ga= Ma= L= 0; x0 = x; dert_ = []  # initialize P params
             elif _mask:
                 I= Dy= Dx= G= M= Dyy= Dyx= Dxy= Dxx= Ga= Ma= L= 0; x0 = x; dert_ = []  # initialize P params
         elif ~_mask:
-            # dert is masked, prior dert is not masked, pack P:
+            # dert is masked, prior dert is not masked, terminate P:
             P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, sign=_s, dert_=dert_)
             P_.append(P)
 
@@ -234,18 +222,14 @@ def form_P_(idert_, crit_, mask_, binder):  # segment dert__ into P__, in horizo
             _s = s  # prior sign
         _mask = mask
 
-    if ~_mask:  # terminate and pack last P in a row if prior dert is unmasked
+    if ~_mask:  # terminate last P in a row if prior dert is unmasked
         P = CP(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, L=L, x0=x0, sign=_s, dert_=dert_)
         P_.append(P)
-
-    for _P, P in pairwise(P_):
-        if _P.x0 + _P.L == P.x0:  # check if Ps are adjacents
-            binder.bind(_P, P)
 
     return P_
 
 
-def scan_P_(P_, stack_, frame, binder):  # merge P into higher-row stack of Ps which have same sign and overlap by x_coordinate
+def scan_P_(P_, stack_, frame):  # merge P into higher-row stack of Ps which have same sign and overlap by x_coordinate
     '''
     Each P in P_ scans higher-row _Ps (in stack_) left-to-right, testing for x-overlaps between Ps and same-sign _Ps.
     Overlap is represented as up_connect in P and is added to down_connect_cnt in _P. Scan continues until P.x0 >= _P.xn:
@@ -277,16 +261,12 @@ def scan_P_(P_, stack_, frame, binder):  # merge P into higher-row stack of Ps w
                     if P.sign == stack.sign:  # sign match
                         stack.down_connect_cnt += 1
                         up_connect_.append(stack)  # buffer P-connected higher-row stacks into P' up_connect_
-                    else:
-                        binder.bind(_P, P)
 
             else:  # -G, check for orthogonal overlaps only: 4 directions, edge blobs are more selective
                 if _x0 < xn and x0 < _xn:  # x overlap between loaded P and _P
                     if P.sign == stack.sign:  # sign match
                         stack.down_connect_cnt += 1
                         up_connect_.append(stack)  # buffer P-connected higher-row stacks into P' up_connect_
-                    else:
-                        binder.bind(_P, P)
 
             if (xn < _xn or  # _P overlaps next P in P_
                     xn == _xn and stack.sign):  # check in 8 directions
@@ -327,9 +307,9 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
         xn = x0 + L  # next-P x0
         if not up_connect_:
             # initialize new stack for each input-row P that has no connections in higher row, as in the whole top row:
-            blob = CBlob(Dert=dict(I=0, Dy=0, Dx=0, G=0, M=0, Dyy=0, Dyx=0, Dxy=0, Dxx=0, Ga=0, Ma=0, S=0, Ly=0),
+            blob = CBlob(Dert=dict(I=0, Dy=0, Dx=0, G=0, M=0, Dyy=0, Dyx=0, Dxy=0, Dxx=0, Ga=0, Ma=0, A=0, Ly=0),
                          box=[y, x0, xn], stack_=[], sign=s, open_stacks=1)
-            new_stack = Cstack(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, S=L, Ly=1,
+            new_stack = CStack(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, A=L, Ly=1,
                                y0=y, Py_=[P], blob=blob, down_connect_cnt=0, sign=s, fPP=0)
             new_stack.hid = blob.id
             blob.stack_.append(new_stack)
@@ -338,7 +318,7 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
             if len(up_connect_) == 1 and up_connect_[0].down_connect_cnt == 1:
                 # P has one up_connect and that up_connect has one down_connect=P: merge P into up_connect stack:
                 new_stack = up_connect_[0]
-                new_stack.accumulate(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, S=L, Ly=1)
+                new_stack.accumulate(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, A=L, Ly=1)
                 new_stack.Py_.append(P)  # Py_: vertical buffer of Ps
                 new_stack.down_connect_cnt = 0  # reset down_connect_cnt
                 blob = new_stack.blob
@@ -346,7 +326,7 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
             else:  # P has >1 up_connects, or 1 up_connect that has >1 down_connect_cnt:
                 blob = up_connect_[0].blob
                 # initialize new_stack with up_connect blob:
-                new_stack = Cstack(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, S=L, Ly=1,
+                new_stack = CStack(I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, A=L, Ly=1,
                                    y0=y, Py_=[P], blob=blob, down_connect_cnt=0, sign=s, fPP=0)
                 new_stack.hid = blob.id
                 blob.stack_.append(new_stack)  # stack is buffered into blob
@@ -361,8 +341,8 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
 
                         if not up_connect.blob is blob:
                             Dert, box, stack_, s, open_stacks = up_connect.blob.unpack()[:5]  # merged blob
-                            I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, S, Ly = Dert.values()
-                            accum_Dert(blob.Dert, I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, S=S, Ly=Ly)
+                            I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, A, Ly = Dert.values()
+                            accum_Dert(blob.Dert, I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, A=A, Ly=Ly)
                             blob.open_stacks += open_stacks
                             blob.box[0] = min(blob.box[0], box[0])  # extend box y0
                             blob.box[1] = min(blob.box[1], box[1])  # extend box x0
@@ -388,32 +368,28 @@ def form_stack_(P_, frame, y):  # Convert or merge every P into its stack of Ps,
 
 def form_blob(stack, frame):  # increment blob with terminated stack, check for blob termination and merger into frame
 
-    I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, S, Ly, y0, Py_, blob, down_connect_cnt, sign, fPP = stack.unpack()
+    I, Dy, Dx, G, M, Dyy, Dyx, Dxy, Dxx, Ga, Ma, A, Ly, y0, Py_, sign, fPP, down_connect_cnt, blob = stack.unpack()
     # terminated stack is merged into continued or initialized blob (all connected stacks):
-    accum_Dert(blob.Dert, I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, S=S, Ly=Ly)
+    accum_Dert(blob.Dert, I=I, Dy=Dy, Dx=Dx, G=G, M=M, Dyy=Dyy, Dyx=Dyx, Dxy=Dxy, Dxx=Dxx, Ga=Ga, Ma=Ma, A=A, Ly=Ly)
 
     blob.open_stacks += down_connect_cnt - 1  # incomplete stack cnt + terminated stack down_connect_cnt - 1: stack itself
     # open stacks contain Ps of a current row and may be extended with new x-overlapping Ps in next run of scan_P_
+
     if blob.open_stacks == 0:  # number of incomplete stacks == 0: blob is terminated and packed in frame:
+        # if there is no re-evaluation: check for dert__ termination vs. open stacks
         last_stack = stack
         [y0, x0, xn], stack_, s, open_stacks = blob.unpack()[1:5]
         yn = last_stack.y0 + last_stack.Ly
 
         mask = np.ones((yn - y0, xn - x0), dtype=bool)  # mask box, then unmask Ps:
+
         for stack in stack_:
-            form_PPy_(stack)  # evaluate to convert stack.Py_ to stack.PPy_
-            
-            if stack.fPP:  # Py_ is PPy_
-                for y, (PP_sign, PP_G, P_) in enumerate(stack.Py_, start=stack.y0 - y0):
-                    for P in P_:
-                        x_start = P.x0 - x0
-                        x_stop = x_start + P.L
-                        mask[y, x_start:x_stop] = False  
-            else:
-                for y, P in enumerate(stack.Py_, start=stack.y0 - y0):
-                    x_start = P.x0 - x0
-                    x_stop = x_start + P.L
-                    mask[y, x_start:x_stop] = False
+            for y, P in enumerate(stack.Py_, start=stack.y0 - y0):
+                x_start = P.x0 - x0
+                x_stop = x_start + P.L
+                mask[y, x_start:x_stop] = False
+
+            form_gPPy_(stack)  # evaluate for comp_g, converting stack.Py_ to stack.PPy_
 
         dert__ = tuple(derts[y0:yn, x0:xn] for derts in frame['dert__'])  # slice each dert array of the whole frame
 
@@ -425,7 +401,6 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
         blob.box = (y0, yn, x0, xn)
         blob.dert__ = dert__
         blob.mask = mask
-        blob.adj_blobs = [[], 0, 0, 0, 0]
         blob.fopen = fopen
 
         frame.update(I=frame['I'] + blob.Dert['I'],
@@ -443,42 +418,64 @@ def form_blob(stack, frame):  # increment blob with terminated stack, check for 
         frame['blob__'].append(blob)
 
 
-def form_PPy_(stack):
+def form_gPPy_(stack):
     ave_PP = 100  # min summed value of gdert params
 
     if stack.G > aveG:
         stack_Dg = stack_Mg = 0
-        PPy_ = []  # may replace stack.Py_
+        gPPy_ = []  # may replace stack.Py_
         P = stack.Py_[0]
-        Py_ = [P]; PP_G = P.G   # initialize PP params
+
+        # initialize PP params:
+        Py_ = [P]; PP_I = P.I; PP_Dy = P.Dy; PP_Dx = P.Dx; PP_G = P.G; PP_M = P.M; PP_Dyy = P.Dyy; PP_Dyx = P.Dyx; PP_Dxy = P.Dxy; PP_Dxx = P.Dxx
+        PP_Ga = P.Ga; PP_Ma = P.Ma; PP_A = P.L; PP_Ly = 1; PP_y0 = stack.y0
+
         _PP_sign = PP_G > aveG and P.L > 1
 
         for P in stack.Py_[1:]:
             PP_sign = P.G > aveG and P.L > 1  # PP sign
             if _PP_sign == PP_sign:  # accum PP:
                 Py_.append(P)
+                PP_I += P.I
+                PP_Dy += P.Dy
+                PP_Dx += P.Dx
                 PP_G += P.G
+                PP_M += P.M
+                PP_Dyy += P.Dyy
+                PP_Dyx += P.Dyx
+                PP_Dxy += P.Dxy
+                PP_Dxx += P.Dxx
+                PP_Ga += P.Ga
+                PP_Ma += P.Ma
+                PP_A += P.L
+                PP_Ly += 1
+
             else:  # sign change, terminate PP:
                 if PP_G > aveG:
                     Py_, Dg, Mg = comp_g(Py_)  # adds gdert_, Dg, Mg per P in Py_
                     stack_Dg += abs(Dg)  # in all high-G Ps, regardless of direction
                     stack_Mg += Mg
-                PPy_.append((_PP_sign, PP_G, Py_))  # pack PP
-                Py_ = [P]; PP_G = P.G  # initialize PP params
+                gPPy_.append(CStack(I=PP_I, Dy = PP_Dy, Dx = PP_Dx, G = PP_G, M = PP_M, Dyy = PP_Dyy, Dyx = PP_Dyx, Dxy = PP_Dxy, Dxx = PP_Dxx,
+                                    Ga = PP_Ga, Ma = PP_Ma, A = PP_A, y0 = PP_y0, Ly = PP_Ly, Py_=Py_, sign =_PP_sign ))  # pack PP
+                # initialize PP params:
+                Py_ = [P]; PP_I = P.I; PP_Dy = P.Dy; PP_Dx = P.Dx; PP_G = P.G; PP_M = P.M; PP_Dyy = P.Dyy; PP_Dyx = P.Dyx; PP_Dxy = P.Dxy; PP_Dxx = P.Dxx
+                PP_Ga = P.Ga; PP_Ma = P.Ma; PP_A = P.L; PP_Ly = 1; PP_y0 = stack.y0
+
             _PP_sign = PP_sign
 
-        PP = _PP_sign, PP_G, Py_  # terminate last PP
         if PP_G > aveG:
             Py_, Dg, Mg = comp_g(Py_)  # adds gdert_, Dg, Mg per P
             stack_Dg += abs(Dg)  # stack params?
             stack_Mg += Mg
         if stack_Dg + stack_Mg < ave_PP:  # separate comp_P values, revert to Py_ if below-cost
-            PPy_.append(PP)
-            stack.Py_ = PPy_
-            stack.fPP = 1  # flag PPy_ vs. Py_ in stack
+             # terminate last PP
+            gPPy_.append(CStack(I=PP_I, Dy = PP_Dy, Dx = PP_Dx, G = PP_G, M = PP_M, Dyy = PP_Dyy, Dyx = PP_Dyx, Dxy = PP_Dxy, Dxx = PP_Dxx,
+                                Ga = PP_Ga, Ma = PP_Ma, A = PP_A, y0 = PP_y0, Ly = PP_Ly, Py_=Py_, sign =_PP_sign ))  # pack PP
+            stack.Py_ = gPPy_
+            stack.f_gstack = 1  # flag gPPy_ vs. Py_ in stack
 
 
-def comp_g(Py_):  # cross-comp of gs in P.dert_, in PP.Py_
+def comp_g(Py_):  # cross-comp of gs in P.dert_, in gPP.Py_
     gP_ = []
     gP_Dg = gP_Mg = 0
 
@@ -549,8 +546,8 @@ def assign_adjacents(blob_binder):  # adjacents are connected opposite-sign blob
         # bilateral assignments
         blob1.adj_blobs[0].append((blob2, pose2))
         blob2.adj_blobs[0].append((blob1, pose1))
-        blob1.adj_blobs[1] += blob2.Dert['S']
-        blob2.adj_blobs[1] += blob1.Dert['S']
+        blob1.adj_blobs[1] += blob2.Dert['A']
+        blob2.adj_blobs[1] += blob1.Dert['A']
         blob1.adj_blobs[2] += blob2.Dert['G']
         blob2.adj_blobs[2] += blob1.Dert['G']
         blob1.adj_blobs[3] += blob2.Dert['M']
