@@ -47,9 +47,9 @@ Mayukh Sarkar, $600 for frame_blobs performance analysis and porting form_P to C
 
 Maria Parshakova, $1600, team developer, March-May 
 
-Khanh Nguyen, $6600, lead developer, January-September
+Khanh Nguyen, $8100, team developer
 
-Kok Wei Chee, $10500, team developer, January-October
+Kok Wei Chee, $14200, team developer
 
 
 

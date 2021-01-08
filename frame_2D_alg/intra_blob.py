@@ -3,9 +3,9 @@
 
     - comp_r: incremental range cross-comp in low-variation flat areas of +v--vg: the trigger is positive deviation of negated -vg,
     - comp_a: angle cross-comp in high-variation edge areas of positive deviation of gradient, forming gradient of angle,
-    - P_blob forms roughly edge-orthogonal Ps, evaluated for comp_d, then evaluates their stacks for comp_P
-    Please see diagram: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_blob_scheme.png
+    - slice_blob forms roughly edge-orthogonal Ps, their stacks evaluated for rotation, comp_d, and comp_slice
 
+    Please see diagram: https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_blob_scheme.png
     Blob structure, for all layers of blob hierarchy:
     root_dert__,
     Dert = A, Ly, I, Dy, Dx, G, M, Day, Dax, Ga, Ma
@@ -14,8 +14,8 @@
     box,  # y0, yn, x0, xn
     dert__,  # box of derts, each = i, dy, dx, g, m, day, dax, ga, ma
     # next fork:
-    fia,  # flag: input is from comp angle
-    fca,  # flag: current fork is comp angle
+    f_root_a,  # flag: input is from comp angle
+    f_comp_a,  # flag: current fork is comp angle
     rdn,  # redundancy to higher layers
     rng,  # comparison range
     sub_layers  # [sub_blobs ]: list of layers across sub_blob derivation tree
@@ -23,124 +23,114 @@
 '''
 
 import numpy as np
-from frame_blobs import assign_adjacents, flood_fill, CDeepBlob
+from frame_blobs import assign_adjacents, flood_fill, CBlob
 from intra_comp import comp_r, comp_a
 from frame_blobs_imaging import visualize_blobs
 from itertools import zip_longest
-from P_blob import P_blob
+from slice_blob import slice_blob
+from comp_slice_draft import comp_slice_blob
 
 # filters, All *= rdn:
 ave = 50  # fixed cost per dert, from average m, reflects blob definition cost, may be different for comp_a?
 aveB = 50  # fixed cost per intra_blob comp and clustering
 
+
 # --------------------------------------------------------------------------------------------------------------
 # functions:
 
+def intra_blob(blob, **kwargs):  # slice_blob or recursive input rng+ | angle cross-comp within input blob
 
-def intra_blob(blob, **kwargs):  # recursive input rng+ | angle cross-comp within blob
-
-    Ave = int(ave * blob.rdn); AveB = int(aveB * blob.rdn)
-
-    if kwargs.get('render') is not None:  # stop rendering sub-blobs when blob is too small
-        if blob.A < 100:
-            kwargs['render'] = False
-
+    Ave = int(ave * blob.rdn)
+    AveB = int(aveB * blob.rdn)
+    if kwargs.get('render') is not None:  # don't render small blobs
+        if blob.A < 100: kwargs['render'] = False
     spliced_layers = []  # to extend root_blob sub_layers
-    ext_dert__, ext_mask = extend_dert(blob)
 
-    if blob.fia:
-        # input from comp_a -> P_blobs
-        dert__, mask = comp_a(ext_dert__, Ave, ext_mask)  # -> ga sub_blobs -> P_blobs (comp_g, comp_P)
-        if mask.shape[0] > 2 and mask.shape[1] > 2 and False in mask:  # min size in y and x, at least one dert in dert__
+    if blob.f_root_a:
+        # root fork is comp_a -> slice_blob
+        if blob.mask__.shape[0] > 2 and blob.mask__.shape[1] > 2 and False in blob.mask__:  # min size in y and x, at least one dert in dert__
 
-            # P_blobs eval, tentative:
-            if blob.G * (1 - blob.Ga / (4.45 * blob.A)) - AveB > 0:  # max_ga=4.45
-                # G reduced by relative Ga value, base G is second deviation or specific borrow value
-                crit__ = dert__[3] * (1 - dert__[7] / 4.45) - Ave  # max_ga=4.45, record separately from g and ga?
-                # ga is not signed, use Ave_ga?
-                blob.fca = 0
-                sub_eval(blob, dert__, crit__, mask, **kwargs)
-                # includes re-clustering by P_blobs
-                spliced_layers = [spliced_layers + sub_layers for spliced_layers, sub_layers in
-                                  zip_longest(spliced_layers, blob.sub_layers, fillvalue=[])]
+            if blob.G * blob.Ma - AveB > 0:  # vs. G reduced by Ga: * (1 - Ga / (4.45 * A)), max_ga=4.45
+                blob.f_comp_a = 0
+                blob.prior_forks.extend('p')
+                if kwargs.get('verbose'): print('\nslice_blob fork\n')
+
+                slice_blob(blob, verbose=kwargs.get('verbose'))  # adds stack_ to blob
+                comp_slice_blob(blob, AveB)  # cross-comp of vertically consecutive Ps in selected stacks
     else:
-        # input from comp_r -> comp_r or comp_a
-        if blob.M > AveB:
-            if kwargs.get('verbose'):
-                print(' ')
-                print('r fork')
-            dert__, mask = comp_r(ext_dert__, Ave, blob.fia, ext_mask)
-            crit__ = dert__[4]  # m__ is inverse deviation of SAD
+        # root fork is frame_blobs or comp_r
+        ext_dert__, ext_mask__ = extend_dert(blob)  # dert__ boundaries += 1, for cross-comp in larger kernels
 
-            if mask.shape[0] > 2 and mask.shape[1] > 2 and False in mask:  # min size in y and x, least one dert in dert__
-                sub_eval(blob, dert__, crit__, mask, **kwargs)
+        if blob.G > AveB:  # comp_a fork, replace G with borrow_M when known
+
+            adert__, mask__ = comp_a(ext_dert__, Ave, ext_mask__)  # compute ma and ga
+            blob.f_comp_a = 1
+            if kwargs.get('verbose'): print('\na fork\n')
+            blob.prior_forks.extend('a')
+
+            if mask__.shape[0] > 2 and mask__.shape[1] > 2 and False in mask__:  # min size in y and x, least one dert in dert__
+                sign__ = adert__[3] * adert__[8] > 0  # g * (ma / ave: deviation rate, no independent value, not co-measurable with g)
+
+                dert__ = tuple([adert__[0], adert__[1], adert__[2], adert__[3], adert__[4],
+                                adert__[5][0], adert__[5][1], adert__[6][0], adert__[6][1],
+                                adert__[7], adert__[8]])  # flatten adert
+
+                cluster_sub_eval(blob, dert__, sign__, mask__, **kwargs)  # forms sub_blobs of sign in unmasked area
                 spliced_layers = [spliced_layers + sub_layers for spliced_layers, sub_layers in
                                   zip_longest(spliced_layers, blob.sub_layers, fillvalue=[])]
 
-        elif blob.G > AveB:
-            if kwargs.get('verbose'):
-                print(' '); print('a fork')
+        elif blob.M > AveB * 1.41:  # comp_r fork, ave M = ave G * 1.41
 
-            dert__, mask = comp_a(ext_dert__, Ave, ext_mask)  # -> m sub_blobs
-            crit__ = dert__[3]  # deviation of g
+            dert__, mask__ = comp_r(ext_dert__, Ave, blob.f_root_a, ext_mask__)
+            blob.f_comp_a = 0
+            if kwargs.get('verbose'): print('\na fork\n')
+            blob.prior_forks.extend('r')
 
-            if mask.shape[0] > 2 and mask.shape[1] > 2 and False in mask:  # min size in y and x, least one dert in dert__
-                sub_eval(blob, dert__, crit__, mask, **kwargs)
+            if mask__.shape[0] > 2 and mask__.shape[1] > 2 and False in mask__:  # min size in y and x, at least one dert in dert__
+                sign__ = dert__[4] > 0  # m__ is inverse deviation of SAD
+
+                cluster_sub_eval(blob, dert__, sign__, mask__, **kwargs)  # forms sub_blobs of sign in unmasked area
                 spliced_layers = [spliced_layers + sub_layers for spliced_layers, sub_layers in
                                   zip_longest(spliced_layers, blob.sub_layers, fillvalue=[])]
 
     return spliced_layers
 
 
-def sub_eval(blob, dert__, crit__, mask, **kwargs):
+def cluster_sub_eval(blob, dert__, sign__, mask__, **kwargs):  # comp_r or comp_a eval per sub_blob:
+
     AveB = aveB * blob.rdn
 
-    if blob.fia and not blob.fca:  # terminal P_blobs
-        if kwargs.get('verbose'):
-            print(' '); print('dert_P fork')
-        dert__ = list(dert__)
-        # flatten day and dax
-        dert__ = (dert__[0], dert__[1], dert__[2], dert__[3], dert__[4],
-                  dert__[5][0], dert__[5][1], dert__[6][0], dert__[6][1],
-                  dert__[7], dert__[8])
+    sub_blobs, idmap, adj_pairs = flood_fill(dert__, sign__, verbose=False, mask__=mask__, blob_cls=CBlob, accum_func=accum_blob_Dert)
+    assign_adjacents(adj_pairs, CBlob)
 
-        sub_frame = P_blob(dert__, mask, crit__, AveB, verbose=kwargs.get('verbose'))
-        sub_blobs = sub_frame['blob__']
-        blob.Ls = len(sub_blobs)  # for visibility and next-fork rd
-        blob.sub_layers = [sub_blobs]  # 1st layer of sub_blobs
+    if kwargs.get('render', False):
+        visualize_blobs(idmap, sub_blobs, winname=f"Deep blobs (f_comp_a = {blob.f_comp_a}, f_root_a = {blob.f_root_a})")
 
-    else:  # comp_r, comp_a
-        sub_blobs, idmap, adj_pairs = flood_fill(dert__,
-                                                 sign__=crit__ > 0,
-                                                 verbose=False,
-                                                 mask=mask,
-                                                 blob_cls=CDeepBlob,
-                                                 accum_func=accum_blob_Dert)
-        assign_adjacents(adj_pairs, CDeepBlob)
-        if kwargs.get('render', False):
-            visualize_blobs(idmap, sub_blobs, winname=f"Deep blobs (fca = {blob.fca}, fia = {blob.fia})")
+    blob.Ls = len(sub_blobs)  # for visibility and next-fork rdn
+    blob.sub_layers = [sub_blobs]  # 1st layer of sub_blobs
 
-        blob.Ls = len(sub_blobs)  # for visibility and next-fork rdn
-        blob.sub_layers = [sub_blobs]  # 1st layer of sub_blobs
+    for sub_blob in sub_blobs:  # evaluate sub_blob
+        G = blob.G  # Gr, Grr...
+        adj_M = blob.adj_blobs[3]  # adj_M is incomplete, computed within current dert_only, use root blobs instead:
+        # adjacent valuable blobs of any sign are tracked from frame_blobs to form borrow_M?
+        # track adjacency of sub_blobs: wrong sub-type but right macro-type: flat blobs of greater range?
+        # G indicates or dert__ extend per blob G?
 
-        for sub_blob in sub_blobs:  # evaluate sub_blob
-            G = blob.G  # or Gr, Grr..
-            adj_M = blob.adj_blobs[3]
-            borrow_M = min(G, adj_M / 2)
+        borrow_M = min(G, adj_M / 2)
+        sub_blob.prior_forks = blob.prior_forks.copy()  # increments forking sequence: g->a, g->a->p, etc.
 
-            if borrow_M > AveB:
-                # comp_a:
-                sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
-                sub_blob.fia = 1
-                sub_blob.a_depth += blob.a_depth  # accumulate a depth from blob to sub blob
-                blob.sub_layers += intra_blob(sub_blob, **kwargs)
+        if sub_blob.G > AveB:  # replace with borrow_M when known
+            # comp_a:
+            sub_blob.f_root_a = 1
+            sub_blob.a_depth += blob.a_depth  # accumulate a depth from blob to sub_blob, currently not used
+            sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
+            blob.sub_layers += intra_blob(sub_blob, **kwargs)
 
-            elif sub_blob.M - borrow_M > AveB:
-                # comp_r:
-                sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
-                sub_blob.fia = 0
-                sub_blob.rng = blob.rng * 2
-                blob.sub_layers += intra_blob(sub_blob, **kwargs)
+        elif sub_blob.M - borrow_M > AveB:
+            # comp_r:
+            sub_blob.rng = blob.rng * 2
+            sub_blob.rdn = sub_blob.rdn + 1 + 1 / blob.Ls
+            blob.sub_layers += intra_blob(sub_blob, **kwargs)
 
 
 def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
@@ -164,13 +154,13 @@ def extend_dert(blob):  # extend dert borders (+1 dert to boundaries)
             ext_dert__.append(dert[y0e:yne, x0e:xne])
     ext_dert__ = tuple(ext_dert__)  # change list to tuple
 
-    # extended mask
-    ext_mask = np.pad(blob.mask,
-                      ((y0 - y0e, yne - yn),
-                       (x0 - x0e, xne - xn)),
-                      constant_values=True, mode='constant')
+    # extended mask__
+    ext_mask__ = np.pad(blob.mask__,
+                        ((y0 - y0e, yne - yn),
+                         (x0 - x0e, xne - xn)),
+                        constant_values=True, mode='constant')
 
-    return ext_dert__, ext_mask
+    return ext_dert__, ext_mask__
 
 
 def accum_blob_Dert(blob, dert__, y, x):
@@ -182,9 +172,10 @@ def accum_blob_Dert(blob, dert__, y, x):
 
     if len(dert__) > 5:  # past comp_a fork
 
-        blob.Dyy += dert__[5][0][y, x]
-        blob.Dyx += dert__[5][1][y, x]
-        blob.Dxy += dert__[6][0][y, x]
-        blob.Dxx += dert__[6][1][y, x]
-        blob.Ga += dert__[7][y, x]
-        blob.Ma += dert__[8][y, x]
+        blob.Dyy += dert__[5][y, x]
+        blob.Dyx += dert__[6][y, x]
+        blob.Dxy += dert__[7][y, x]
+        blob.Dxx += dert__[8][y, x]
+        blob.Ga += dert__[9][y, x]
+        blob.Ma += dert__[10][y, x]
+

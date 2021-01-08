@@ -1,5 +1,5 @@
 """
-Cross-comparison of pixels or gradients, in 2x2 or 3x3 kernels
+Cross-comparison of pixels 3x3 kernels or gradient angles in 2x2 kernels
 """
 
 import numpy as np
@@ -20,7 +20,7 @@ YCOEFs = np.array([-47, -162, -47, 0, 47, 162, 47, 0])
 XCOEFs = np.array([-47, 0, 47, 162, 47, 0, -47, -162])
 '''
 
-def comp_r(dert__, ave, root_fia, mask=None):
+def comp_r(dert__, ave, root_fia, mask__=None):
     '''
     Cross-comparison of input param (dert[0]) over rng passed from intra_blob.
     This fork is selective for blobs with below-average gradient,
@@ -40,6 +40,7 @@ def comp_r(dert__, ave, root_fia, mask=None):
 
     '''
     sparse aligned i__center and i__rim arrays:
+    rotate in first call only: same orientation as from frame_blobs?
     '''
     i__center = i__[1:-1:2, 1:-1:2]  # also assignment to new_dert__[0]
     i__topleft = i__[:-2:2, :-2:2]
@@ -55,19 +56,19 @@ def comp_r(dert__, ave, root_fia, mask=None):
     to avoid extreme blob shrinking and loss of info in other derts of partially masked kernels
     unmasked derts were computed due to extend_dert() in intra_blob   
     '''
-    if mask is not None:
-        majority_mask = ( mask[1:-1:2, 1:-1:2].astype(int)
-                        + mask[:-2:2, :-2:2].astype(int)
-                        + mask[:-2:2, 1:-1: 2].astype(int)
-                        + mask[:-2:2, 2::2].astype(int)
-                        + mask[1:-1:2, 2::2].astype(int)
-                        + mask[2::2, 2::2].astype(int)
-                        + mask[2::2, 1:-1:2].astype(int)
-                        + mask[2::2, :-2:2].astype(int)
-                        + mask[1:-1:2, :-2:2].astype(int)
-                        ) > 1
+    if mask__ is not None:
+        majority_mask__ = ( mask__[1:-1:2, 1:-1:2].astype(int)
+                          + mask__[:-2:2, :-2:2].astype(int)
+                          + mask__[:-2:2, 1:-1: 2].astype(int)
+                          + mask__[:-2:2, 2::2].astype(int)
+                          + mask__[1:-1:2, 2::2].astype(int)
+                          + mask__[2::2, 2::2].astype(int)
+                          + mask__[2::2, 1:-1:2].astype(int)
+                          + mask__[2::2, :-2:2].astype(int)
+                          + mask__[1:-1:2, :-2:2].astype(int)
+                          ) > 1
     else:
-        majority_mask = None  # returned at the end of function
+        majority_mask__ = None  # returned at the end of function
 
     if root_fia:  # initialize derivatives:
         dy__ = np.zeros_like(i__center)  # sparse to align with i__center
@@ -100,53 +101,58 @@ def comp_r(dert__, ave, root_fia, mask=None):
     '''
     inverse match = SAD, direction-invariant and more precise measure of variation than g
     (all diagonal derivatives can be imported from prior 2x2 comp)
+    ave SAD = ave g * 1.41:
     '''
-    m__ += ave - ( abs(i__center - i__topleft)
-                 + abs(i__center - i__top)
-                 + abs(i__center - i__topright)
-                 + abs(i__center - i__right)
-                 + abs(i__center - i__bottomright)
-                 + abs(i__center - i__bottom)
-                 + abs(i__center - i__bottomleft)
-                 + abs(i__center - i__left)
-                 )
+    m__ += int(ave * 1.41) - ( abs(i__center - i__topleft)
+                             + abs(i__center - i__top)
+                             + abs(i__center - i__topright)
+                             + abs(i__center - i__right)
+                             + abs(i__center - i__bottomright)
+                             + abs(i__center - i__bottom)
+                             + abs(i__center - i__bottomleft)
+                             + abs(i__center - i__left)
+                             )
 
-    return (i__center, dy__, dx__, g__, m__), majority_mask
+    return (i__center, dy__, dx__, g__, m__), majority_mask__
 
 
-def comp_a(dert__, ave, mask=None):  # cross-comp of angle in 2x2 kernels
+def comp_a(dert__, ave, mask__=None):  # cross-comp of angle in 2x2 kernels
 
-    if mask is not None:
-        majority_mask = (mask[:-1, :-1].astype(int) +
-                         mask[:-1, 1:].astype(int) +
-                         mask[1:, 1:].astype(int) +
-                         mask[1:, :-1].astype(int)
-                         ) > 1
+    if mask__ is not None:
+        majority_mask__ = (mask__[:-1, :-1].astype(int) +
+                           mask__[:-1, 1:].astype(int) +
+                           mask__[1:, 1:].astype(int) +
+                           mask__[1:, :-1].astype(int)
+                           ) > 1
     else:
-        majority_mask = None
+        majority_mask__ = None
 
     i__, dy__, dx__, g__, m__ = dert__[:5]  # day__,dax__,ga__,ma__ are recomputed
-    g__[np.where(g__ == 0)] = 1  # to avoid / 0
-    a__ = [dy__, dx__] / (g__ + ave)  # angle, restore g to abs, similar to calc_a
 
-    # each shifted a in 2x2 kernel
-    a__topleft = a__[:, :-1, :-1]
-    a__topright = a__[:, :-1, 1:]
-    a__botright = a__[:, 1:, 1:]
-    a__botleft = a__[:, 1:, :-1]
+    a__ = [dy__, dx__] / (g__ + ave + 0.001)  # + ave to restore abs g, + .001 to avoid / 0
+    # use rot_gy__ and rot_gx__
 
-    # diagonal angle differences:
-    sin_da0__, cos_da0__ = angle_diff(a__topleft, a__botright)
-    sin_da1__, cos_da1__ = angle_diff(a__topright, a__botleft)
+    # each shifted a in 2x2 kernel, rotated 45 degrees counter-clockwise:
+    # g and m are rotation invariant, just more accurate if rot_gy__ and rot_gx__
 
-    ma__ = np.hypot(sin_da0__ + 1, cos_da0__ + 1) \
-         + np.hypot(sin_da1__ + 1, cos_da1__ + 1)
-    # ma = inverse angle match = SAD: covert sin and cos da to 0->2 range
+    a__left   = a__[:, :-1, :-1]  # was topleft
+    a__top    = a__[:, :-1, 1:]   # was topright
+    a__right  = a__[:, 1:, 1:]    # was botright
+    a__bottom = a__[:, 1:, :-1]   # was botleft
+
+    # kernel is twice rotated, thus angle differences orthogonal:
+    sin_da0__, cos_da0__ = angle_diff(a__right, a__left)
+    sin_da1__, cos_da1__ = angle_diff(a__bottom, a__top)
+
+    ma__ = 2 / (cos_da0__ + 1.001) + (cos_da1__ + 1.001)  # +1 to convert to all positives, +.001 to avoid / 0
+    # match of angle = inverse deviation rate of SAD of angles from ave ma: (2 + 2) / 2
 
     day__ = [-sin_da0__ - sin_da1__, cos_da0__ + cos_da1__]
+    # needs to be reviewed for the effects of rotation, currently used for ga only?
     # angle change in y, sines are sign-reversed because da0 and da1 are top-down, no reversal in cosines
 
     dax__ = [-sin_da0__ + sin_da1__, cos_da0__ + cos_da1__]
+    # needs to be reviewed for the effects of rotation, currently used for ga only?
     # angle change in x, positive sign is right-to-left, so only sin_da0__ is sign-reversed
     '''
     sin(-θ) = -sin(θ), cos(-θ) = cos(θ): 
@@ -161,10 +167,10 @@ def comp_a(dert__, ave, mask=None):  # cross-comp of angle in 2x2 kernels
     i__ = i__[:-1, :-1]  # for summation in Dert
     g__ = g__[:-1, :-1]  # for summation in Dert
     m__ = m__[:-1, :-1]
-    dy__ = dy__[:-1, :-1]  # passed on as idy
-    dx__ = dx__[:-1, :-1]  # passed on as idx
+    dy__ = dy__[:-1, :-1]  # passed on as idy, not rotated
+    dx__ = dx__[:-1, :-1]  # passed on as idx, not rotated
 
-    return (i__, dy__, dx__, g__, m__, day__, dax__, ga__, ma__), majority_mask
+    return (i__, dy__, dx__, g__, m__, day__, dax__, ga__, ma__), majority_mask__
 
 
 # -----------------------------------------------------------------------------
