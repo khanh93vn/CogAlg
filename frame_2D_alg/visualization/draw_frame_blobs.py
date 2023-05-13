@@ -53,7 +53,7 @@ def visualize_blobs(frame, layer='r'):
         blob_id=None, img_slice=None, blob_cls=None,
         layers_stack=[(frame, layer)],
         # flags
-        show_gradient=True, quiver=None,
+        show_gradient=False, quiver=None,
     )
 
     fig, ax = plt.subplots()
