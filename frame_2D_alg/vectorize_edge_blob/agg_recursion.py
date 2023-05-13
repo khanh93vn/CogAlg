@@ -1,8 +1,3 @@
-
-import numpy as np
-from copy import deepcopy, copy
-from class_cluster import ClusterStructure
-from comp_slice import ave_sub, ave_nsub, ave_agg, ave_dI, ave_M, ave_Ma, ave_daxis, ave_dangle, ave_daangle, ave_G, ave_Ga, ave_L, ave_mval, ave_dval, CQ, comp_angle, comp_aangle, comp_par
 '''
 Blob edges may be represented by higher-composition patterns, etc., if top param-layer match,
 in combination with spliced lower-composition patterns, etc, if only lower param-layers match.
@@ -29,6 +24,16 @@ Fork selection should be per var or co-derived der layer or agg level.
 There are concepts that include same matching vars: size, density, color, stability, etc, but in different combinations.
 Weak value vars are combined into higher var, so derivation fork can be selected on different levels of param composition.
 '''
+
+import numpy as np
+
+from copy import deepcopy, copy
+from class_cluster import ClusterStructure
+
+from .filters import ave_sub, ave_nsub, ave_agg, med_decay
+from .classes import  CQ
+from .comp_slice import comp_angle, comp_aangle, comp_par
+
 # aves defined for rdn+1:
 aveG = 6  # fixed costs per G
 aveGm = 5
@@ -40,10 +45,6 @@ ave_ext = 5  # to eval comp_derH
 ave_len = 3
 ave_distance = 5
 ave_sparsity = 2
-med_decay = .5  # decay of induction per med layer
-
-pnames = ["I", "M", "Ma", "axis", "angle", "aangle","G", "Ga", "L"]
-aves = [ave_dI, ave_M, ave_Ma, ave_daxis, ave_dangle, ave_daangle, ave_G, ave_Ga, ave_L, ave_mval, ave_dval]
 
 class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
     ''' ext / agg.sub.derH:

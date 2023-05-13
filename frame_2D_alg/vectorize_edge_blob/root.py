@@ -27,26 +27,14 @@ As we add higher dimensions (3D and time), this dimensionality reduction is done
 '''
 import sys
 import numpy as np
-from itertools import zip_longest
-from copy import copy
 
-from .classes import CQ, Cptuple, CP, CderP, CPP
-from .filters import (
-    aves, vaves, PP_vars, PP_aves,
-    ave_inv, ave, ave_g, ave_ga,
-    flip_ave, flip_ave_FPP,
-    div_ave,
-    ave_rmP, ave_ortho, aveB, ave_dI, ave_M, ave_Ma, ave_G, ave_Ga, ave_L,
-    ave_x, ave_dx, ave_dy, ave_daxis, ave_dangle, ave_daangle,
-    ave_mval, ave_mPP, ave_dPP, ave_splice,
-    ave_nsub, ave_sub, ave_agg, ave_overlap, ave_rotate,
-    med_decay,
-)
-from .comp_slice import comp_slice
+from .classes import Cptuple, CP
+from .filters import ave, ave_g, ave_ga, ave_rotate
+from .comp_slice import comp_slice, comp_angle
 
 def vectorize_root(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
 
-    slice_blob(blob, verbose=False)  # form 2D array of Ps: horizontal blob slices in dert__
+    slice_blob(blob, verbose=verbose)  # form 2D array of Ps: horizontal blob slices in dert__
     rotate_P_(blob)  # reform Ps around centers along G, sides may overlap
     comp_slice(blob, verbose=verbose)  # scan rows top-down, comp y-adjacent, x-overlapping Ps to form derPs
 

@@ -2,10 +2,10 @@
 Agg_recursion eval and PP->graph conversion
 '''
 
-from comp_slice import PP_aves, pnames, ave_agg, ave_nsub
-from comp_slice import Cptuple, CPP, CQ
-from comp_slice import sum_derH
-from agg_recursion import Cgraph, agg_recursion, op_parH
+from .filters import PP_aves, PP_vars, ave_agg, ave_nsub
+from .classes import Cptuple, CPP, CQ
+from .comp_slice import sum_derH
+from .agg_recursion import Cgraph, agg_recursion, op_parH
 from copy import copy, deepcopy
 
 # move here temporary, for debug purpose

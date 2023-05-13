@@ -1,17 +1,11 @@
-from .classes import CQ, Cptuple, CP, CderP, CPP
-from .filters import (
-    aves, vaves, PP_vars, PP_aves,
-    ave_inv, ave, ave_g, ave_ga,
-    flip_ave, flip_ave_FPP,
-    div_ave,
-    ave_rmP, ave_ortho, aveB, ave_dI, ave_M, ave_Ma, ave_G, ave_Ga, ave_L,
-    ave_x, ave_dx, ave_dy, ave_daxis, ave_dangle, ave_daangle,
-    ave_mval, ave_mPP, ave_dPP, ave_splice,
-    ave_nsub, ave_sub, ave_agg, ave_overlap, ave_rotate,
-    med_decay,
-)
-from .sub_recursion import sub_recursion_eval, copy
-from .agg_convert import agg_recursion_eval
+import numpy as np
+from copy import copy
+from itertools import zip_longest
+from .classes import CderP, CPP
+from .filters import aves, vaves, ave, aveB, ave_dangle, ave_daangle, PP_vars, med_decay
+# Need to deal with circular imports with these two modules
+# from .sub_recursion import sub_recursion_eval, copy
+# from .agg_convert import agg_recursion_eval
 
 
 def comp_slice(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
@@ -38,7 +32,8 @@ def comp_slice(blob, verbose=False):  # always angle blob, composite dert core p
     # re comp, cluster:
     for i, PP_ in enumerate([PPm_, PPd_]):  # derH, fds per PP
         if sum([PP.valt[i] for PP in PP_]) > ave * sum([PP.rdnt[i] for PP in PP_]):
-            sub_recursion_eval(blob, PP_, fd=i)  # intra PP
+            pass
+            # sub_recursion_eval(blob, PP_, fd=i)  # intra PP
             # agg_recursion_eval(blob, copy(PP_))  # cross PP, Cgraph conversion doesn't replace PPs?
 
 
@@ -199,7 +194,7 @@ def sum_tuple(Ptuple,ptuple, fneg=0):  # mtuple or dtuple
 
 def sum_ptuple(Ptuple, ptuple, fneg=0):
 
-    for pname, ave in zip(pnames, aves):
+    for pname, ave in zip(PP_vars, aves):
         Par = getattr(Ptuple, pname); par = getattr(ptuple, pname)
 
         if isinstance(Par, list):  # angle or aangle
@@ -251,7 +246,7 @@ def comp_ptuple(_ptuple, ptuple):
     mtuple, dtuple = [],[]  # in the order of ("I", "M", "Ma", "axis", "angle", "aangle","G", "Ga", "x", "L")
     rn = _ptuple.n / ptuple.n  # normalize param as param*rn for n-invariant ratio: _param / param*rn = (_param/_n) / (param/n)
 
-    for pname, ave in zip(pnames, aves):
+    for pname, ave in zip(PP_vars, aves):
         _par = getattr(_ptuple, pname)
         par = getattr(ptuple, pname)
         if pname=="aangle": m,d = comp_aangle(_par, par)

@@ -1,9 +1,8 @@
 from copy import copy, deepcopy
-import numpy as np
 
-from frame_2D_alg.vectorize_edge_blob.comp_slice import PP_aves, ave, ave_nsub, ave_g, ave_ga
-from frame_2D_alg.vectorize_edge_blob.comp_slice import CP, CQ, Cptuple, CderP, CPP
-from frame_2D_alg.vectorize_edge_blob.comp_slice import comp_P, comp_angle, form_PP_t
+from .filters import PP_aves, ave, ave_nsub
+from .classes import CP, CQ, CderP, CPP
+from .comp_slice import comp_P, form_PP_t
 
 ave_rotate = 10
 ave_P = 10
