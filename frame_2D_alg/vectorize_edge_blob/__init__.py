@@ -1,1 +1,1 @@
-from .root import vectorize_root
+from .root import *
