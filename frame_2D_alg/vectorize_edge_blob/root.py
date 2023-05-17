@@ -39,15 +39,17 @@ As we add higher dimensions (3D and time), this dimensionality reduction is done
 def vectorize_root(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
 
     slice_blob(blob, verbose=verbose)  # form 2D array of Ps: horizontal blob slices in dert__
-    # default?
+    # if Daxis?:
     rotate_P_(blob)  # re-form Ps around centers along P.G, P sides may overlap
-    # conditional?
+    # if sum P.M + P.Ma?:
     comp_slice(blob, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
     # re compare PPs, cluster in graphs:
-    # for fd, PP_ in enumerate([blob.PPm_, blob.PPd_]):  # derH, fds per PP
-    #     if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
-    #         sub_recursion_eval(blob, PP_, fd=fd)  # intra PP
-    #         agg_recursion_eval(blob, copy(PP_), ifd=fd)  # cross PP, Cgraph conversion doesn't replace PPs?
+    for fd, PP_ in enumerate([blob.PPm_, blob.PPd_]):
+        # extend derH, fds / PP, no feedback: no derH, valt in blob?
+        if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
+            sub_recursion_eval(blob, PP_, fd=fd)  # intra PP,
+        if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):  # adjusted by sub+, ave*agg_coef?
+            agg_recursion_eval(blob, copy(PP_), fd=fd)  # comp sub_PPs, form intermediate PPs
 
 '''
 this is too involved for initial Ps, most of that is only needed for final rotated Ps?
@@ -59,13 +61,13 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
     dert__ = [zip(*dert_) for dert_ in dert__]  # convert 1D array of 10-tuple rows into 2D array of 10-tuples per blob
     P__ = []
     height, width = mask__.shape
+    if verbose: print("Converting to image...")
 
     for y, (dert_, mask_) in enumerate(zip(dert__, mask__)):  # unpack lines, each may have multiple slices -> Ps:
         if verbose: print(f"\rConverting to image... Processing line {y + 1}/{height}", end=""); sys.stdout.flush()
         P_ = []
-        _mask = True  # mask the cell before 1st dert
+        _mask = True  # mask -1st dert
         for x, (dert, mask) in enumerate(zip(dert_, mask_)):
-
             g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = dert[1:]  # skip i
             if not mask:  # masks: if 0,_1: P initialization, if 0,_0: P accumulation, if 1,_0: P termination
                 if _mask:  # ini P params with first unmasked dert
@@ -90,6 +92,7 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
             L = len(Pdert_); params.L = L; params.x = x-L/2  # params.valt=[params.M+params.Ma,params.G+params.Ga]
             P_ += [CP(ptuple=params, x0=x-(L-1), y0=y, dert_=Pdert_)]
         P__ += [P_]
+
     if verbose: print("\r", end="")
     blob.P__ = P__
     return P__
@@ -122,8 +125,7 @@ def rotate_P(P, dert__t, mask__, yn, xn):
     rx=xcenter-dx; ry=ycenter-dy; rdert=1  # to start while:
     while rdert and rx>=0 and ry>=0 and np.ceil(ry)<yn:
         rdert = form_rdert(rx,ry, dert__t, mask__)
-        # terminate the sequence if dert is outside the blob (masked or out of bound)
-        if rdert is None: break
+        if rdert is None: break  # dert is not in blob: masked or out of bound
         rdert_.insert(0, rdert)
         rx += dx; ry += dy  # next rx, ry
     P.x0 = rx+dx; P.y0 = ry+dy  # revert to leftmost
@@ -131,8 +133,7 @@ def rotate_P(P, dert__t, mask__, yn, xn):
     rx=xcenter+dx; ry=ycenter+dy; rdert=1  # to start while:
     while rdert and ry>=0 and np.ceil(rx)<xn and np.ceil(ry)<yn:
         rdert = form_rdert(rx,ry, dert__t, mask__)
-        # terminate the sequence if dert is outside the blob (masked or out of bound)
-        if rdert is None: break
+        if rdert is None: break  # dert is not in blob: masked or out of bound
         rdert_ += [rdert]
         rx += dx; ry += dy  # next rx,ry
     # form rP:
@@ -159,8 +160,7 @@ def form_rdert(rx,ry, dert__t, mask__):
     y1 = int(np.floor(ry)); dy1 = abs(ry - y1)
     y2 = int(np.ceil(ry));  dy2 = abs(ry - y2)
 
-    try:
-        # scale all dert params in proportion to inverted distance from rdert, sum(distances) = 1?
+    try:  # scale all dert params in proportion to inverted distance from rdert, sum(distances) = 1?
         # approximation, square of rpixel is rotated, won't fully match not-rotated derts
         mask = mask__[y1, x1] * (1 - np.hypot(dx1, dy1)) \
              + mask__[y2, x1] * (1 - np.hypot(dx1, dy2)) \
@@ -172,7 +172,7 @@ def form_rdert(rx,ry, dert__t, mask__):
         mask = 1
     if mask:
         return None
-    # if rdert is still inside the blob, return it
+    # return rdert if inside the blob
     ptuple = []
     for dert__ in dert__t:  # 10 params in dert: i, g, ga, ri, dy, dx, day0, dax0, day1, dax1
         param = dert__[y1, x1] * (1 - np.hypot(dx1, dy1)) \
