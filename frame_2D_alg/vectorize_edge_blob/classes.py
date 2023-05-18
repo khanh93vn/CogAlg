@@ -72,13 +72,11 @@ lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays:
 class CPP(CderP):
 
     ptuple = Cptuple  # summed P__ ptuples, = 0th derLay
-    derH = list  # 1vertuple / 1layer in comp_slice, extend in der+
-    # pack in rngH?
-    aggH = list  # nested hierarchy from agg+, if any
-    fds = list  # fd per derLay or H if HH
+    derH = list  # 1vert)1lay in comp_slice, extend in der+, extend to rngH in feedback, no comp rngH till agg+
+    fds = list  # fd per derLay
     valt = lambda: [0,0]  # link Vals
     rdnt = lambda: [1,1]  # link Rdns
-    Rdn = int  # for accumulation only? or recursion count?
+    Rdn = int  # for accumulation or separate recursion count?
     rng = lambda: 1
     box = lambda: [0,0,0,0]  # y0,yn, x0,xn
     fterm = int  # sub-comp was terminated
@@ -87,7 +85,7 @@ class CPP(CderP):
     P__ = list  # 2D array of nodes: Ps or sub-PPs
     link_ = list  # all links summed from Ps
     link_t = lambda: [[],[]]  # +ve rlink_, dlink_
-    roott = lambda: [None,None]  # PPPm, PPPd that contain this PP
+    root = NoneType  # PPPm|PPPd containing this PP
     cPP_ = list  # rdn reps in other PPPs, to eval and remove?
 
 
