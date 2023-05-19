@@ -1,4 +1,4 @@
-from frame_2D_alg.class_cluster import ClusterStructure, NoneType
+from class_cluster import ClusterStructure, NoneType
 
 class CQ(ClusterStructure):  # generic sequence or hierarchy
 
