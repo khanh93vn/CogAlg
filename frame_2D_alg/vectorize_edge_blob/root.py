@@ -83,13 +83,13 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
                 params.Ga = (params.aangle[1]+1) + (params.aangle[3]+1)  # Cos_da0, Cos_da1
                 L = len(Pdert_)
                 params.L = L; params.x = x-L/2  # params.valt = [params.M+params.Ma, params.G+params.Ga]
-                P_+=[CP(ptuple=params, x0=x-(L-1), y0=y, dert_=Pdert_)]
+                P_+=[CP(ptuple=params, x0=x-L, y0=y, dert_=Pdert_)]
             _mask = mask
         # pack last P, same as above:
         if not _mask:
             params.G = np.hypot(*params.angle); params.Ga = (params.aangle[1]+1) + (params.aangle[3]+1)
             L = len(Pdert_); params.L = L; params.x = x-L/2  # params.valt=[params.M+params.Ma,params.G+params.Ga]
-            P_ += [CP(ptuple=params, x0=x-(L-1), y0=y, dert_=Pdert_)]
+            P_ += [CP(ptuple=params, x0=x-L, y0=y, dert_=Pdert_)]
         P__ += [P_]
 
     if verbose: print("\r", end="")
@@ -114,23 +114,29 @@ def rotate_P_(blob):  # rotate each P to align it with direction of P gradient
 def rotate_P(P, dert__t, mask__, yn, xn):
 
     L = len(P.dert_)
-    rdert_ = [P.dert_[int(L/2)]]  # init rotated dert_ with old central dert
+    L2 = L // 2        # index of central dert
+    rdert_ = [P.dert_[L2]]  # init rotated dert_ with old central dert
+    # Center of horizontal P
+    ycenter = P.y0
+    xcenter = P.x0 + L2
 
-    ycenter = int(P.y0 + P.ptuple.axis[0]/2)  # can be negative
-    xcenter = int(P.x0 + abs(P.ptuple.axis[1]/2))  # always positive
-    Dy, Dx = P.ptuple.angle
-    dy = Dy/L; dx = abs(Dx/L)  # hypot(dy,dx)=1: each dx,dy adds one rotated dert|pixel to rdert_
+    dy = P.ptuple.angle[0] / P.ptuple.G
+    dx = P.ptuple.angle[1] / P.ptuple.G
+    if dx < 0:              # dx always >= 0, dy can be < 0
+        dy, dx = -dy, -dx
+    assert abs(dy*dy + dx*dx - 1) < 1e-5    # hypot(dy,dx)=1: each dx,dy adds one rotated dert|pixel to rdert_
+    axis = (dy, dx)  # axis of rotation
     # scan left:
-    rx=xcenter-dx; ry=ycenter-dy; rdert=1  # to start while:
-    while rdert and rx>=0 and ry>=0 and np.ceil(ry)<yn:
+    rx=xcenter; ry=ycenter; rdert=1  # to start while:
+    while True:
         rdert = form_rdert(rx,ry, dert__t, mask__)
         if rdert is None: break  # dert is not in blob: masked or out of bound
-        rdert_.insert(0, rdert)
-        rx += dx; ry += dy  # next rx, ry
-    P.x0 = rx+dx; P.y0 = ry+dy  # revert to leftmost
+        rdert_ = [rdert] + rdert_   # add to left
+        rx -= dx; ry -= dy  # next rx, ry
+    P.x0 = rx; P.y0 = ry
     # scan right:
     rx=xcenter+dx; ry=ycenter+dy; rdert=1  # to start while:
-    while rdert and ry>=0 and np.ceil(rx)<xn and np.ceil(ry)<yn:
+    while True:
         rdert = form_rdert(rx,ry, dert__t, mask__)
         if rdert is None: break  # dert is not in blob: masked or out of bound
         rdert_ += [rdert]
@@ -145,13 +151,13 @@ def rotate_P(P, dert__t, mask__, yn, xn):
         ndert_ += [rdert]
     # re-form gradients:
     G = np.hypot(Dy,Dx);  Ga = (Cos_da0 + 1) + (Cos_da1 + 1)
-    ptuple = Cptuple(I=I, M=M, G=G, Ma=Ma, Ga=Ga, angle=(Dy,Dx), aangle=(Sin_da0, Cos_da0, Sin_da1, Cos_da1))
+    ptuple = Cptuple(axis=axis, I=I, M=M, G=G, Ma=Ma, Ga=Ga, angle=(Dy,Dx), aangle=(Sin_da0, Cos_da0, Sin_da1, Cos_da1))
     # add n,val,L,x,axis?
     # replace P:
     P.ptuple=ptuple; P.dert_=ndert_
 
 def form_rdert(rx,ry, dert__t, mask__):
-
+    Y, X = mask__.shape
     # coord, distance of four int-coord derts, overlaid by float-coord rdert in dert__, int for indexing
     # always in dert__ for intermediate float rx,ry:
     x1 = int(np.floor(rx)); dx1 = abs(rx - x1)
@@ -159,25 +165,34 @@ def form_rdert(rx,ry, dert__t, mask__):
     y1 = int(np.floor(ry)); dy1 = abs(ry - y1)
     y2 = int(np.ceil(ry));  dy2 = abs(ry - y2)
 
-    try:  # scale all dert params in proportion to inverted distance from rdert, sum(distances) = 1?
-        # approximation, square of rpixel is rotated, won't fully match not-rotated derts
-        mask = mask__[y1, x1] * (1 - np.hypot(dx1, dy1)) \
-             + mask__[y2, x1] * (1 - np.hypot(dx1, dy2)) \
-             + mask__[y1, x2] * (1 - np.hypot(dx2, dy1)) \
-             + mask__[y2, x2] * (1 - np.hypot(dx2, dy2))
-        mask = round(mask)  # summed mask is fractional, round to 1|0
-    except IndexError:
-        # out of dert__ => out of blob. Treat as if masked
-        mask = 1
-    if mask:
+    if (x1 < 0 or x1 >= X or x2 < 0 or x2 >= X) or (y1 < 0 or y1 >= Y or y2 < 0 or y2 >= Y):
+        return None
+
+    # scale all dert params in proportion to inverted distance from rdert, sum(distances) = 1?
+    # approximation, square of rpixel is rotated, won't fully match not-rotated derts
+    k1 = 1 - np.hypot(dx1, dy1)
+    k2 = 1 - np.hypot(dx1, dy2)
+    k3 = 1 - np.hypot(dx2, dy1)
+    k4 = 1 - np.hypot(dx2, dy2)
+    summed_k = k1 + k2 + k3 + k4
+
+    mask = (
+        mask__[y1, x1] * k1 +
+        mask__[y2, x1] * k2 +
+        mask__[y1, x2] * k3 +
+        mask__[y2, x2] * k4) / summed_k
+
+    if round(mask):  # summed mask is fractional, round to 1|0
         return None
     # return rdert if inside the blob
     ptuple = []
     for dert__ in dert__t:  # 10 params in dert: i, g, ga, ri, dy, dx, day0, dax0, day1, dax1
-        param = dert__[y1, x1] * (1 - np.hypot(dx1, dy1)) \
-              + dert__[y2, x1] * (1 - np.hypot(dx1, dy2)) \
-              + dert__[y1, x2] * (1 - np.hypot(dx2, dy1)) \
-              + dert__[y2, x2] * (1 - np.hypot(dx2, dy2))
+        param = (
+            dert__[y1, x1] * k1 +
+            dert__[y2, x1] * k2 +
+            dert__[y1, x2] * k3 +
+            dert__[y2, x2] * k4) / summed_k
+
         ptuple += [param]
     return ptuple
 

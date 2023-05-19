@@ -18,7 +18,7 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of compared params in P, 
     I = int  # [m,d] in higher layers:
     M = int
     Ma = float
-    axis = lambda: [1, 0]  # ini dy=1,dx=0, old angle after rotation
+    axis = lambda: [0, 1]  # ini dy=0,dx=1, initial axis of slices
     angle = lambda: [0, 0]  # in latuple only, replaced by float in vertuple
     aangle = lambda: [0, 0, 0, 0]
     G = float  # for comparison, not summation:
