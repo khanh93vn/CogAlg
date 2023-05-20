@@ -117,12 +117,12 @@ def rotate_P(P, dert__t, mask__, yn, xn):
     L = len(P.dert_)
     L2 = L // 2
     rdert_ = [P.dert_[L2]]  # init rotated dert_ with old central dert
+    ycenter = P.y0 + L2 * P.axis[0]   # P center coords
+    xcenter = P.x0 + L2 * P.axis[1]
     sin = P.ptuple.angle[0] / P.ptuple.G
     cos = P.ptuple.angle[1] / P.ptuple.G
     if cos < 0: sin,cos = -sin,-cos # dx always >= 0, dy can be < 0
     assert abs(sin**2 + cos**2 - 1) < 1e-5  # hypot(dy,dx)=1: each dx,dy adds one rotated dert|pixel to rdert_
-    ycenter = P.y0 + L2 * sin   # P center coords
-    xcenter = P.x0 + L2 * cos
     P.axis = (sin,cos)  # last P angle
     # scan left:
     rx=xcenter; ry=ycenter
