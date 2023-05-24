@@ -103,22 +103,23 @@ def rotate_P_(blob):  # rotate each P to align it with direction of P gradient
 
     P__, dert__, mask__ = blob.P__, blob.dert__, blob.mask__
 
-    yn, xn = dert__[0].shape[:2]
     for P_ in P__:
         for P in P_:
             daxis = P.ptuple.angle[0] / P.ptuple.G  # dy: deviation from horizontal axis
             # recursive reform P along new G angle in blob.dert__:
             # P.daxis for future reval?
-            while P.ptuple.G * abs(daxis) > ave_rotate:
-                rotate_P(P, dert__, mask__)
+            n_rotations = 0
+            while P.ptuple.G * abs(daxis) > ave_rotate and n_rotations < 50: # rotate until deviation is small enough or too many rotations have been done
+                if not rotate_P(P, dert__, mask__): break   # terminate if center of P invalid
                 maxis, daxis = comp_angle(P.ptuple.angle, P.axis)
+                n_rotations += 1
 
 
 def rotate_P(P, dert__t, mask__):
 
     sin = P.ptuple.angle[0] / P.ptuple.G
     cos = P.ptuple.angle[1] / P.ptuple.G
-    P.axis = (sin, cos)  # last P angle
+    new_axis = get_new_axis(*P.axis, sin, cos, 0.2) # rotate at rate 20% of angle difference
     if cos < 0: sin,cos = -sin,-cos  # dx always >= 0, dy can be < 0
     # assert abs(sin**2 + cos**2 - 1) < 1e-5  # hypot(dy,dx)=1: each dx,dy adds one rotated dert|pixel to rdert_
     y0,yn,x0,xn = P.box
@@ -141,6 +142,8 @@ def rotate_P(P, dert__t, mask__):
         rx+=cos; ry+=sin  # next rx,ry
     P.box = [min(yleft,ry), max(yleft,ry), x0, rx]  # P may go up-right or down-right
     # form rP:
+    if not rdert_: return False # center of P is invalid
+    P.axis = new_axis
     rdert = rdert_[0]  # initialization:
     G, Ga, I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1 = rdert; M=ave_g-G; Ma=ave_ga-Ga; dert_=[rdert]
     # accumulation:
@@ -153,6 +156,8 @@ def rotate_P(P, dert__t, mask__):
     ptuple = Cptuple(I=I, M=M, G=G, Ma=Ma, Ga=Ga, angle=(Dy,Dx), aangle=(Sin_da0, Cos_da0, Sin_da1, Cos_da1))
     # replace P:
     P.ptuple = ptuple; P.dert_ = dert_
+
+    return True
 
 
 def form_rdert(rx,ry, dert__t, mask__):
@@ -191,6 +196,16 @@ def form_rdert(rx,ry, dert__t, mask__):
              for dert__ in dert__t[1:]]  # skip i in dert = i, g, ga, ri, dy, dx, day0, dax0, day1, dax1
     return ptuple
 
+
+def get_new_axis(s1, c1, s2, c2, rate):
+    if s1*s2 + c1*c2 < 0:  # angle difference between axes is > 90 deg
+        s2 = -s2; c2 = -c2  # flip target axis2
+
+    u = s1*(1 - rate) + s2*rate # new axis is weighted sum of axes
+    v = c1*(1 - rate) + c2*rate
+    norm = np.hypot(u, v)
+
+    return (u/norm, v/norm)  # normalized new axis
 
 # slice_blob with axis-orthogonal Ps, but P centers may overlap or be missed?
 def slice_blob_ortho(blob):
