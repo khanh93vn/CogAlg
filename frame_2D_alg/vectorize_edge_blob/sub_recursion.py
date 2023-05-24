@@ -5,83 +5,52 @@ from .classes import CP, CPP
 from .comp_slice import comp_P, form_PP_t, sum_vertuple, sum_layer, sum_derH
 
 
-def sub_recursion_eval(root, PP_, fd):  # fork PP_ in PP or blob, no rngH, valt,rdnt in blob?
+def sub_recursion_eval(root, PP_, fd):  # fork PP_ in PP or blob, no derH,valH,rdnH in blob
 
     term = 1
     for PP in PP_:
-        # fork val, rdn, no select per ptuple:
-        if PP.valt[fd] > PP_aves[fd] * PP.rdnt[fd] and len(PP.P__) > ave_nsub:
+        if PP.valt[fd] > PP_aves[fd] * PP.rdnt[fd] and len(PP.P__) > ave_nsub:  # no select per ptuple
             term = 0
             sub_recursion(PP, fd)  # comp_der|rng in PP -> parLayer, sub_PPs
-        else:
-            PP.derH = [PP.derH]
-    # init feedback from PP.P__ Ps:
-    if term and isinstance(root,CPP):
-        Val=0; Rdn=1; DerLay=[]  # not in root.derH
-        for PP in root.P__[fd]:
-            for P_ in PP.P__[1:]:  # no derH in top row
-                for P in P_:  # sum in root, PP was updated in sum2PP
-                    sum_layer(DerLay, P.derH[-1]); Val+=P.valt[fd]; Rdn+=P.rdnt[fd]
-        root.valt[fd]+=Val; root.rdnt[fd]+=Rdn
-        root.derH = [root.derH]  # derH-> rngH
-        if fd: root.derH[-1] += [DerLay]  # new der lay
-        else:  root.derH += [[DerLay]]  # new rng lay = derH
-        # higher feedback:
-        if isinstance(root.root, CPP):
-            root = root.root
-            root.fb_ += [[DerLay, Val, Rdn]]
-            feedback(root, fd)  # upward recursive, eval forward only?
-
-# or skip Ps, draft:
-def sub_recursion_eval(root, PP_, fd):  # fork PP_ in PP or blob, no rngH, valt,rdnt in blob?
-
-    term = 1
-    DerLay=[]; Val=0; Rdn=0  # not in root.derH
-
-    for PP in PP_:
-        # fork val, rdn, no select per ptuple:
-        if PP.valt[fd] > PP_aves[fd] * PP.rdnt[fd] and len(PP.P__) > ave_nsub:
-            term = 0
-            sub_recursion(PP, fd)  # comp_der|rng in PP -> parLayer, sub_PPs
-        else:
-            derLay=[]  # init feedback from PP.P__ Ps:
-            for P_ in PP.P__[1:]:  # no derH in top row
-                for P in P_:
-                    sum_layer(derLay, P.derH[-1])
-            PP.derH = [PP.derH]  # derH-> rngH
-            if fd: root.derH[-1] += [DerLay]  # new der lay
-            else:  root.derH += [[DerLay]]  # new rng lay = derH
-            if isinstance(root, CPP):
-                root.fb_ += [[derLay, PP.valt[fd], PP.rdnt[fd]]]  # from sum2PP
-
+        elif isinstance(root, CPP):
+            root.fd_ += [[PP.derH[-1], [fd], PP.valH[-1][fd], PP.rdnH[-1][fd]]]
+            # feed back last layer, added in sum2PP
     if term and isinstance(root, CPP):
-        feedback(root, fd)  # upward recursive, eval forward only?
+        feedback(root, fd)  # upward recursive extend root.derH, forward eval only
 
 
-def feedback(root, fd):
+def feedback(root, fd):  # append new der layers to root
 
-    DerLay=[]; Val=0; Rdn=0
-    for derlay, val, rdn in root.fb_:
-
-        sum_layer(DerLay, derlay)
-        root.valt[fd] += val; root.rdnt[fd] += rdn
-        Val += val; Rdn += rdn
-        root.derH = [root.derH]  # derH -> rngH
-        if fd: root.derH[-1] += [DerLay] # der+
-        else:  root.derH += [[DerLay]]   # rng+
-        # may also append DerH | rngH?
-    if isinstance(root, CPP):
+    Fback = root.fb_.pop()  # init with 1st fback ders: derH, fds, valH, rdnH
+    while root.fb_:
+        sum_ders(Fback, root.fb_.pop())  # sum fback in Fback, add Fback nesting if missing
+    # append Fback params to root params:
+    root.derH += Fback[0]
+    root.fds  += Fback[1]
+    root.valH += Fback[2]
+    root.rdnH += Fback[3]
+    if isinstance(root.root, CPP):
         root = root.root
-        root.fb_ += [[DerLay, Val, Rdn]]
-        if len(root.fb_) == len(root.P__[fd]):
-            # all nodes terminated, fed back to root.fb_
+        root.fb_ += [Fback]
+        if len(root.fb_) == len(root.P__[fd]):  # all nodes terminated, fed back to root.fb_
             feedback(root, fd)
     '''
-    if rng+:
-        root.derH += RngH if RngH else [DerH]  # append new rng lays or rng lay = terminated DerH?
-        RngH += [DerH]  # not sure; comp in agg+ only
-        VAL += Val; RDN += Rdn
+     PP.derH: layer) derH before feedback, indefinitely nested layer) derH) rngH... after feedback
+     fb Ders: append to root.derH, nesting is incremented in recursive feedback.
     '''
+# draft
+def sum_ders(Fback, fback):  # sum or append fb in Fb, for deeper feedback:
+
+    DerH, Fds, ValH, RdnH = Fback
+    derH, fds, valH, rdnH = fback
+    while True:
+        for Lay, Fd, Val, Rdn, lay, fd, val, rdn in zip_longest(
+            DerH, Fds, ValH, RdnH, derH, fds, valH, rdnH, fillvalue=None):  # loop bottom-up,
+            # terminate summation at 1st None or Fd!=fd?
+            # not sure:
+            if lay != None and Lay != None and Fd==fd:
+                sum_layer(Lay,lay); Val+=val; Rdn+=rdn
+            # else append copy?
 
 def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+, add layers to select sub_PPs
 
@@ -92,9 +61,9 @@ def sub_recursion(PP, fd):  # evaluate PP for rng+ and der+, add layers to selec
     PP.P__ = form_PP_t(cP__,base_rdn=PP.rdnt[fd])  # P__ = sub_PPm_, sub_PPd_
 
     for fd, sub_PP_ in enumerate(PP.P__):
-        for sub_PP in sub_PP_:
-            sub_PP.root = PP
-        sub_recursion_eval(PP, sub_PP_, fd=fd)
+        if sub_PP_:  # der+ | rng+
+            for sub_PP in sub_PP_: sub_PP.roott[fd] = PP
+            sub_recursion_eval(PP, sub_PP_, fd=fd)
         '''
         if PP.valt[fd] > ave * PP.rdnt[fd]:  # adjusted by sub+, ave*agg_coef?
             agg_recursion_eval(PP, copy(sub_PP_), fd=fd)  # comp sub_PPs, form intermediate PPs
@@ -121,7 +90,7 @@ def comp_rng(iP__, rng):  # form new Ps and links in rng+ PP.P__, switch to rng+
                     comp_P(P,__P, link_,link_m,link_d, Valt, Rdnt, DerH, fd=0)
             if Valt[0] > P_aves[0] * Rdnt[0]:
                 # add new P in rng+ PP:
-                P_ += [CP(ptuple=deepcopy(P.ptuple), derH=[DerH], dert_=copy(P.dert_), fds=copy(P.fds)+[0], x0=P.x0, y0=P.y0,
+                P_ += [CP(ptuple=deepcopy(P.ptuple), derH=[DerH], dert_=copy(P.dert_), fds=copy(P.fds)+[0], box=copy(P.box),
                       valt=Valt, rdnt=Rdnt, link_=link_, link_t=[link_m,link_d])]
         P__+= [P_]
     return P__
@@ -142,7 +111,6 @@ def comp_der(iP__):  # form new Ps and links in rng+ PP.P__, extend their link.d
             if Valt[1] > P_aves[1] * Rdnt[1]:
                 # add new P in der+ PP:
                 P_ += [CP(ptuple=deepcopy(P.ptuple), derH=DerH+[DerLay], dert_=copy(P.dert_), fds=copy(P.fds)+[1],
-                          x0=P.x0, y0=P.y0, valt=Valt, rdnt=Rdnt, rdnlink_=link_, link_t=[link_m,link_d])]
+                          box=copy(P.box), valt=Valt, rdnt=Rdnt, rdnlink_=link_, link_t=[link_m,link_d])]
         P__+= [P_]
     return P__
-

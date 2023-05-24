@@ -66,7 +66,8 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
         if verbose: print(f"\rConverting to image... Processing line {y + 1}/{height}", end=""); sys.stdout.flush()
         P_ = []
         _mask = True  # mask -1st dert
-        for x, (dert, mask) in enumerate(zip(dert_, mask_)):
+        x = 0
+        for dert, mask in zip(dert_, mask_):
             g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = dert[1:]  # skip i
             if not mask:  # masks: if 0,_1: P initialization, if 0,_0: P accumulation, if 1,_0: P termination
                 if _mask:  # ini P params with first unmasked dert
@@ -83,13 +84,14 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
                 params.Ga = (params.aangle[1]+1) + (params.aangle[3]+1)  # Cos_da0, Cos_da1
                 L = len(Pdert_)
                 params.L = L; params.x = x-L/2  # params.valt = [params.M+params.Ma, params.G+params.Ga]
-                P_+=[CP(ptuple=params, box=[y, y+1, x-L, x], dert_=Pdert_)]
+                P_+=[CP(ptuple=params, box=[y,y, x-L,x], dert_=Pdert_)]
             _mask = mask
+            x += 1
         # pack last P, same as above:
         if not _mask:
             params.G = np.hypot(*params.angle); params.Ga = (params.aangle[1]+1) + (params.aangle[3]+1)
             L = len(Pdert_); params.L = L; params.x = x-L/2  # params.valt=[params.M+params.Ma,params.G+params.Ga]
-            P_ += [CP(ptuple=params, box=[y, y+1, x-L, x], dert_=Pdert_)]
+            P_ += [CP(ptuple=params, box=[y,y, x-L,x], dert_=Pdert_)]
         P__ += [P_]
 
     if verbose: print("\r", end="")
