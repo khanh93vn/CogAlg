@@ -117,9 +117,10 @@ def rotate_P_(blob):  # rotate each P to align it with direction of P gradient
 
 def rotate_P(P, dert__t, mask__):
 
-    sin = P.ptuple.angle[0] / P.ptuple.G
-    cos = P.ptuple.angle[1] / P.ptuple.G
-    new_axis = get_new_axis(*P.axis, sin, cos, 0.2) # rotate at rate 20% of angle difference
+    sin_g = P.ptuple.angle[0] / P.ptuple.G
+    cos_g = P.ptuple.angle[1] / P.ptuple.G
+    new_axis = get_new_axis(*P.axis, sin_g, cos_g, 0.2) # rotate at rate 20% of angle difference
+    sin, cos = new_axis
     if cos < 0: sin,cos = -sin,-cos  # dx always >= 0, dy can be < 0
     # assert abs(sin**2 + cos**2 - 1) < 1e-5  # hypot(dy,dx)=1: each dx,dy adds one rotated dert|pixel to rdert_
     y0,yn,x0,xn = P.box
@@ -143,8 +144,8 @@ def rotate_P(P, dert__t, mask__):
     P.box = [min(yleft,ry), max(yleft,ry), x0, rx]  # P may go up-right or down-right
     # form rP:
     if not rdert_: return False # center of P is invalid
-    P.axis = new_axis
-    rdert = rdert_[0]  # initialization:
+    P.axis = new_axis   # update axis
+    rdert = rdert_[0]   # initialization:
     G, Ga, I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1 = rdert; M=ave_g-G; Ma=ave_ga-Ga; dert_=[rdert]
     # accumulation:
     for rdert in rdert_[1:]:
