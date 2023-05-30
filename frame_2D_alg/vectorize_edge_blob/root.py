@@ -66,8 +66,8 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
         P_ = []
         _mask = True  # mask -1st dert
         x = 0
-        for (i, *dert), mask in zip(dert_, mask_):
-            g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = dert  # skip i
+        for dert, mask in zip(dert_, mask_):
+            g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = dert[1:]  # skip i
             if not mask:  # masks: if 0,_1: P initialization, if 0,_0: P accumulation, if 1,_0: P termination
                 if _mask:  # ini P params with first unmasked dert
                     Pdert_ = [dert]
@@ -75,8 +75,7 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
                     Sin_da0, Cos_da0, Sin_da1, Cos_da1 = sin_da0, cos_da0, sin_da1, cos_da1
                 else:
                     # dert and _dert are not masked, accumulate P params:
-                    I +=ri; M+=ave_g-g; Ma+=ave_ga-ga
-                    Dy += dy; Dx += dx                  # angle
+                    I +=ri; M+=ave_g-g; Ma+=ave_ga-ga; Dy+=dy; Dx+=dx  # angle
                     Sin_da0+=sin_da0; Cos_da0+=cos_da0; Sin_da1+=sin_da1; Cos_da1+=cos_da1  # aangle
                     Pdert_ += [dert]
             elif not _mask:
@@ -85,15 +84,14 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
                 Ga = (Cos_da0 + 1) + (Cos_da1 + 1)  # Cos_da0, Cos_da1
                 L = len(Pdert_)
                 # params.valt = [params.M+params.Ma, params.G+params.Ga]
-                P_+=[CP(ptuple=[I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L],
-                        box=[y,y, x-L,x], dert_=Pdert_)]
+                P_+=[CP(ptuple=[I,M,Ma,[Dy,Dx],[Sin_da0,Cos_da0,Sin_da1,Cos_da1], G, Ga, L], box=[y,y, x-L,x-1], dert_=Pdert_)]
             _mask = mask
             x += 1
         # pack last P, same as above:
         if not _mask:
             G = np.hypot(Dy, Dx); Ga = (Cos_da0 + 1) + (Cos_da1 + 1)
-            L = len(Pdert_); # params.valt=[params.M+params.Ma,params.G+params.Ga]
-            P_ += [CP(ptuple=[I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L], box=[y,y, x-L,x], dert_=Pdert_)]
+            L = len(Pdert_) # params.valt=[params.M+params.Ma,params.G+params.Ga]
+            P_ += [CP(ptuple=[I,M,Ma,[Dy,Dx],[Sin_da0,Cos_da0,Sin_da1,Cos_da1], G, Ga, L], box=[y,y, x-L,x-1], dert_=Pdert_)]
         P__ += [P_]
 
     if verbose: print("\r", end="")
@@ -344,3 +342,25 @@ def copy_P(P, Ptype=None):  # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP 
         new_P.mlevels, new_P.dlevels = copy(mlevels), copy(dlevels)
 
     return new_P
+
+# draft
+def rotate_P_ave(blob):  # rotate each P to align it with direction of P gradient
+
+    P__, dert__, mask__ = blob.P__, blob.dert__, blob.mask__
+
+    for P_ in P__:
+        for P in P_:
+            daxis = P.ptuple.angle[0] / P.ptuple.G  # dy: deviation from horizontal axis
+            _daxis = 0
+            G = P.ptuple.G
+            while abs(daxis)*G > ave_rotate:  # recursive reform P along new G angle in blob.dert__, P.daxis for future reval?
+
+                rotate_P(P, dert__, mask__, ave_a=None)  # rescan in the direction of ave_a, if any
+                maxis, daxis = comp_angle(P.ptuple.angle, P.axis)
+                ddaxis = daxis +_daxis  # cancel-out if opposite-sign
+                # test oscillation:
+                if ddaxis*G < ave_rotate:
+                    # pseudo:
+                    rotate_P(P, dert__, mask__, ave_a=(P.ptuple.angle+P.axis)/2)  # rescan in the direction of ave_a, if any
+                    break
+
