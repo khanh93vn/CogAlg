@@ -66,18 +66,18 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
         P_ = []
         _mask = True  # mask -1st dert
         x = 0
-        for dert, mask in zip(dert_, mask_):
-            g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = dert[1:]  # skip i
+        for (i, *dert), mask in zip(dert_, mask_):
+            g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = dert
             if not mask:  # masks: if 0,_1: P initialization, if 0,_0: P accumulation, if 1,_0: P termination
                 if _mask:  # ini P params with first unmasked dert
-                    Pdert_ = [dert]
+                    Pdert_ = [dert] # dert without i
                     I = ri; M = ave_g - g; Ma = ave_ga - ga; Dy = dy; Dx = dx
                     Sin_da0, Cos_da0, Sin_da1, Cos_da1 = sin_da0, cos_da0, sin_da1, cos_da1
                 else:
                     # dert and _dert are not masked, accumulate P params:
                     I +=ri; M+=ave_g-g; Ma+=ave_ga-ga; Dy+=dy; Dx+=dx  # angle
                     Sin_da0+=sin_da0; Cos_da0+=cos_da0; Sin_da1+=sin_da1; Cos_da1+=cos_da1  # aangle
-                    Pdert_ += [dert]
+                    Pdert_ += [dert] # dert without i
             elif not _mask:
                 # _dert is not masked, dert is masked, terminate P:
                 G = np.hypot(Dy, Dx)  # Dy,Dx  # recompute G,Ga, it can't reconstruct M,Ma
@@ -106,20 +106,25 @@ def rotate_P_(blob):  # rotate each P to align it with direction of P gradient
     for P_ in P__:
         for P in P_:
             daxis = P.ptuple[3][0] / P.ptuple[5]  # dy: deviation from horizontal axis
-            # recursive reform P along new G angle in blob.dert__:
-            # P.daxis for future reval?
-            step_size = 1.0     # first rotation always reaches P gradient angle
-            while P.ptuple[5] * abs(daxis) > ave_rotate and step_size > 1e-4:
-                rotate_P(P, dert__, mask__, step_size)
+            _daxis = 0
+            G = P.ptuple[5]
+            while abs(daxis)*G > ave_rotate:  # recursive reform P along new G angle in blob.dert__, P.daxis for future reval?
+
+                rotate_P(P, dert__, mask__, ave_a=None)  # rescan in the direction of ave_a, if any
                 maxis, daxis = comp_angle(P.ptuple[3], P.axis)
-                step_size /= 2  # step_size is halved after each iteration
+                ddaxis = daxis +_daxis  # cancel-out if opposite-sign
+                # test oscillation:
+                if ddaxis*G < ave_rotate:
+                    rotate_P(P, dert__, mask__, ave_a=np.add(P.ptuple[3], P.axis))  # rescan in the direction of ave_a, if any
+                    break
 
-def rotate_P(P, dert__t, mask__, step_size):
+def rotate_P(P, dert__t, mask__, ave_a):
+    if ave_a is None:
+        sin, cos = np.divide(P.ptuple[3], P.ptuple[5])
+    else:
+        sin, cos = np.divide(ave_a, np.hypot(*ave_a))
 
-    sin_g = P.ptuple[3][0] / P.ptuple[5]
-    cos_g = P.ptuple[3][1] / P.ptuple[5]
-    new_axis = get_new_axis(*P.axis, sin_g, cos_g, step_size) # step_size <= 1.0, with 1.0 being full rotation
-    sin, cos = new_axis
+    new_axis = sin, cos
 
     if cos < 0: sin,cos = -sin,-cos  # dx always >= 0, dy can be < 0
     # assert abs(sin**2 + cos**2 - 1) < 1e-5  # hypot(dy,dx)=1: each dx,dy adds one rotated dert|pixel to rdert_
@@ -193,16 +198,6 @@ def form_rdert(rx,ry, dert__t, mask__):
              ) / K
              for dert__ in dert__t[1:]]  # skip i in dert = i, g, ga, ri, dy, dx, day0, dax0, day1, dax1
     return ptuple
-
-def get_new_axis(s1, c1, s2, c2, step_size):
-    if s1*s2 + c1*c2 < 0:  # angle difference between axes is > 90 deg
-        s2 = -s2; c2 = -c2  # flip target axis2
-
-    u = s1 * (1 - step_size) + s2 * step_size # new axis is weighted sum of axes
-    v = c1 * (1 - step_size) + c2 * step_size
-    norm = np.hypot(u, v)
-
-    return (u/norm, v/norm)  # normalized new axis
 
 # slice_blob with axis-orthogonal Ps, but P centers may overlap or be missed?
 def slice_blob_ortho(blob, verbose=False):
