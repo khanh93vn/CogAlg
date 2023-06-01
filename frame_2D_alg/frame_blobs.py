@@ -34,7 +34,7 @@ import numpy as np
 from time import time
 from collections import deque
 from visualization.draw_frame_blobs import visualize_blobs
-from class_cluster import ClusterStructure, init_param
+from class_cluster import ClusterStructure, ipar
 # from frame_blobs_wrapper import wrapped_flood_fill, from utils import minmax
 
 # hyper-parameters, set as a guess, latter adjusted by feedback:
@@ -49,7 +49,7 @@ EXCLUDED_ID = -2
 
 class CBlob(ClusterStructure):
     # comp_pixel:
-    sign : bool | None = None
+    sign : bool = None
     I : float = 0.0
     Dy : float = 0.0
     Dx : float = 0.0
@@ -58,10 +58,10 @@ class CBlob(ClusterStructure):
     # composite params:
     M : float = 0.0 # summed PP.M, for both types of recursion?
     box : tuple = (0, 0, 0, 0)  # x0, xn, y0, yn
-    mask__ : object | None = None
-    dert__ : object | None = None
-    root_dert__ : object | None = None
-    adj_blobs : list = init_param([])  # adjacent blobs
+    mask__ : object = None
+    dert__ : object = None
+    root_dert__ : object = None
+    adj_blobs : list = ipar([])  # adjacent blobs
     fopen : bool = False
     # intra_blob params: # or pack in intra = lambda: Cintra
     # comp_angle:
@@ -78,16 +78,16 @@ class CBlob(ClusterStructure):
     fBa : bool = False  # in root_blob: next fork is comp angle, else comp_r
     rdn : float = 1.0  # redundancy to higher blob layers, or combined?
     rng : int = 1  # comp range, set before intra_comp
-    P__ : list = init_param([])  # input + derPs, common root for downward layers and upward PP_s:
-    rlayers : list = init_param([])  # list of layers across sub_blob derivation tree, deeper layers are nested with both forks
-    dlayers : list = init_param([])  # separate for range and angle forks per blob
-    PPm_ : list = init_param([])  # mblobs in frame
-    PPd_ : list = init_param([])  # dblobs in frame
-    valt : list = init_param([])  # PPm_ val, PPd_ val, += M,G?
+    P__ : list = ipar([])  # input + derPs, common root for downward layers and upward PP_s:
+    rlayers : list = ipar([])  # list of layers across sub_blob derivation tree, deeper layers are nested with both forks
+    dlayers : list = ipar([])  # separate for range and angle forks per blob
+    PPm_ : list = ipar([])  # mblobs in frame
+    PPd_ : list = ipar([])  # dblobs in frame
+    valt : list = ipar([])  # PPm_ val, PPd_ val, += M,G?
     fsliced : bool = False  # from comp_slice
-    root : object | None = None  # frame or from frame_bblob
-    mgraph : object | None = None  # reference to converted blob
-    dgraph : object | None = None  # reference to converted blob
+    root : object = None  # frame or from frame_bblob
+    mgraph : object = None  # reference to converted blob
+    dgraph : object = None  # reference to converted blob
 
 '''
     Conventions:

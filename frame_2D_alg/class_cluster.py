@@ -42,7 +42,9 @@ class ClusterStructure:
     def unpack(self):
         return astuple(self)
 
-def init_param(default):
+# ----------------------------------------------------------------------------
+# functions
+def ipar(default):
     return field(default_factory=lambda: deepcopy(default),
                  repr=False) # repr=False to avoid recursion in __repr__
 
