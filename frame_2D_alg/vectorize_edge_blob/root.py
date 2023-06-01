@@ -70,14 +70,14 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
             g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = dert
             if not mask:  # masks: if 0,_1: P initialization, if 0,_0: P accumulation, if 1,_0: P termination
                 if _mask:  # ini P params with first unmasked dert
-                    Pdert_ = [dert] # dert without i
+                    Pdert_ = [dert]
                     I = ri; M = ave_g - g; Ma = ave_ga - ga; Dy = dy; Dx = dx
                     Sin_da0, Cos_da0, Sin_da1, Cos_da1 = sin_da0, cos_da0, sin_da1, cos_da1
                 else:
                     # dert and _dert are not masked, accumulate P params:
                     I +=ri; M+=ave_g-g; Ma+=ave_ga-ga; Dy+=dy; Dx+=dx  # angle
                     Sin_da0+=sin_da0; Cos_da0+=cos_da0; Sin_da1+=sin_da1; Cos_da1+=cos_da1  # aangle
-                    Pdert_ += [dert] # dert without i
+                    Pdert_ += [dert]
             elif not _mask:
                 # _dert is not masked, dert is masked, terminate P:
                 G = np.hypot(Dy, Dx)  # Dy,Dx  # recompute G,Ga, it can't reconstruct M,Ma
@@ -113,21 +113,20 @@ def rotate_P_(blob):  # rotate each P to align it with direction of P gradient
                 rotate_P(P, dert__, mask__, ave_a=None)  # rescan in the direction of ave_a, if any
                 maxis, daxis = comp_angle(P.ptuple[3], P.axis)
                 ddaxis = daxis +_daxis  # cancel-out if opposite-sign
-                # test oscillation:
+                # terminate if oscillation
                 if ddaxis*G < ave_rotate:
                     rotate_P(P, dert__, mask__, ave_a=np.add(P.ptuple[3], P.axis))  # rescan in the direction of ave_a, if any
                     break
 
 def rotate_P(P, dert__t, mask__, ave_a):
+
     if ave_a is None:
         sin, cos = np.divide(P.ptuple[3], P.ptuple[5])
     else:
         sin, cos = np.divide(ave_a, np.hypot(*ave_a))
-
     new_axis = sin, cos
 
     if cos < 0: sin,cos = -sin,-cos  # dx always >= 0, dy can be < 0
-    # assert abs(sin**2 + cos**2 - 1) < 1e-5  # hypot(dy,dx)=1: each dx,dy adds one rotated dert|pixel to rdert_
     y0,yn,x0,xn = P.box
     ycenter = (y0+yn)/2; xcenter = (x0+xn)/2
     rdert_ = []
@@ -337,25 +336,3 @@ def copy_P(P, Ptype=None):  # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP 
         new_P.mlevels, new_P.dlevels = copy(mlevels), copy(dlevels)
 
     return new_P
-
-# draft
-def rotate_P_ave(blob):  # rotate each P to align it with direction of P gradient
-
-    P__, dert__, mask__ = blob.P__, blob.dert__, blob.mask__
-
-    for P_ in P__:
-        for P in P_:
-            daxis = P.ptuple.angle[0] / P.ptuple.G  # dy: deviation from horizontal axis
-            _daxis = 0
-            G = P.ptuple.G
-            while abs(daxis)*G > ave_rotate:  # recursive reform P along new G angle in blob.dert__, P.daxis for future reval?
-
-                rotate_P(P, dert__, mask__, ave_a=None)  # rescan in the direction of ave_a, if any
-                maxis, daxis = comp_angle(P.ptuple.angle, P.axis)
-                ddaxis = daxis +_daxis  # cancel-out if opposite-sign
-                # test oscillation:
-                if ddaxis*G < ave_rotate:
-                    # pseudo:
-                    rotate_P(P, dert__, mask__, ave_a=(P.ptuple.angle+P.axis)/2)  # rescan in the direction of ave_a, if any
-                    break
-
