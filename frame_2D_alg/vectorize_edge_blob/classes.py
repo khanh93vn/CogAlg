@@ -1,4 +1,4 @@
-from class_cluster import ClusterStructure, z
+from class_cluster import ClusterStructure, init_param as z
 # z: initialize param value
 
 # not needed?
