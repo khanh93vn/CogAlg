@@ -44,7 +44,7 @@ class ClusterStructure:
 
 # ----------------------------------------------------------------------------
 # functions
-def ipar(default):
+def z(default):  # initialize param value
     return field(default_factory=lambda: deepcopy(default),
                  repr=False) # repr=False to avoid recursion in __repr__
 

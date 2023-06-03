@@ -198,11 +198,11 @@ def form_rdert(rx,ry, dert__t, mask__):
              for dert__ in dert__t[1:]]  # skip i in dert = i, g, ga, ri, dy, dx, day0, dax0, day1, dax1
     return ptuple
 
-# slice_blob with axis-orthogonal Ps, but P centers may overlap or be missed?
-def slice_blob_ortho(blob, verbose=False):
+
+def slice_blob_ortho(blob, verbose=False):  # slice_blob with axis-orthogonal Ps
+
     from .hough_P import new_rt_olp_array, hough_check
     Y, X = blob.mask__.shape
-
     # Get thetas and positions:
     dy__, dx__ = blob.dert__[4:6]  # Get blob derts' angle
     y__, x__ = np.indices((Y, X))  # Get blob derts' position
