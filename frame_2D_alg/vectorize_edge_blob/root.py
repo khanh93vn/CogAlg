@@ -271,9 +271,9 @@ def slice_blob_ortho(blob, verbose=False):  # slice_blob with axis-orthogonal Ps
 def slice_blob_flow(blob, verbose=False):
     # let "gradient source" be the cell whose gradient points to subject cell
     # find number of gradient sources for each cell
-    _yx_ = np.indices(blob.mask__.shape)[:, blob.mask__].T  # blob derts' position
+    _yx_ = np.indices(blob.mask__.shape)[:, ~blob.mask__].T  # blob derts' position
     with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
-        sc_ = np.divide(blob.dert__[4:6], blob.dert__[1])[:, blob.mask__].T    # blob derts' angle
+        sc_ = np.divide(blob.dert__[4:6], blob.dert__[1])[:, ~blob.mask__].T    # blob derts' angle
     uv_ = np.zeros_like(sc_)        # (u, v) points to one of the eight neighbor cells
     u_, v_ = uv_.T                  # unpack u, v
     s_, c_ = sc_.T                  # unpack sin, cos
@@ -286,7 +286,7 @@ def slice_blob_flow(blob, verbose=False):
     yx_ = _yx_ + uv_                # compute target cell position
     m__ = (yx_.reshape(-1, 1, 2) == _yx_).all(axis=2)   # mapping from _yx_ to yx_
     def get_p(a):
-        nz = a.nonzero()
+        nz = a.nonzero()[0]
         if len(nz) == 0:    return -1
         elif len(nz) == 1:  return nz[0]
         else:               raise ValueError
@@ -303,12 +303,12 @@ def slice_blob_flow(blob, verbose=False):
             box = [y, y, x, x]
 
             j = i
-            while p_[j] != -1:      # while there is a dert to follow
+            while True:      # while there is a dert to follow
                 y, x = _yx_[j]      # get dert position
                 dert = [par__[y, x] for par__ in blob.dert__[1:]]  # dert params at _y, _x, skip i
                 g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = dert
                 I+=i; M+=ave_g-g; Ma+=ave_ga-ga; Dy+=dy; Dx+=dx; Sin_da0+=sin_da0; Cos_da0+=cos_da0; Sin_da1+=sin_da1; Cos_da1+=cos_da1
-                dert_ += [dert]
+                dert_ += [(y, x, *dert)]
                 if y < box[0]: box[0] = y
                 if y > box[1]: box[1] = y
                 if x < box[2]: box[2] = x
@@ -323,12 +323,17 @@ def slice_blob_flow(blob, verbose=False):
                         if "is not in list" not in str(e):
                             raise e
                         break
-                j = p_[j]
+                if p_[j] != -1:
+                    j = p_[j]
+                else:
+                    break
             G = np.hypot(Dy, Dx); Ga = (Cos_da0 + 1) + (Cos_da1 + 1)
-            L = len(Pdert_) # params.valt=[params.M+params.Ma,params.G+params.Ga]
-            P_ += [CP(ptuple=[I,M,Ma,[Dy,Dx],[Sin_da0,Cos_da0,Sin_da1,Cos_da1], G, Ga, L], box=[y,y, x-L,x-1], dert_=Pdert_)]
+            L = len(dert_) # params.valt=[params.M+params.Ma,params.G+params.Ga]
+            P_ += [CP(ptuple=[I,M,Ma,[Dy,Dx],[Sin_da0,Cos_da0,Sin_da1,Cos_da1], G, Ga, L], box=[y,y, x-L,x-1], dert_=dert_)]
 
-    return P_
+    blob.P__ = [P_]
+
+    return blob.P__
 
 def append_P(P__, P):  # pack P into P__ in top down sequence
 
