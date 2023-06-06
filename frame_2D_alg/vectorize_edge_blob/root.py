@@ -118,7 +118,7 @@ def rotate_P_(blob):  # rotate each P to align it with direction of P gradient
                     rotate_P(P, der__t, mask__, ave_a=np.add(P.ptuple[3], P.axis))  # rescan in the direction of ave_a, if any
                     break
 
-def rotate_P(P, der__tt, mask__, ave_a):
+def rotate_P(P, der__t, mask__, ave_a):
 
     if ave_a is None:
         sin, cos = np.divide(P.ptuple[3], P.ptuple[5])
@@ -133,7 +133,7 @@ def rotate_P(P, der__tt, mask__, ave_a):
     # scan left:
     rx=xcenter; ry=ycenter
     while True:  # terminating condition is in form_rdert()
-        rdert = form_rdert(rx,ry, der__tt, mask__)
+        rdert = form_rdert(rx,ry, der__t, mask__)
         if rdert is None: break  # dert is not in blob: masked or out of bound
         rdert_ = [rdert] + rdert_  # append left
         rx-=cos; ry-=sin  # next rx,ry
@@ -141,7 +141,7 @@ def rotate_P(P, der__tt, mask__, ave_a):
     # scan right:
     rx=xcenter+cos; ry=ycenter+sin  # center dert was included in scan left
     while True:
-        rdert = form_rdert(rx,ry, der__tt, mask__)
+        rdert = form_rdert(rx,ry, der__t, mask__)
         if rdert is None: break  # dert is not in blob: masked or out of bound
         rdert_ += [rdert]  # append right
         rx+=cos; ry+=sin  # next rx,ry
@@ -162,7 +162,7 @@ def rotate_P(P, der__tt, mask__, ave_a):
     P.box = [min(yleft, ry), max(yleft, ry), x0, rx]  # P may go up-right or down-right
     P.axis = new_axis
 
-def form_rdert(rx,ry, der__tt, mask__):
+def form_rdert(rx,ry, der__t, mask__):
 
     Y, X = mask__.shape
     # coord, distance of four int-coord derts, overlaid by float-coord rdert in der__t, int for indexing
@@ -190,12 +190,12 @@ def form_rdert(rx,ry, der__tt, mask__):
     if round(mask):  # summed mask is fractional, round to 1|0
         return None  # return rdert if inside the blob
     ptuple = [(
-        der__t[y1, x1] * k1 +
-        der__t[y2, x1] * k2 +
-        der__t[y1, x2] * k3 +
-        der__t[y2, x2] * k4
+        der__[y1, x1] * k1 +
+        der__[y2, x1] * k2 +
+        der__[y1, x2] * k3 +
+        der__[y2, x2] * k4
              ) / K
-             for der__t in der__tt[1:]]  # skip i in dert = i, g, ga, ri, dy, dx, day0, dax0, day1, dax1
+             for der__ in der__t[1:]]  # skip i in dert = i, g, ga, ri, dy, dx, day0, dax0, day1, dax1
     return ptuple
 
 
