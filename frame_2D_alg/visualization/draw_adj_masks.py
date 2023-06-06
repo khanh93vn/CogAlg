@@ -35,22 +35,22 @@ else:
 for i, blob in enumerate(blob_to_draw_):
 
     # initialize image with 3 channels (colour image)
-    img_blob_ = np.zeros((frame['dert__'][0].shape[0], frame['dert__'][0].shape[1], 3))
+    img_blob_ = np.zeros((frame['der__t'][0].shape[0], frame['der__t'][0].shape[1], 3))
     img_blob_box = img_blob_.copy()
 
     # check if there are adjacent blobs and there are unmasked values
     if blob.adj_blobs:
-        dert__mask = ~blob.mask  # get inverted mask value (we need plot mask = false)
-        dert__mask = dert__mask * 255  # set intensity of colour
+        der__tmask = ~blob.mask  # get inverted mask value (we need plot mask = false)
+        der__tmask = der__tmask * 255  # set intensity of colour
 
         # draw blobs into image
         # current blob - whilte colour
-        img_blob_[blob.box[0]:blob.box[1], blob.box[2]:blob.box[3], 0] += dert__mask
-        img_blob_[blob.box[0]:blob.box[1], blob.box[2]:blob.box[3], 1] += dert__mask
-        img_blob_[blob.box[0]:blob.box[1], blob.box[2]:blob.box[3], 2] += dert__mask
-        img_blob_box[blob.box[0]:blob.box[1], blob.box[2]:blob.box[3], 0] += dert__mask
-        img_blob_box[blob.box[0]:blob.box[1], blob.box[2]:blob.box[3], 1] += dert__mask
-        img_blob_box[blob.box[0]:blob.box[1], blob.box[2]:blob.box[3], 2] += dert__mask
+        img_blob_[blob.box[0]:blob.box[1], blob.box[2]:blob.box[3], 0] += der__tmask
+        img_blob_[blob.box[0]:blob.box[1], blob.box[2]:blob.box[3], 1] += der__tmask
+        img_blob_[blob.box[0]:blob.box[1], blob.box[2]:blob.box[3], 2] += der__tmask
+        img_blob_box[blob.box[0]:blob.box[1], blob.box[2]:blob.box[3], 0] += der__tmask
+        img_blob_box[blob.box[0]:blob.box[1], blob.box[2]:blob.box[3], 1] += der__tmask
+        img_blob_box[blob.box[0]:blob.box[1], blob.box[2]:blob.box[3], 2] += der__tmask
 
         # draw bounding box
         cv2.rectangle(img_blob_box, (blob.box[2], blob.box[0]),
@@ -61,13 +61,13 @@ for i, blob in enumerate(blob_to_draw_):
 
             # check if there are unmasked values
             if False in adj_blob[0].mask:
-                adj_dert__mask = ~adj_blob[0].mask  # get inverted mask value (we need plot mask = false)
-                adj_dert__mask = adj_dert__mask * 255  # set intensity of colour
+                adj_der__tmask = ~adj_blob[0].mask  # get inverted mask value (we need plot mask = false)
+                adj_der__tmask = adj_der__tmask * 255  # set intensity of colour
 
                 if adj_blob[1] == 1:  # external blob, colour = green
                     # draw blobs into image
-                    img_blob_[adj_blob[0].box[0]:adj_blob[0].box[1], adj_blob[0].box[2]:adj_blob[0].box[3], 1] += adj_dert__mask
-                    img_blob_box[adj_blob[0].box[0]:adj_blob[0].box[1], adj_blob[0].box[2]:adj_blob[0].box[3], 1] += adj_dert__mask
+                    img_blob_[adj_blob[0].box[0]:adj_blob[0].box[1], adj_blob[0].box[2]:adj_blob[0].box[3], 1] += adj_der__tmask
+                    img_blob_box[adj_blob[0].box[0]:adj_blob[0].box[1], adj_blob[0].box[2]:adj_blob[0].box[3], 1] += adj_der__tmask
 
                     # draw bounding box
                     cv2.rectangle(img_blob_box, (adj_blob[0].box[2], adj_blob[0].box[0]),
@@ -76,8 +76,8 @@ for i, blob in enumerate(blob_to_draw_):
 
                 elif adj_blob[1]== 0:  # internal blob, colour = red
                     # draw blobs into image
-                    img_blob_[adj_blob[0].box[0]:adj_blob[0].box[1], adj_blob[0].box[2]:adj_blob[0].box[3], 2] += adj_dert__mask
-                    img_blob_box[adj_blob[0].box[0]:adj_blob[0].box[1], adj_blob[0].box[2]:adj_blob[0].box[3], 2] += adj_dert__mask
+                    img_blob_[adj_blob[0].box[0]:adj_blob[0].box[1], adj_blob[0].box[2]:adj_blob[0].box[3], 2] += adj_der__tmask
+                    img_blob_box[adj_blob[0].box[0]:adj_blob[0].box[1], adj_blob[0].box[2]:adj_blob[0].box[3], 2] += adj_der__tmask
 
                     # draw bounding box
                     cv2.rectangle(img_blob_box, (adj_blob[0].box[2], adj_blob[0].box[0]),
@@ -85,8 +85,8 @@ for i, blob in enumerate(blob_to_draw_):
                                   color=(0, 0, 155), thickness=1)
                 else:  # open， colour = blue
                     # draw blobs into image
-                    img_blob_[adj_blob[0].box[0]:adj_blob[0].box[1], adj_blob[0].box[2]:adj_blob[0].box[3], 0] += adj_dert__mask
-                    img_blob_box[adj_blob[0].box[0]:adj_blob[0].box[1], adj_blob[0].box[2]:adj_blob[0].box[3], 0] += adj_dert__mask
+                    img_blob_[adj_blob[0].box[0]:adj_blob[0].box[1], adj_blob[0].box[2]:adj_blob[0].box[3], 0] += adj_der__tmask
+                    img_blob_box[adj_blob[0].box[0]:adj_blob[0].box[1], adj_blob[0].box[2]:adj_blob[0].box[3], 0] += adj_der__tmask
 
                     # draw bounding box
                     cv2.rectangle(img_blob_box, (adj_blob[0].box[2], adj_blob[0].box[0]),
