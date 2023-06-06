@@ -127,7 +127,7 @@ def shift_img(img,rng):
     return img_center__, img_shift_
 
 
-def comp_rng(dert__, ave, root_fia, rng, mask__=None):
+def comp_rng(der__t, ave, root_fia, rng, mask__=None):
 
     print('rng = '+str(rng))
     '''
@@ -136,7 +136,7 @@ def comp_rng(dert__, ave, root_fia, rng, mask__=None):
     where input intensity didn't vary much in shorter-range cross-comparison.
     Such input is predictable enough for selective sampling: skipping current
     rim derts as kernel-central derts in following comparison kernels.
-    Skipping forms increasingly sparse output dert__ for greater-range cross-comp, hence
+    Skipping forms increasingly sparse output der__t for greater-range cross-comp, hence
     rng (distance between centers of compared derts) increases as 2^n, with n starting at 0:
     rng = 1: 3x3 kernel,
     rng = 2: 5x5 kernel,
@@ -145,7 +145,7 @@ def comp_rng(dert__, ave, root_fia, rng, mask__=None):
     Due to skipping, configuration of input derts in next-rng kernel will always be 3x3, see:
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_diagrams.png
     '''
-    i__ = dert__[0]  # i is pixel intensity
+    i__ = der__t[0]  # i is pixel intensity
 
     '''
     sparse aligned i__center and i__rim arrays:
@@ -175,9 +175,9 @@ def comp_rng(dert__, ave, root_fia, rng, mask__=None):
         m__ = np.zeros_like(dy__)
 
     else:  # root fork is comp_r, accumulate derivatives:
-        dy__ = dert__[1][rng:-(rng):1, rng:-(rng):1].copy()  # sparse to align with i__center
-        dx__ = dert__[2][rng:-(rng):1, rng:-(rng):1].copy()
-        m__  = dert__[4][rng:-(rng):1, rng:-(rng):1].copy()
+        dy__ = der__t[1][rng:-(rng):1, rng:-(rng):1].copy()  # sparse to align with i__center
+        dx__ = der__t[2][rng:-(rng):1, rng:-(rng):1].copy()
+        m__  = der__t[4][rng:-(rng):1, rng:-(rng):1].copy()
 
     # compare diametrically opposed pairs of rim pixels:
 

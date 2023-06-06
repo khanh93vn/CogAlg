@@ -224,7 +224,7 @@ def map_frame_binary(frame, *args, **kwargs):
     out : ndarray
         2D array of image's pixel.
     '''
-    height, width = frame['dert__'].shape[1:]
+    height, width = frame['der__t'].shape[1:]
     box = (0, height, 0, width)
     image = blank_image(box)
 
@@ -251,7 +251,7 @@ def map_frame(frame, *args, **kwargs):
         2D array of image's pixel.
     '''
 
-    height, width = frame['gdert__'].shape[1:]
+    height, width = frame['gder__t'].shape[1:]
     box = (0, height, 0, width)
     image = blank_image(box)
 
@@ -289,7 +289,7 @@ def draw_stack(stack, box, sign,
 
     for y, P in enumerate(stack.Py_, start= stack.y0 - y0):
         try:
-            for x, dert in enumerate(P.dert__, start=P.x0-x0):
+            for x, dert in enumerate(P.der__t, start=P.x0-x0):
                 if sign_map is None:
                     stack_img[y, x] = dert[0]
                 else:
