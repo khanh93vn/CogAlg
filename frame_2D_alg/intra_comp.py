@@ -7,19 +7,19 @@ import functools
 # no ave_ga = .78, ave_ma = 2  # at 22.5 degrees
 # https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_diagrams.png
 
-def comp_r(der__t, rng, mask__=None):
+def comp_r(dert__, rng, mask__=None):
     '''
     Cross-comparison of input param (dert[0]) over rng passed from intra_blob.
     This fork is selective for blobs with below-average gradient in shorter-range cross-comp: input intensity didn't vary much.
     Such input is predictable enough for selective sampling: skipping current rim in following comparison kernels.
-    Skipping forms increasingly sparse der__t for next-range cross-comp,
+    Skipping forms increasingly sparse dert__ for next-range cross-comp,
     hence kernel width increases as 2^rng: 1: 2x2 kernel, 2: 4x4 kernel, 3: 8x8 kernel
     There is also skipping within greater-rng rims, so configuration of compared derts is always 2x2
     '''
 
-    i__ = der__t[0]  # pixel intensity, should be separate from i__sum
+    i__ = dert__[0]  # pixel intensity, should be separate from i__sum
     # sparse aligned rim arrays:
-    i__topleft = i__[:-1:2, :-1:2]  # also assignment to new_der__t[0]
+    i__topleft = i__[:-1:2, :-1:2]  # also assignment to new_dert__[0]
     i__topright = i__[:-1:2, 1::2]
     i__bottomleft = i__[1::2, :-1:2]
     i__bottomright = i__[1::2, 1::2]
@@ -37,8 +37,8 @@ def comp_r(der__t, rng, mask__=None):
     else:
         majority_mask__ = None  # returned at the end of function
 
-    d_upleft__ = der__t[1][:-1:2, :-1:2].copy()  # sparse step=2 sampling
-    d_upright__= der__t[2][:-1:2, :-1:2].copy()
+    d_upleft__ = dert__[1][:-1:2, :-1:2].copy()  # sparse step=2 sampling
+    d_upright__= dert__[2][:-1:2, :-1:2].copy()
     rngSkip = 1
     if rng>2: rngSkip *= (rng-2)*2  # *2 for 8x8, *4 for 16x16
     # combined distance and extrapolation coeffs, or separate distance coef: ave * (rave / dist), rave = ave abs d / ave i?
@@ -52,7 +52,7 @@ def comp_r(der__t, rng, mask__=None):
     return (i__topleft, d_upleft__, d_upright__, g__, ri__), majority_mask__
 
 
-def comp_a(der__t, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
+def comp_a(dert__, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
 
     if mask__ is not None:
         majority_mask__ = (mask__[:-1, :-1].astype(int) +
@@ -63,7 +63,7 @@ def comp_a(der__t, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
     else:
         majority_mask__ = None
 
-    i__, dy__, dx__, g__, ri__ = der__t[:5]  # day__,dax__,ma__ are recomputed
+    i__, dy__, dx__, g__, ri__ = dert__[:5]  # day__,dax__,ma__ are recomputed
 
     with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
         angle__ = [dy__, dx__] / np.hypot(dy__, dx__)
@@ -115,14 +115,14 @@ def angle_diff(a2, a1):  # compare angle_1 to angle_2 (angle_1 to angle_2)
 '''
 alternative versions below:
 '''
-def comp_r_odd(der__t, ave, rng, root_fia, mask__=None):
+def comp_r_odd(dert__, ave, rng, root_fia, mask__=None):
     '''
     Cross-comparison of input param (dert[0]) over rng passed from intra_blob.
     This fork is selective for blobs with below-average gradient,
     where input intensity didn't vary much in shorter-range cross-comparison.
     Such input is predictable enough for selective sampling: skipping current
     rim derts as kernel-central derts in following comparison kernels.
-    Skipping forms increasingly sparse output der__t for greater-range cross-comp, hence
+    Skipping forms increasingly sparse output dert__ for greater-range cross-comp, hence
     rng (distance between centers of compared derts) increases as 2^n, with n starting at 0:
     rng = 1: 3x3 kernel,
     rng = 2: 5x5 kernel,
@@ -143,13 +143,13 @@ def comp_r_odd(der__t, ave, rng, root_fia, mask__=None):
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_d.drawio
     '''
 
-    i__ = der__t[0]  # i is pixel intensity
+    i__ = dert__[0]  # i is pixel intensity
 
     '''
     sparse aligned i__center and i__rim arrays:
     rotate in first call only: same orientation as from frame_blobs?
     '''
-    i__center = i__[1:-1:2, 1:-1:2]  # also assignment to new_der__t[0]
+    i__center = i__[1:-1:2, 1:-1:2]  # also assignment to new_dert__[0]
     i__topleft = i__[:-2:2, :-2:2]
     i__top = i__[:-2:2, 1:-1:2]
     i__topright = i__[:-2:2, 2::2]
@@ -185,9 +185,9 @@ def comp_r_odd(der__t, ave, rng, root_fia, mask__=None):
     else: 
     '''
      # root fork is comp_r, accumulate derivatives:
-    dy__ = der__t[1][1:-1:2, 1:-1:2].copy()  # sparse to align with i__center
-    dx__ = der__t[2][1:-1:2, 1:-1:2].copy()
-    m__ = der__t[4][1:-1:2, 1:-1:2].copy()
+    dy__ = dert__[1][1:-1:2, 1:-1:2].copy()  # sparse to align with i__center
+    dx__ = dert__[2][1:-1:2, 1:-1:2].copy()
+    m__ = dert__[4][1:-1:2, 1:-1:2].copy()
 
     # compare four diametrically opposed pairs of rim pixels, with Sobel coeffs * rim skip ratio:
 
@@ -222,7 +222,7 @@ def comp_r_odd(der__t, ave, rng, root_fia, mask__=None):
     return (i__center, dy__, dx__, g__, m__), majority_mask__
 
 
-def comp_a_complex(der__t, ave, prior_forks, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
+def comp_a_complex(dert__, ave, prior_forks, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
     '''
     More concise but also more opaque version
     https://github.com/khanh93vn/CogAlg/commit/1f3499c4545742486b89e878240d5c291b81f0ac
@@ -236,7 +236,7 @@ def comp_a_complex(der__t, ave, prior_forks, mask__=None):  # cross-comp of grad
     else:
         majority_mask__ = None
 
-    i__, dy__, dx__, g__, m__ = der__t[:5]  # day__,dax__,ga__,ma__ are recomputed
+    i__, dy__, dx__, g__, m__ = dert__[:5]  # day__,dax__,ga__,ma__ are recomputed
 
     az__ = dx__ + 1j * dy__  # take the complex number (z), phase angle is now atan2(dy, dx)
 
