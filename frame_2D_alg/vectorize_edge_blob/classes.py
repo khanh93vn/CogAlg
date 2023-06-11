@@ -50,7 +50,8 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     link_ : list = z([])  # all links
     link_t : list = z([[],[]])  # +ve rlink_, dlink_
     roott : list = z([None, None])  # mPP,dPP that contain this P
-    box : list = z([0,0,0,0])  # y0,yn, x0,xn
+    pivot : tuple = None  # pivot for P rotation
+    ipivot : int = 0  # pivot index in P
     # optional:
     dxdert_ : list = z([])  # only in Pd
     Pd_ : list = z([])  # only in Pm
