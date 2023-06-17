@@ -180,37 +180,26 @@ def scan_direction(P, rdert_,dert_ext_, y,x, axis, der__t,mask__, fleft):  # lef
     sin,cos = axis
     while True:
         # coord, distance of four int-coord derts, overlaid by float-coord rdert in der__t, int for indexing
-        x0 = int(np.floor(x)); dx0 = abs(x-x0)
-        x1 = int(np.ceil(x));  dx1 = abs(x-x1)
-        y0 = int(np.floor(y)); dy0 = abs(y-y0)
-        y1 = int(np.ceil(y));  dy1 = abs(y-y1)
-        kernel = []
-        if not mask__[y0+1][x0+1]: kernel += [[[y0,x0], np.hypot((y-y0),(x-x0))]]
-        if not mask__[y0+1][x0+1]: kernel += [[[y0,x1], np.hypot((y-y0),(x-x1))]]
-        if not mask__[y1+1][x0+1]: kernel += [[[y1,x0], np.hypot((y-y1),(x-x0))]]
-        if not mask__[y1+1][x1+1]: kernel += [[[y1,x1], np.hypot((y-y1),(x-x1))]]
-        K = 0
-        ktuples = []  # scale params by inverted distance, approx: square of rpixel is rotated, won't fully match init derts:
-        for [ky,kx], dist in kernel:  # kernel excludes masked derts
-            K += 2 - dist
-            ptuple = [par__[ky,kx] * dist for par__ in der__t[1:]]  # exclude i
-            ktuples += [ptuple]
-        Ptuple = ktuples[0]  # init with 1st not masked quadrant
-        for _ptuple in ktuples[1:]:
-            for i,par in enumerate(_ptuple):
-                Ptuple[i] += par
-        ptuple = [Par/K for Par in Ptuple]  # normalize with K
+        x0, y0 = int(x), int(y)
+        x1, y1 = x0+1, y0+1
+        kernel = [  # ky, kx, weight
+            (y0, x0, (y1-y)*(x1-x)),
+            (y0, x1, (y1-y)*(x-x0)),
+            (y1, x0, (y-y0)*(x1-x)),
+            (y1, x1, (y-y0)*(x-x0))]
+        mask = sum((mask__[ky, kx] * weight for ky, kx, weight in kernel))  # take weighted average four kernel cells
+        if mask >= 0.5: break
+        ptuple = [
+            sum((par__[ky, kx] * weight for ky, kx, weight in kernel))  # take weighted average four kernel cells
+            for par__ in der__t[1:]]
         if fleft:
             y -= sin; x -= cos  # next y,x
-            rdert_.insert(0, ptuple)  # append left
-            dert_ext_.insert(0, [[P],y,x])  # append left external params: roots and coords per dert
+            rdert_ = [ptuple] + rdert_ # append left
+            dert_ext_ = [[[P],y,x]] + dert_ext_  # append left external params: roots and coords per dert
         else:
             y += sin; x += cos   # next ry,rx
-            rdert_ += [ptuple]  # append right
-            dert_ext_ += [[[P],y,x]]
-
-        if mask__[y0][x0] and mask__[y1][x0] and mask__[y0][x1] and mask__[y1][x1]:
-            break
+            rdert_ = rdert_ + [ptuple]  # append right
+            dert_ext_ = dert_ext_ + [[[P],y,x]]
 
     return rdert_,dert_ext_, y,x
 
