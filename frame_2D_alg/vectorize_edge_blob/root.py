@@ -5,7 +5,7 @@ import sys
 import numpy as np
 from copy import copy, deepcopy
 from itertools import product
-from .classes import Cptuple, CP, CPP, CderP
+from .classes import CP, CPP, CderP
 from .filters import ave, ave_g, ave_ga, ave_rotate
 from .comp_slice import comp_slice, comp_angle
 from .agg_convert import agg_recursion_eval
