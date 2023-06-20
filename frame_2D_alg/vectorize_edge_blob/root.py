@@ -93,11 +93,11 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
                     Pdert_ += [dert]
             elif not _mask:
                 # _dert is not masked, dert is masked, pack P:
-                P_ += [term_P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, y,x-1, Pdert_)]
+                P_ += [term_P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, y,x, Pdert_)]
             _mask = mask
             x += 1
         if not _mask:  # pack last P:
-            P_ += [term_P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, y,x-1, Pdert_)]
+            P_ += [term_P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, y,x, Pdert_)]
 
     if verbose: print("\r" + " " * 79, end=""); sys.stdout.flush(); print("\r", end="")
     blob.P_ = P_
@@ -107,7 +107,7 @@ def term_P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, y,x, Pdert_):
 
     G = np.hypot(Dy, Dx); Ga = (Cos_da0 + 1) + (Cos_da1 + 1)  # recompute G,Ga, it can't reconstruct M,Ma
     L = len(Pdert_)  # params.valt = [params.M+params.Ma, params.G+params.Ga]?
-    return CP(ptuple=[I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L], dert_=Pdert_, y=y, x=x-L/2)
+    return CP(ptuple=[I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L], dert_=Pdert_, y=y, x=x-(L+1)//2)
 
 def pad1(mask__):  # pad blob.mask__ with rim of 1s:
     return np.pad(mask__,pad_width=[(1,1),(1,1)], mode='constant',constant_values=True)
@@ -131,7 +131,9 @@ def rotate_P_(blob, verbose=False):  # rotate each P to align it with direction 
             _daxis = daxis
             G = P.ptuple[5]  # rescan in the direction of ave_a, P.daxis if future reval:
             if ddaxis * G < ave_rotate:  # terminate if oscillation
-                P = form_P(der__t, mask__, axis=np.add(_axis, P.axis), y=P.y, x=P.x)  # not pivoting to dert G
+                axis = np.add(_axis, P.axis)
+                axis = np.divide(axis, np.hypot(*axis))  # normalize
+                P = form_P(der__t, mask__, axis=axis, y=P.y, x=P.x)  # not pivoting to dert G
                 break
         for _,y,x in P.dert_ext_:
             x0 = int(np.floor(x)); x1 = int(np.ceil(x)); y0 = int(np.floor(y)); y1 = int(np.ceil(y))
@@ -166,10 +168,11 @@ def form_P(der__t, mask__, axis, y,x):
         dert_ += [rdert]
     P.dert_ = dert_
     P.dert_ext_ = dert_ext_
-    P.y = (yleft+ry)/2; P.x = (x0+rx)/2
+    L = len(dert_)
+    P.y = yleft+axis[0]*((L+1)//2); P.x = x0+axis[1]*((L+1)//2)
     G = np.hypot(Dy,Dx);  Ga = (Cos_da0+1) + (Cos_da1+1); L = len(rdert_)
     P.ptuple = [I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L]
-    P.axis = np.divide(P.ptuple[3], P.ptuple[5])  # new axis
+    P.axis = axis  # new axis
 
     return P
 
