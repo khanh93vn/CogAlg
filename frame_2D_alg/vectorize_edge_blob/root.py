@@ -107,7 +107,7 @@ def term_P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, y,x, Pdert_):
 
     G = np.hypot(Dy, Dx); Ga = (Cos_da0 + 1) + (Cos_da1 + 1)  # recompute G,Ga, it can't reconstruct M,Ma
     L = len(Pdert_)  # params.valt = [params.M+params.Ma, params.G+params.Ga]?
-    return CP(ptuple=[I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L], dert_=Pdert_, y=y, x=x-(L+1)//2)
+    return CP(ptuple=[I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L], dert_=Pdert_, y=y, x=x-L/2)
 
 def pad1(mask__):  # pad blob.mask__ with rim of 1s:
     return np.pad(mask__,pad_width=[(1,1),(1,1)], mode='constant',constant_values=True)
@@ -131,9 +131,7 @@ def rotate_P_(blob, verbose=False):  # rotate each P to align it with direction 
             _daxis = daxis
             G = P.ptuple[5]  # rescan in the direction of ave_a, P.daxis if future reval:
             if ddaxis * G < ave_rotate:  # terminate if oscillation
-                axis = np.add(_axis, P.axis)
-                axis = np.divide(axis, np.hypot(*axis))  # normalize
-                P = form_P(der__t, mask__, axis=axis, y=P.y, x=P.x)  # not pivoting to dert G
+                P = form_P(der__t, mask__, axis = np.divide(np.add(_axis,P.axis),2), y=P.y, x=P.x)  # not pivoting to dert G
                 break
         for _,y,x in P.dert_ext_:
             x0 = int(np.floor(x)); x1 = int(np.ceil(x)); y0 = int(np.floor(y)); y1 = int(np.ceil(y))
@@ -168,11 +166,10 @@ def form_P(der__t, mask__, axis, y,x):
         dert_ += [rdert]
     P.dert_ = dert_
     P.dert_ext_ = dert_ext_
-    L = len(dert_)
-    P.y = yleft+axis[0]*((L+1)//2); P.x = x0+axis[1]*((L+1)//2)
+    P.y = (yleft+ry)/2; P.x = (x0+rx)/2
     G = np.hypot(Dy,Dx);  Ga = (Cos_da0+1) + (Cos_da1+1); L = len(rdert_)
     P.ptuple = [I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L]
-    P.axis = axis  # new axis
+    P.axis = np.divide(P.ptuple[3], P.ptuple[5])  # new axis
 
     return P
 
@@ -182,15 +179,14 @@ def scan_direction(P, rdert_,dert_ext_, y,x, axis, der__t,mask__, fleft):  # lef
     while True:
         x0, y0 = int(x), int(y)  # floor
         x1, y1 = x0+1, y0+1  # ceiling
+        if mask__[y0,x0] and mask__[y0,x1] and mask__[y1,x0] and mask__[y1,x1]:
+            break  # need at least one unmasked cell to continue direction
         kernel = [  # cell weighing by inverse distance from float y,x:
             # https://www.researchgate.net/publication/241293868_A_study_of_sub-pixel_interpolation_algorithm_in_digital_speckle_correlation_method
             (y0,x0, (y1-y) * (x1-x)),
             (y0,x1, (y1-y) * (x-x0)),
             (y1,x0, (y-y0) * (x1-x)),
             (y1,x1, (y-y0) * (x-x0))]
-        mask = sum((mask__[cy,cx] * dist for cy,cx, dist in kernel))  # weighted average of four kernel cells
-        if mask >.75:  # need at least one unmasked cell
-            break  # terminate direction in P
         ptuple = [
             sum((par__[cy,cx] * dist for cy,cx, dist in kernel))
             for par__ in der__t[1:]]
@@ -238,10 +234,9 @@ def scan_P_rim(P, blob, rim_, cP_, fup):  # scan rim roots up and down from curr
 
     link_, new_link_ = [],[]  # potential links per direction
     for roots,y,x in rim_:
-        if roots:  # set(link_+ roots)
-            link_ += [root for root in roots if root not in link_]  # unique only
+        if roots: link_ = list(set(link_ + roots))  # unique only
         else:  # no adj root, may form new P from dert:
-            new_link_ += [[y,x]] if [y,x] not in new_link_ else []
+            new_link_ += [[blob.der__t[1][y,x], y,x]] if [y,x] not in new_link_ else []  # der__t[1] is G
 
     for i, _P in enumerate( sorted(link_, key=lambda x:x.ptuple[5], reverse=True)):  # sort by P.G, rdn for lower-G _Ps only
         if _P.ptuple[5] > ave*(i+1):  # fork redundancy
@@ -253,7 +248,7 @@ def scan_P_rim(P, blob, rim_, cP_, fup):  # scan rim roots up and down from curr
         else: break  # the rest of link_ is weaker
 
     if not link_ and new_link_:  # add not-redundant new P:
-        dert,y,x = sorted(new_link_, key=lambda x:x[0][9], reverse=True)[0]
+        _, y,x = sorted(new_link_, key=lambda x:x[0], reverse=True)[0]  # sort by G
         # form new _P from max-G rim dert along P.axis:
         _P = form_P(blob.der__t, blob.mask__, axis=P.axis, y=y, x=x)
         if fup: P.link_ += [_P]  # represent uplinks only
