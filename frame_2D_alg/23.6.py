@@ -587,3 +587,119 @@ def form_rdert(rx,ry, der__t, imask__):
         return ptuple
 
     else: return None
+
+
+def op_parT(_parT, parT, fcomp, fneg=0):  # unpack aggH( subH( derH -> ptuples
+
+    for i in 0, 1:
+        if fcomp:
+            dparT = comp_unpack(_parT, parT, rn)
+        else:
+            sum_unpack(_parT, parT)
+        pass
+        # use sum_unpack here?
+        _parH, parH = _parT[i], parT[i]
+        for _aggH, aggH in _parH, parH:
+            daggH = []
+            for _subH, subH in _aggH, aggH:
+                dsubH = []
+                for Que, que in _subH, subH:
+                    if fcomp:
+                        parT, valT, rdnT = comp_unpack(Ele, ele, rn)
+                        for i, parH in enumerate(0, 1):
+                            dparT[i] += [parT[1]]
+                    else:
+                        pass
+                        # use sum_unpack here?
+                daggH += [dsubH]
+            dparH[i] += [daggH]
+        """  
+        elev, _idx, d_didx, last_i, last_idx = 0,0,0,-1,-1
+        for _i, _didx in enumerate(_parH.Q):  # i: index in Qd (select param set), idx: index in ptypes (full param set)
+            _idx += _didx; idx = last_idx+1; _fd = _parH.fds[elev]; _val = _parH.Qd[_i].valt[_fd]
+            for i, didx in enumerate(parH.Q[last_i+1:]):  # start after last matching i and idx
+                idx += didx; fd = _parH.fds[elev]; val = parH.Qd[_i+i].valt[fd]
+                if _idx==idx:
+                    if _fd==fd:
+                        _sub = _parH.Qd[_i]; sub = parH.Qd[_i+i]
+                        if fcomp:
+                            if _val > G_aves[fd] and val > G_aves[fd]:
+                                if sub.n:  # sub is ptuple
+                                    dsub = op_ptuple(_sub, sub, fcomp, fd, fneg)  # sub is vertuple | ptuple | ext
+                                else:  # sub is pH
+                                    dsub = op_parH(_sub, sub, 0, fcomp)  # keep unpacking aggH | subH | derH
+                                    if sub.ext[1]: comp_ext(_sub.ext[1],sub.ext[1], dsub)
+                                dparH.valt[0]+=dsub.valt[0]; dparH.valt[1]+=dsub.valt[1]  # add rdnt?
+                                dparH.Qd += [dsub]; dparH.Q += [_didx+d_didx]
+                                dparH.fds += [fd]
+                        else:  # no eval: no new dparH
+                            if sub.n: op_ptuple(_sub, sub, fcomp, fd, fneg)  # sub is vertuple | ptuple | ext
+                            else:
+                                op_parH(_sub, sub, fcomp)  # keep unpacking aggH | subH | derH
+                                if sub.ext[1]: sum_ext(_sub.ext, sub.ext)
+                    last_i=i; last_idx=idx  # last matching i,idx
+                    break
+                elif fcomp:
+                    if _idx < idx: d_didx+=didx  # += missing didx
+                else:
+                    _parH.Q.insert[idx, didx+d_didx]
+                    _parH.Q[idx+1] -= didx+d_didx  # reduce next didx
+                    _parH.Qd.insert[idx, deepcopy(parH.Qd[idx])]
+                    d_didx = 0
+                if _idx < idx: break  # no par search beyond current index
+                # else _idx > idx: keep searching
+                idx += 1  # 1 sub/loop
+            _idx += 1
+            if elev in (0,1) or not _i%(2**elev):  # first 2 levs are single-element, higher levs are 2**elev elements
+                elev+=1  # elevation
+
+        """
+    if fcomp:
+        return dparH
+    else:
+        _parH.valt[0] += parH.valt[0];
+        _parH.valt[1] += parH.valt[1]
+        _parH.rdnt[0] += parH.rdnt[0];
+        _parH.rdnt[1] += parH.rdnt[1]
+
+def comp_G_(G_, pri_G_=None, f1Q=1, fd = 0, fsub=0):  # cross-comp Graphs if f1Q, else comp G_s in comp_node_
+
+    if not f1Q: dpH_=[]  # not sure needed
+
+    for i, _iG in enumerate(G_ if f1Q else pri_G_):  # G_ is node_ of root graph, initially converted PPs
+        # follow links in der+, loop all Gs in rng+:
+        for iG in _iG.link_ if fd \
+            else G_[i+1:] if f1Q else G_:  # compare each G to other Gs in rng+, bilateral link assign, val accum:
+            # no new G per sub+, just compare corresponding layers?
+            # if the pair was compared in prior rng+:
+            if iG in [node for link in _iG.link_ for node in link.node_]:  # if f1Q? add frng to skip?
+                continue
+            dy = _iG.box[0]-iG.box[0]; dx = _iG.box[1]-iG.box[1]  # between center x0,y0
+            distance = np.hypot(dy, dx)  # Euclidean distance between centers, sum in sparsity, proximity = ave-distance
+            if distance < ave_distance * ((sum(_iG.pH.valt) + sum(iG.pH.valt)) / (2*sum(G_aves))):
+                # same for cis and alt Gs:
+                for _G, G in ((_iG, iG), (_iG.alt_Graph, iG.alt_Graph)):
+                    if not _G or not G:  # or G.val
+                        continue
+                    # pass parT, valT, rdnT?
+                    dparT,valT,rdnT = comp_unpack(_G.parT, G.parT, rn=1)  # comp layers while lower match?
+                    dpH.ext[1] = [1,distance,[dy,dx]]  # pack in ds
+                    mval, dval = dpH.valt
+                    derG = Cgraph(valt=[mval,dval], G=[_G,G], pH=dpH, box=[])  # box is redundant to G
+                    # add links:
+                    _G.link_ += [derG]; G.link_ += [derG]  # no didx, no ext_valt accum?
+                    if mval > ave_Gm:
+                        _G.link_t[0] += [derG]; _G.link_.valt[0] += mval
+                        G.link_t[0] += [derG]; G.link_.valt[0] += mval
+                    if dval > ave_Gd:
+                        _G.link_t[1] += [derG]; _G.link_.valt[1] += dval
+                        G.link_t[1] += [derG]; G.link_.valt[1] += dval
+
+                    if not f1Q: dpH_+= dpH  # comp G_s
+                # implicit cis, alt pair nesting in mderH, dderH
+    if not f1Q:
+        return dpH_  # else no return, packed in links
+
+    '''
+    comp alts,val,rdn? cluster per var set if recurring across root: type eval if root M|D?
+    '''
