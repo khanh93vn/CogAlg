@@ -136,14 +136,10 @@ def rotate_P_(blob, verbose=False):  # rotate each P to align it with direction 
                 P = form_P(der__t, mask__, axis=axis, y=P.y, x=P.x)  # not pivoting to dert G
                 break
         for _,y,x in P.dert_ext_:  # assign roots in der__t
-            x0 = int(np.floor(x)); x1 = int(np.ceil(x)); y0 = int(np.floor(y)); y1 = int(np.ceil(y))
-            kernel = []
-            if not mask__[y0][x0]: kernel += [[[y0,x0], np.hypot((y-y0),(x-x0))]]
-            if not mask__[y0][x1]: kernel += [[[y0,x1], np.hypot((y-y0),(x-x1))]]
-            if not mask__[y1][x0]: kernel += [[[y1,x0], np.hypot((y-y1),(x-x0))]]
-            if not mask__[y1][x1]: kernel += [[[y1,x1], np.hypot((y-y1),(x-x1))]]
-
-            y,x = sorted(kernel, key=lambda x: x[1])[0][0]  # nearest cell y,x
+            x0 = int(x); y0 = int(y)
+            x1 = x0 + 1; y1 = y0 + 1
+            y = y0 if y1 - y > y - y0   # nearest cell y
+            x = x0 if x1 - x > x - x0   # nearest cell x
             blob.der__t_roots[y][x] += [P]  # final rotated P
 
         P_ += [P]
