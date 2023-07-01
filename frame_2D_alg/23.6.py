@@ -723,3 +723,34 @@ def sum_dert(Dert,Valt,Rdnt, derP):
 
     # if fd: Rdnt = [[[rdn+base_rdn for rdn in rdnL] for rdnL in link.rdnH] for rdnH in link.rdnT]
     # else:  Rdnt = [rdn+base_rdn for rdn in link.rdnT]  # single mtuple rdn, dptuple rdn
+
+def feedback(root, fd):  # append new der layers to root
+
+    Fback = root.fback_.pop()  # init with 1st fback: [derT,valT,rdnT]
+    while root.fback_:
+        sum_unpack(Fback, root.fback_.pop())  # Fback += fback, both = [derT,valT,rdnT]
+    sum_unpack([root.derT,root.valT,root.rdnT], Fback)  # root += Fback, fixed nesting?
+
+    for Layer,layer in zip(Fback,fback):  # combined layer is scalars: [n_msubPP,n_dsubPP, mval,dval, mrdn,drdn]
+        for i, (Scal,scal) in enumerate(zip(Layer,layer)):
+            Layer[i]+=layer[i]
+
+    if isinstance(root.roott[fd], CPP):  # not blob
+        root = root.roott[fd]
+        root.fback_ += [Fback]
+        if len(root.fback_) == len(root.P__[fd]):  # all nodes term, fed back to root.fback_
+            feedback(root, fd)  # derT/ rng layer in sum2PP, deeper rng layers are appended by feedback
+
+def sum_unpack(Q,q):  # recursive unpack of two pairs of nested sequences, to sum final ptuples
+
+    Que,Val_,Rdn_ = Q; que,val_,rdn_ = q  # alternating rngH( derH( rngH... nesting, down to ptuple|val|rdn
+    for i, (Ele,Val,Rdn, ele,val,rdn) in enumerate(zip_longest(Que,Val_,Rdn_, que,val_,rdn_, fillvalue=[])):
+        if ele:
+            if Ele:
+                if isinstance(val,list):  # element is layer or fork
+                    sum_unpack([Ele,Val,Rdn], [ele,val,rdn])
+                else:  # ptuple
+                    Val_[i] += val; Rdn_[i] += rdn
+                    sum_ptuple(Ele, ele)
+            else:
+                Que += [deepcopy(ele)]; Val_+= [deepcopy(val)]; Rdn_+= [deepcopy(rdn)]
