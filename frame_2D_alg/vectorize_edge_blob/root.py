@@ -107,10 +107,7 @@ def term_P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, y,x, Pdert_):
 
     G = np.hypot(Dy, Dx); Ga = (Cos_da0 + 1) + (Cos_da1 + 1)  # recompute G,Ga, it can't reconstruct M,Ma
     L = len(Pdert_)  # params.valt = [params.M+params.Ma, params.G+params.Ga]?
-    return CP(ptuple=[I, G, Ga, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], L], dert_=Pdert_, y=y, x=x-(L+1)//2)
-
-def pad1(mask__):  # pad blob.mask__ with rim of 1s:
-    return np.pad(mask__,pad_width=[(1,1),(1,1)], mode='constant',constant_values=True)
+    return CP(ptuple=[I, G, Ga, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], L], dert_=Pdert_, y=y, x=x+1-(L+1)//2)
 
 def rotate_P_(blob, verbose=False):  # rotate each P to align it with direction of P or dert gradient
 
@@ -125,7 +122,8 @@ def rotate_P_(blob, verbose=False):  # rotate each P to align it with direction 
         while abs(daxis) * G > ave_rotate:  # recursive reform P in blob.der__t along new G angle:
             if verbose: print(f"\rRotating... {i}/{len(P_)}: {round(np.degrees(np.arctan2(*P.axis)))}°", end=" " * 79); sys.stdout.flush()
             _axis = P.axis
-            P = form_P(der__t, mask__, axis=np.divide(P.ptuple[5], np.hypot(*P.ptuple[5])), y=P.y, x=P.x)  # pivot to P angle
+            cdert = P.dert_[len(P.dert_)//2]  # pivoting dert
+            P = form_P(der__t, mask__, axis=np.divide(P.ptuple[5], np.hypot(*P.ptuple[5])), y=P.y, x=P.x, cdert=cdert)  # pivot to P angle
             maxis, daxis = comp_angle(_axis, P.axis)
             ddaxis = daxis +_daxis  # cancel-out if opposite-sign
             _daxis = daxis
@@ -133,7 +131,8 @@ def rotate_P_(blob, verbose=False):  # rotate each P to align it with direction 
             if ddaxis * G < ave_rotate:  # terminate if oscillation
                 axis = np.add(_axis, P.axis)
                 axis = np.divide(axis, np.hypot(*axis))  # normalize
-                P = form_P(der__t, mask__, axis=axis, y=P.y, x=P.x)  # not pivoting to dert G
+                cdert = P.dert_[len(P.dert_) // 2]  # pivoting dert
+                P = form_P(der__t, mask__, axis=axis, y=P.y, x=P.x, cdert=cdert)  # not pivoting to dert G
                 break
         for _,y,x in P.dert_ext_:  # assign roots in der__t
             x0 = int(np.floor(x)); x1 = int(np.ceil(x)); y0 = int(np.floor(y)); y1 = int(np.ceil(y))
@@ -157,13 +156,13 @@ def rotate_P_(blob, verbose=False):  # rotate each P to align it with direction 
 
     if verbose: print("\r", end=" " * 79); sys.stdout.flush(); print("\r", end="")
 
-def form_P(der__t, mask__, axis, y,x):
+def form_P(der__t, mask__, axis, y,x, cdert):
 
-    rdert_,dert_ext_ = [],[]
     P = CP()
+    rdert_, dert_ext_ = [cdert], [[[P], y, x]]
     rdert_,dert_ext_, ry,rx = scan_direction(P, rdert_,dert_ext_, y,x, axis, der__t,mask__, fleft=1)  # scan left, include pivot
     x0=rx; yleft=ry  # up-right or down-right
-    rdert_,dert_ext_, ry,rx = scan_direction(P, rdert_,dert_ext_, ry,rx, axis, der__t,mask__, fleft=0)  # scan right:
+    rdert_,dert_ext_, ry,rx = scan_direction(P, rdert_,dert_ext_, y,x, axis, der__t,mask__, fleft=0)  # scan right:
     # initialization:
     rdert = rdert_[0]
     G, Ga, I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1 = rdert; M=ave_g-G; Ma=ave_ga-Ga; dert_=[rdert]
@@ -182,13 +181,22 @@ def form_P(der__t, mask__, axis, y,x):
     return P
 
 def scan_direction(P, rdert_,dert_ext_, y,x, axis, der__t,mask__, fleft):  # leftward or rightward from y,x
-
+    Y, X = mask__.shape
     sin,cos = axis
+    _y, _x = y, x
+    if fleft:
+        y, x = y - sin, x - cos
+    else:
+        y, x = y + sin, x + cos
     while True:
         x0, y0 = int(x), int(y)  # floor
-        x1, y1 = x0+1, y0+1  # ceiling
-        if all([mask__[y0,x0], mask__[y0,x1], mask__[y1,x0], mask__[y1,x1]]):
-            break  # need at least one unmasked cell to continue direction
+        x1, y1 = x0 + 1, y0 + 1  # ceiling
+        if x0 < 0 or x1 >= X or y0 < 0 or y1 >= Y: break  # boundary check
+
+        if mask__[round(y), round(x)]: break
+        if abs(y-_y) + abs(x-_x) == 2:  # if there is intermediate cell
+            pass    # TODO: check if intermediate cell is masked
+
         kernel = [  # cell weighing by inverse distance from float y,x:
             # https://www.researchgate.net/publication/241293868_A_study_of_sub-pixel_interpolation_algorithm_in_digital_speckle_correlation_method
             (y0,x0, (y1-y) * (x1-x)),
@@ -198,6 +206,7 @@ def scan_direction(P, rdert_,dert_ext_, y,x, axis, der__t,mask__, fleft):  # lef
         ptuple = [
             sum((par__[cy,cx] * dist for cy,cx, dist in kernel))
             for par__ in der__t[1:]]
+        _y, _x = y, x
         if fleft:
             y -= sin; x -= cos  # next y,x
             rdert_ = [ptuple] + rdert_ # append left
