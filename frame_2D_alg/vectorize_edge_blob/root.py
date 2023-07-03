@@ -60,11 +60,11 @@ def vectorize_root(blob, verbose=False):  # always angle blob, composite dert co
 
     comp_slice(blob, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
     for fd, PP_ in enumerate([blob.PPm_, blob.PPd_]):
-        sub_recursion_eval(blob, PP_, fd=fd)  # intra PP, no blob fb
+        sub_recursion_eval(blob, PP_)  # intra PP, no blob fb
         # cross-compare PPs, cluster them in graphs:
-        if sum([np.sum(PP.valT[fd]) for PP in PP_]) > ave * sum([np.sum(PP.rdnT[fd]) for PP in PP_]):
+        if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
             agg_recursion_eval(blob, copy(PP_), fd=fd)  # comp sub_PPs, form intermediate PPs
-
+        # else feedback?
 '''
 or only compute params needed for rotate_P_?
 '''
