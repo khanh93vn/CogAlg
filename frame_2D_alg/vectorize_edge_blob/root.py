@@ -64,7 +64,7 @@ def vectorize_root(blob, verbose=False):  # always angle blob, composite dert co
         # cross-compare PPs, cluster them in graphs:
         if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
             agg_recursion_eval(blob, copy(PP_), fd=fd)  # comp sub_PPs, form intermediate PPs
-        # else feedback?
+
 '''
 or only compute params needed for rotate_P_?
 '''
@@ -108,7 +108,7 @@ def term_P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, y,x, Pdert_):
     G = np.hypot(Dy, Dx); Ga = (Cos_da0 + 1) + (Cos_da1 + 1)  # recompute G,Ga, it can't reconstruct M,Ma
     L = len(Pdert_)  # params.valt = [params.M+params.Ma, params.G+params.Ga]?
     P = CP(ptuple=[I, G, Ga, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], L], dert_=Pdert_)
-    P.dert_ext_ = [[P, y, kx] for kx in range(x - L + 1, x + 1)] # +1 to compensate for x-1 in slice_blob
+    P.dert_ext_ = [[P, y, kx] for kx in range(x-L+1, x+1)]  # +1 to compensate for x-1 in slice_blob
     _, P.y, P.x = P.dert_ext_[L//2]
     return P
 
@@ -168,12 +168,12 @@ def scan_direction(P, rdert_,dert_ext_, y,x, axis, der__t,mask__, fleft):  # lef
     Y, X = mask__.shape # boundary
     sin,cos = axis      # unpack axis
     r = cos*y - sin*x   # from P line equation: cos*y - sin*x = r = constant
-    _cy, _cx = round(y), round(x)                   # keep previous cell
+    _cy,_cx = round(y), round(x)  # keep previous cell
     y, x = (y-sin,x-cos) if fleft else (y+sin, x+cos)   # first dert position in the direction of axis
-    while True:                                     # begin scanning, stop at boundary or edge of blob
-        x0, y0 = int(x), int(y)                             # floor
-        x1, y1 = x0 + 1, y0 + 1                             # ceiling
-        if x0 < 0 or x1 >= X or y0 < 0 or y1 >= Y: break    # boundary check
+    while True:                   # start scanning, stop at boundary or edge of blob
+        x0, y0 = int(x), int(y)   # floor
+        x1, y1 = x0 + 1, y0 + 1   # ceiling
+        if x0 < 0 or x1 >= X or y0 < 0 or y1 >= Y: break  # boundary check
         kernel = [  # cell weighing by inverse distance from float y,x:
             # https://www.researchgate.net/publication/241293868_A_study_of_sub-pixel_interpolation_algorithm_in_digital_speckle_correlation_method
             (y0, x0, (y1 - y) * (x1 - x)),
@@ -250,13 +250,14 @@ def scan_P_rim(P, blob, rim_, cP_, fup):  # scan rim roots up and down from curr
 
     if link_:
         for i, _P in enumerate(sorted(link_, key=lambda P:P.ptuple[1], reverse=True)):  # sort by P.G, rdn for lower-G _Ps only
-            if _P.ptuple[1] > ave*(i+1):  # fork redundancy | this kills some links?
+            if _P.ptuple[1] > ave*(i+1):  # fork redundancy
                 if fup and _P not in P.link_: P.link_ += [_P]  # represent uplinks only
                 elif P not in _P.link_:       _P.link_ += [P]
                 if _P in cP_:
                     cP_.remove(_P)
                     form_link_(_P, cP_, blob)
                 break  # the rest of link_ is weaker
+
     elif new_link_:  # add not-redundant new P:
         g, y,x = sorted(new_link_, key=lambda new_link:new_link[0], reverse=True)[0]  # sort by G
         # form new _P from max-G rim dert along P.axis:
