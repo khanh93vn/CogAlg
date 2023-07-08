@@ -1,3 +1,5 @@
+from typing import Tuple
+from numbers import Number
 from class_cluster import ClusterStructure, init_param as z
 '''
     Conventions:
@@ -28,14 +30,14 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     derH : list = z([])  # [[mtuple,dtuple,mval,dval,mrdn,drdn]] vertical derivatives summed from P links
     valt : list = z([0,0])
     rdnt : list = z([1,1])
-    axis : list = z([0,1])  # prior slice angle, init sin=0,cos=1
-    dert_ : list = z([])  # array of pixel-level derts, redundant to uplink_, only per blob?
-    dert_ext_: list = z([])  # external params: roots and coords per dert
-    link_ : list = z([])  # all links
-    link_t: list = z([[],[]])  # +ve rlink_, dlink_
-    roott : list = z([None, None])  # mPP,dPP that contain this P
-    y : float = 0.0
-    x : float = 0.0
+    anchor : Tuple[Number, Number] = None   # prior anchor point, init 0,0
+    axis : Tuple[Number, Number] = (0,1)    # prior slice angle, init sin=0,cos=1
+    dert_ : list = z([])                    # array of pixel-level derts, redundant to uplink_, only per blob?
+    dert_ext_: list = z([])                 # external params: roots and coords per dert
+    dert_olp_: set = z(set())               # overlap with pixel derts
+    link_ : list = z([])                    # all links
+    link_t: list = z([[],[]])               # +ve rlink_, dlink_
+    roott : list = z([None, None])          # mPP,dPP that contain this P
     ''' 
     add L,S,A from links?
     optional:

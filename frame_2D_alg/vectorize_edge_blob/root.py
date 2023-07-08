@@ -108,8 +108,9 @@ def term_P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, y,x, Pdert_):
     G = np.hypot(Dy, Dx); Ga = (Cos_da0 + 1) + (Cos_da1 + 1)  # recompute G,Ga, it can't reconstruct M,Ma
     L = len(Pdert_)  # params.valt = [params.M+params.Ma, params.G+params.Ga]?
     P = CP(ptuple=[I, G, Ga, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], L], dert_=Pdert_)
-    P.dert_ext_ = [[P, y, kx] for kx in range(x-L+1, x+1)]  # +1 to compensate for x-1 in slice_blob
-    _, P.y, P.x = P.dert_ext_[L//2]
+    P.dert_ext_ = [(y, kx) for kx in range(x-L+1, x+1)]  # +1 to compensate for x-1 in slice_blob
+    P.anchor = P.dert_ext_[L//2]
+    P.dert_olp_ = set(P.dert_ext_)
     return P
 
 def rotate_P_(blob, verbose=False):  # rotate each P to align it with direction of P or dert gradient
@@ -135,8 +136,8 @@ def rotate_P_(blob, verbose=False):  # rotate each P to align it with direction 
                 axis = np.divide(axis, np.hypot(*axis))  # normalize
                 P = form_P(P, der__t, mask__, axis=axis)  # not pivoting to dert G
                 break
-        for _,y,x in P.dert_ext_:  # assign roots in der__t
-            blob.der__t_roots[round(y)][round(x)] += [P]  # final rotated P
+        for cy,cx in P.dert_olp_:  # assign roots in der__t
+            blob.der__t_roots[cy][cx] += [P]  # final rotated P
 
         P_ += [P]
     blob.P_[:] = P_
@@ -144,10 +145,10 @@ def rotate_P_(blob, verbose=False):  # rotate each P to align it with direction 
     if verbose: print("\r", end=" " * 79); sys.stdout.flush(); print("\r", end="")
 
 def form_P(P, der__t, mask__, axis):
-    y, x = P.y, P.x
-    rdert_, dert_ext_ = [P.dert_[len(P.dert_)//2]], [[[P], y, x]]      # include pivot
-    rdert_,dert_ext_ = scan_direction(P, rdert_,dert_ext_, y,x, axis, der__t,mask__, fleft=1)  # scan left
-    rdert_,dert_ext_ = scan_direction(P, rdert_,dert_ext_, y,x, axis, der__t,mask__, fleft=0)  # scan right
+    rdert_, dert_ext_ = [P.dert_[len(P.dert_)//2]],[P.anchor]      # include pivot
+    dert_olp_ = {(round(P.anchor[0]), round(P.anchor[1]))}
+    rdert_,dert_ext_,dert_olp_ = scan_direction(rdert_,dert_ext_,dert_olp_, P.anchor, axis, der__t,mask__, fleft=1)  # scan left
+    rdert_,dert_ext_,dert_olp_ = scan_direction(rdert_,dert_ext_,dert_olp_, P.anchor, axis, der__t,mask__, fleft=0)  # scan right
     # initialization
     rdert = rdert_[0]
     G, Ga, I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1 = rdert; M=ave_g-G; Ma=ave_ga-Ga; dert_=[rdert]
@@ -156,16 +157,18 @@ def form_P(P, der__t, mask__, axis):
         g, ga, i, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = rdert
         I+=i; M+=ave_g-g; Ma+=ave_ga-ga; Dy+=dy; Dx+=dx; Sin_da0+=sin_da0; Cos_da0+=cos_da0; Sin_da1+=sin_da1; Cos_da1+=cos_da1
         dert_ += [rdert]
-    L=len(dert_)
+    L = len(dert_)
     P.dert_ = dert_; P.dert_ext_ = dert_ext_                        # new dert and dert_ext
-    _, P.y, P.x = P.dert_ext_[L//2]                                 # new center
+    P.anchor = P.dert_ext_[L//2]                                    # new center
     G = np.hypot(Dy,Dx); Ga =(Cos_da0+1)+(Cos_da1+1)                # recompute G,Ga
     P.ptuple = [I,G,Ga,M,Ma, [Dy,Dx], [Sin_da0,Cos_da0,Sin_da1,Cos_da1], L]
     P.axis = axis
+    P.dert_olp_ = dert_olp_
     return P
 
-def scan_direction(P, rdert_,dert_ext_, y,x, axis, der__t,mask__, fleft):  # leftward or rightward from y,x
+def scan_direction(rdert_,dert_ext_,dert_olp_, anchor, axis, der__t,mask__, fleft):  # leftward or rightward from y,x
     Y, X = mask__.shape # boundary
+    y, x = anchor
     sin,cos = axis      # unpack axis
     r = cos*y - sin*x   # from P line equation: cos*y - sin*x = r = constant
     _cy,_cx = round(y), round(x)  # keep previous cell
@@ -183,36 +186,39 @@ def scan_direction(P, rdert_,dert_ext_, y,x, axis, der__t,mask__, fleft):  # lef
         cy, cx = round(y), round(x)                         # nearest cell of (y, x)
         if mask__[cy, cx]: break                            # mask check of (y, x)
         if abs(cy-_cy) + abs(cx-_cx) == 2:                  # mask check of intermediate cell between (y, x) and (_y, _x)
-            # Get 2 potential intermediate cells
-            diags = [(ky,kx) for ky, kx, w in kernel        # start from kernel cells...
-                     if (ky,kx) not in ((_cy,_cx),(cy,cx))] # ...excludes (_y, _x) and (y, x)
-
             # Determine whether P goes above, below or crosses the middle point:
-            mx, my = x0 + 0.5, y0 + 0.5                     # Get middle point
+            my, mx = (_cy+cy) / 2, (_cx+cx) / 2             # Get middle point
             myc1 = sin * mx + r                             # my1: y at mx on P; myc1 = my1*cos
             myc = my*cos                                    # multiply by cos to avoid division
+            if cos < 0: myc, myc1 = -myc, -myc1             # reverse sign for comparison because of cos
             if abs(myc-myc1) > 1e-5:                        # check whether myc!=myc1, taking precision error into account
                 # y is reversed in image processing, so:
                 # - myc1 > myc: P goes below the middle point
                 # - myc1 < myc: P goes above the middle point
                 # - myc1 = myc: P crosses the middle point, there's no intermediate cell
-                ty, tx = diags[0] if myc1 < myc else diags[1] # diags[0] always has the smaller y, because of kernel ordering
+                ty, tx = (
+                    ((_cy, cx) if _cy < cy else (cy, _cx))
+                    if myc1 < myc else
+                    ((_cy, cx) if _cy > cy else (cy, _cx))
+                )
                 if mask__[ty, tx]: break    # if the cell is masked, stop
+                dert_olp_ |= {(ty,tx)}
 
         ptuple = [
             sum((par__[ky, kx] * dist for ky, kx, dist in kernel))
             for par__ in der__t[1:]]
+        dert_olp_ |= {(cy, cx)}  # add current cell to overlap
         _cy, _cx = cy, cx
         if fleft:
-            rdert_ = [ptuple] + rdert_ # append left
-            dert_ext_ = [[[P],y,x]] + dert_ext_  # append left external params: roots and coords per dert
+            rdert_ = [ptuple] + rdert_          # append left
+            dert_ext_ = [(y,x)] + dert_ext_     # append left coords per dert
             y -= sin; x -= cos  # next y,x
         else:
             rdert_ = rdert_ + [ptuple]  # append right
-            dert_ext_ = dert_ext_ + [[[P],y,x]]
+            dert_ext_ = dert_ext_ + [(y,x)]
             y += sin; x += cos  # next y,x
 
-    return rdert_,dert_ext_
+    return rdert_,dert_ext_,dert_olp_
 
 # draft
 def form_link_(P, cP_, blob):  # trace adj Ps up and down by adj dert roots, fill|prune if missing or redundant, add to P.link_ if >ave*rdn
