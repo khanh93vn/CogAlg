@@ -54,9 +54,9 @@ def vectorize_root(blob, verbose=False):  # always angle blob, composite dert co
 
     slice_blob(blob, verbose)  # form 2D array of Ps: horizontal blob slices in der__t
     rotate_P_(blob, verbose)  # re-form Ps around centers along P.G, P sides may overlap, if sum(P.M s + P.Ma s)?
-    cP_ = copy(blob.P_)  # to pop here, remove in scan_P_rim
+    cP_ = set(blob.P_)  # to pop here
     while cP_:
-        form_link_(cP_.pop(0), cP_, blob)  # trace adjacent Ps, fill|prune if missing or redundant, add them to P.link_
+        form_link_(cP_.pop(), cP_, blob)  # trace adjacent Ps, fill|prune if missing or redundant, add them to P.link_
 
     comp_slice(blob, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
     for fd, PP_ in enumerate([blob.PPm_, blob.PPd_]):
@@ -223,56 +223,44 @@ def scan_direction(rdert_,dert_ext_,dert_olp_, anchor, axis, der__t,mask__, flef
 # draft
 def form_link_(P, cP_, blob):  # trace adj Ps up and down by adj dert roots, fill|prune if missing or redundant, add to P.link_ if >ave*rdn
     Y, X = blob.mask__.shape
-    up_,down_ = [],[]
-    up_rim_, down_rim_ = [],[]
-    '''
-    up_indices = [up[i] += P.axis[i] for i in 0,1]
-    down_indices = [down[i] += P.axis[i] for i in 0,1]
-    '''
-    for roots,y,x in P.dert_ext_:
-        ix, iy = round(y), round(x)
-        # get relative coords in 3x3 dert rim, loop clockwise:
-        for i, (rim_y,rim_x) in enumerate(product(range(iy-1,iy+2),range(ix-1,ix+2))):
-            if rim_x < 0 or rim_y < 0 or rim_x >= X or rim_y >= Y: continue  # boundary check
-            if i in up_indices and (rim_y, rim_x) not in up_:
-                up_ += [(rim_y,rim_x)]
-                up_rim_ += [[blob.der__t_roots[rim_y][rim_x], rim_y,rim_x]]  # add up-adjacent roots
-            elif i in down_indices and (rim_y, rim_x) not in down_:
-                down_ += [(rim_y,rim_x)]
-                down_rim_ += [[blob.der__t_roots[rim_y][rim_x], rim_y,rim_x]]  # add down-adjacent roots
-    # scan rim roots up and down from current P, repeat with adj_Ps:
-    scan_P_rim(P, blob, up_rim_, cP_, blob.mask__, fup=1)
-    scan_P_rim(P, blob, down_rim_, cP_, blob.mask__, fup=0)
 
-def scan_P_rim(P, blob, rim_, cP_, mask__, fup):  # scan rim roots up and down from current P, repeat with adj_Ps:
+    # rim as a dictionary with key=(y,x) and value=roots
+    rim_ = {(rim_y,rim_x):blob.der__t_roots[rim_y][rim_x]                   # unique key-value pair
+            for iy, ix in P.dert_olp_                                       # overlap derts
+            for rim_y,rim_x in product(range(iy-1,iy+2),range(ix-1,ix+2))   # rim loop of iy, ix
+            if (0 <= rim_y < Y) and (0 <= rim_x < X)                        # boundary check
+            and not blob.mask__[rim_y,rim_x]}                               # blob boundary check
 
-    link_, new_link_ = [], set()  # potential links per direction
-    for roots, y, x in rim_:
-        if roots:
-            link_ = list(set(link_ + roots))  # unique only
-        elif not mask__[y, x]:  # no adj root, may form new P from unmasked dert:
-            g = blob.der__t[1][y, x]  # der__t[1] is G
-            new_link_.add((g, y, x))
-    if link_:
-        for i, _P in enumerate(sorted(link_, key=lambda P:P.ptuple[1], reverse=True)):  # sort by P.G, rdn for lower-G _Ps only
-            if _P.ptuple[1] > ave*(i+1):  # fork redundancy
-                if fup and _P not in P.link_: P.link_ += [_P]  # represent uplinks only
-                elif P not in _P.link_:       _P.link_ += [P]
-                if _P in cP_:
-                    cP_.remove(_P)
-                    form_link_(_P, cP_, blob)
-                break  # the rest of link_ is weaker
+    # scan rim roots:
+    link_ = {*sum(rim_.values(), start=[])} & cP_   # intersect with cP_ to prevent duplicate links and self linking (P not in cP_)
 
-    elif new_link_:  # add not-redundant new P:
-        g, y,x = sorted(new_link_, key=lambda new_link:new_link[0], reverse=True)[0]  # sort by G
-        # form new _P from max-G rim dert along P.axis:
-        dert = [par__[y, x] for par__ in blob.der__t[1:]]
-        _P = form_P(CP(y=y, x=x, dert_=[dert]),
-                    blob.der__t, blob.mask__, axis=np.divide(dert[3:5], g))
-        if fup and _P not in P.link_: P.link_ += [_P]  # represent uplinks only
-        elif P not in _P.link_:      _P.link_ += [P]
-        blob.P_ += [_P]
-        form_link_(_P, cP_, blob)
+    # form links:
+    for _P in link_:
+        assert P is not _P, "P should not be linked to itself"
+        assert P not in _P.link_, "P should not be linked to the same P twice"
+        assert _P not in P.link_, "P should not be linked to the same P twice"
+        P.link_ += [_P]; _P.link_ += [P]
+        # no need to call form_link_ recursively
+
+    # check empty link_:
+    if not P.link_:
+        # filter non-empty roots and get max-G dert coord:
+        y, x = max([(y, x) for y, x in rim_ if not rim_[y, x]],     # filter non-empty roots
+                     key=lambda yx: blob.der__t[1][yx])             # get max-G dert coord
+
+        # get max-G dert:
+        dert = [par__[y,x] for par__ in blob.der__t[1:]]       # get max-G dert
+
+        # form new P
+        _P = form_P(CP(dert, dert_=[dert], dert_ext_=[(y,x)], dert_olp_={(y,x)}, anchor=(y, x)),
+                    blob.der__t, blob.mask__,
+                    axis=np.divide(dert[3:5], dert[0]))
+
+        # link _P:
+        P.link_ += [_P]; _P.link_ += [P]    # form link with P first to avoid further recursion
+        _cP_ = set(blob.P_) - {P}           # exclude P
+        form_link_(_P, _cP_, blob)          # call form_link_ for the newly formed _P
+        blob.P_ += [_P]                     # add _P to blob.P_ for further linking with remaining cP_
 
 
 def slice_blob_ortho(blob, verbose=False):  # slice_blob with axis-orthogonal Ps
