@@ -75,17 +75,17 @@ def comp_a(dert__, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
     angle__botright = angle__[:, 1:, 1:]
     angle__botleft  = angle__[:, 1:, :-1]
 
-    sin_da0__, cos_da0__ = angle_diff(angle__botleft, angle__topright)  # dax__ contains 2 component arrays: sin(dax), cos(dax) ...
-    sin_da1__, cos_da1__ = angle_diff(angle__botright, angle__topleft)  # ... same for day
+    uday__, vday__ = angle_diff(angle__botleft, angle__topright)  # dax__ contains 2 component arrays: sin(dax), cos(dax) ...
+    udax__, vdax__ = angle_diff(angle__botright, angle__topleft)  # ... same for day
 
     with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
-        ma__ = (cos_da0__ + 1) + (cos_da1__ + 1)  # +1 for all positives
+        ma__ = (vday__ + 1) + (vdax__ + 1)  # +1 for all positives
         # or ma__ = ave_ga - ga__?
 
     # angle change in y, sines are sign-reversed because da0 and da1 are top-down, no reversal in cosines
-    day__ = [-sin_da0__ - sin_da1__, cos_da0__ + cos_da1__]
-    # angle change in x, positive sign is right-to-left, so only sin_da0__ is sign-reversed
-    dax__ = [-sin_da0__ + sin_da1__, cos_da0__ + cos_da1__]
+    day__ = [-uday__ - udax__, vday__ + vdax__]
+    # angle change in x, positive sign is right-to-left, so only uday__ is sign-reversed
+    dax__ = [-uday__ + udax__, vday__ + vdax__]
     '''
     sin(-θ) = -sin(θ), cos(-θ) = cos(θ): 
     sin(da) = -sin(-da), cos(da) = cos(-da) => (sin(-da), cos(-da)) = (-sin(da), cos(da))

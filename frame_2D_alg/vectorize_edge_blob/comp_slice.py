@@ -273,13 +273,13 @@ def comp_angle(_angle, angle):  # rn doesn't matter for angles
 
 def comp_aangle(_aangle, aangle):
 
-    _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _aangle
-    sin_da0, cos_da0, sin_da1, cos_da1 = aangle
+    _uday, _vday, _udax, _vdax = _aangle
+    uday, vday, udax, vdax = aangle
 
-    sin_dda0 = (cos_da0 * _sin_da0) - (sin_da0 * _cos_da0)
-    cos_dda0 = (cos_da0 * _cos_da0) + (sin_da0 * _sin_da0)
-    sin_dda1 = (cos_da1 * _sin_da1) - (sin_da1 * _cos_da1)
-    cos_dda1 = (cos_da1 * _cos_da1) + (sin_da1 * _sin_da1)
+    sin_dda0 = (vday * _uday) - (uday * _vday)
+    cos_dda0 = (vday * _vday) + (uday * _uday)
+    sin_dda1 = (vdax * _udax) - (udax * _vdax)
+    cos_dda1 = (vdax * _vdax) + (udax * _udax)
     # for 2D, not reduction to 1D:
     # aaangle = (sin_dda0, cos_dda0, sin_dda1, cos_dda1)
     # day = [-sin_dda0 - sin_dda1, cos_dda0 + cos_dda1]

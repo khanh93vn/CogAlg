@@ -526,20 +526,20 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
         _mask = True  # mask -1st dert
         x = 0
         for dert, mask in zip(dert_, mask_):
-            g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = dert[1:]  # skip i
+            g, ga, ri, dy, dx, uday, vday, udax, vdax = dert[1:]  # skip i
             if not mask:  # masks: if 0,_1: P initialization, if 0,_0: P accumulation, if 1,_0: P termination
                 if _mask:  # ini P params with first unmasked dert
                     Pdert_ = [dert]
-                    params = Cptuple(I=ri,M=ave_g-g,Ma=ave_ga-ga, angle=[dy,dx], aangle=[sin_da0, cos_da0, sin_da1, cos_da1])
+                    params = Cptuple(I=ri,M=ave_g-g,Ma=ave_ga-ga, angle=[dy,dx], aangle=[uday, vday, udax, vdax])
                 else:
                     # dert and _dert are not masked, accumulate P params:
                     params.M+=ave_g-g; params.Ma+=ave_ga-ga; params.I+=ri; params.angle[0]+=dy; params.angle[1]+=dx
-                    params.aangle = [_par+par for _par,par in zip(params.aangle,[sin_da0,cos_da0,sin_da1,cos_da1])]
+                    params.aangle = [_par+par for _par,par in zip(params.aangle,[uday,vday,udax,vdax])]
                     Pdert_ += [dert]
             elif not _mask:
                 # _dert is not masked, dert is masked, terminate P:
                 params.G = np.hypot(*params.angle)  # Dy,Dx  # recompute G,Ga, it can't reconstruct M,Ma
-                params.Ga = (params.aangle[1]+1) + (params.aangle[3]+1)  # Cos_da0, Cos_da1
+                params.Ga = (params.aangle[1]+1) + (params.aangle[3]+1)  # Vday, Vdax
                 L = len(Pdert_)
                 params.L = L; params.x = x-L/2  # params.valt = [params.M+params.Ma, params.G+params.Ga]
                 P_+=[CP(ptuple=params, box=[y,y, x-L,x], dert_=Pdert_)]

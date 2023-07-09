@@ -224,16 +224,16 @@ def rotate_P(P, dert__, mask__, ave_a, center=None):
     # form rP:
     if not rdert_: return
     rdert = rdert_[0]  # initialization:
-    G, Ga, I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1 = rdert; M=ave_g-G; Ma=ave_ga-Ga; dert_=[rdert]
+    G, Ga, I, Dy, Dx, Uday, Vday, Udax, Vdax = rdert; M=ave_g-G; Ma=ave_ga-Ga; dert_=[rdert]
     # accumulation:
     for rdert in rdert_[1:]:
-        g, ga, i, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = rdert
-        I+=i; M+=ave_g-g; Ma+=ave_ga-ga; Dy+=dy; Dx+=dx; Sin_da0+=sin_da0; Cos_da0+=cos_da0; Sin_da1+=sin_da1; Cos_da1+=cos_da1
+        g, ga, i, dy, dx, uday, vday, udax, vdax = rdert
+        I+=i; M+=ave_g-g; Ma+=ave_ga-ga; Dy+=dy; Dx+=dx; Uday+=uday; Vday+=vday; Udax+=udax; Vdax+=vdax
         dert_ += [rdert]
     # re-form gradients:
-    G = np.hypot(Dy,Dx);  Ga = (Cos_da0 + 1) + (Cos_da1 + 1); L = len(rdert_)
+    G = np.hypot(Dy,Dx);  Ga = (Vday + 1) + (Vdax + 1); L = len(rdert_)
     # replace P:
-    P.ptuple = [I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L]
+    P.ptuple = [I, M, Ma, [Dy, Dx], [Uday, Vday, Udax, Vdax], G, Ga, L]
     P.dert_ = dert_
     P.dert_ext_ = dert_ext_
     P.box = [min(yleft, ry), max(yleft, ry), x0, rx]  # P may go up-right or down-right
@@ -241,9 +241,9 @@ def rotate_P(P, dert__, mask__, ave_a, center=None):
 
     if center: return P
 
-def Dert2P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, G, Ga, L, y, x, Pdert_, dert_roots__):
+def Dert2P(I, M, Ma, Dy, Dx, Uday, Vday, Udax, Vdax, G, Ga, L, y, x, Pdert_, dert_roots__):
 
-    P = CP(ptuple=[I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L], box=[y, y, x-L, x-1], dert_=Pdert_)
+    P = CP(ptuple=[I, M, Ma, [Dy, Dx], [Uday, Vday, Udax, Vdax], G, Ga, L], box=[y, y, x-L, x-1], dert_=Pdert_)
 
     # or after rotate?
     center_x = int((P.box[2] + P.box[3]) /2)
@@ -288,34 +288,34 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
         _mask = True  # mask -1st dert
         x = 0
         for (i, *dert), mask in zip(dert_, mask_):
-            g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = dert
+            g, ga, ri, dy, dx, uday, vday, udax, vdax = dert
             if not mask:  # masks: if 0,_1: P initialization, if 0,_0: P accumulation, if 1,_0: P termination
                 if _mask:  # ini P params with first unmasked dert
                     Pdert_ = [dert]
                     I = ri; M = ave_g - g; Ma = ave_ga - ga; Dy = dy; Dx = dx
-                    Sin_da0, Cos_da0, Sin_da1, Cos_da1 = sin_da0, cos_da0, sin_da1, cos_da1
+                    Uday, Vday, Udax, Vdax = uday, vday, udax, vdax
                 else:
                     # dert and _dert are not masked, accumulate P params:
                     I +=ri; M+=ave_g-g; Ma+=ave_ga-ga; Dy+=dy; Dx+=dx  # angle
-                    Sin_da0+=sin_da0; Cos_da0+=cos_da0; Sin_da1+=sin_da1; Cos_da1+=cos_da1  # aangle
+                    Uday+=uday; Vday+=vday; Udax+=udax; Vdax+=vdax  # aangle
                     Pdert_ += [dert]
             elif not _mask:
                 # _dert is not masked, dert is masked, pack P:
-                P_ += [term_P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, y,x, Pdert_)]
+                P_ += [term_P(I, M, Ma, Dy, Dx, Uday, Vday, Udax, Vdax, y,x, Pdert_)]
             _mask = mask
             x += 1
         if not _mask:  # pack last P:
-            P_ += [term_P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, y,x, Pdert_)]
+            P_ += [term_P(I, M, Ma, Dy, Dx, Uday, Vday, Udax, Vdax, y,x, Pdert_)]
 
     if verbose: print("\r", end="")
     blob.P_ = P_
     return P_
 
-def term_P(I, M, Ma, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1, y,x, Pdert_):
+def term_P(I, M, Ma, Dy, Dx, Uday, Vday, Udax, Vdax, y,x, Pdert_):
 
-    G = np.hypot(Dy, Dx); Ga = (Cos_da0 + 1) + (Cos_da1 + 1)  # recompute G,Ga, it can't reconstruct M,Ma
+    G = np.hypot(Dy, Dx); Ga = (Vday + 1) + (Vdax + 1)  # recompute G,Ga, it can't reconstruct M,Ma
     L = len(Pdert_)  # params.valt = [params.M+params.Ma, params.G+params.Ga]?
-    return CP(ptuple=[I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L], box=[y,y, x-L,x-1], dert_=Pdert_)
+    return CP(ptuple=[I, M, Ma, [Dy, Dx], [Uday, Vday, Udax, Vdax], G, Ga, L], box=[y,y, x-L,x-1], dert_=Pdert_)
 
 def rotate_P_(blob):  # rotate each P to align it with direction of P gradient
 
@@ -371,16 +371,16 @@ def rotate_P(P, dert__, mask__, ave_a, center=None):
     # form rP:
     if not rdert_: return
     rdert = rdert_[0]  # initialization:
-    G, Ga, I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1 = rdert; M=ave_g-G; Ma=ave_ga-Ga; dert_=[rdert]
+    G, Ga, I, Dy, Dx, Uday, Vday, Udax, Vdax = rdert; M=ave_g-G; Ma=ave_ga-Ga; dert_=[rdert]
     # accumulation:
     for rdert in rdert_[1:]:
-        g, ga, i, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = rdert
-        I+=i; M+=ave_g-g; Ma+=ave_ga-ga; Dy+=dy; Dx+=dx; Sin_da0+=sin_da0; Cos_da0+=cos_da0; Sin_da1+=sin_da1; Cos_da1+=cos_da1
+        g, ga, i, dy, dx, uday, vday, udax, vdax = rdert
+        I+=i; M+=ave_g-g; Ma+=ave_ga-ga; Dy+=dy; Dx+=dx; Uday+=uday; Vday+=vday; Udax+=udax; Vdax+=vdax
         dert_ += [rdert]
     # re-form gradients:
-    G = np.hypot(Dy,Dx);  Ga = (Cos_da0 + 1) + (Cos_da1 + 1); L = len(rdert_)
+    G = np.hypot(Dy,Dx);  Ga = (Vday + 1) + (Vdax + 1); L = len(rdert_)
     # replace P:
-    P.ptuple = [I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L]
+    P.ptuple = [I, M, Ma, [Dy, Dx], [Uday, Vday, Udax, Vdax], G, Ga, L]
     P.dert_ = dert_
     P.dert_ext_ = dert_ext_
     P.box = [min(yleft, ry), max(yleft, ry), x0, rx]  # P may go up-right or down-right
@@ -541,15 +541,15 @@ def rotate_P(der__t, mask__, ave_a, pivot):
         dert_ext_ += [[[P],ry,rx]]
     # form rP:
     rdert = rdert_[0]  # initialization:
-    G, Ga, I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1 = rdert; M=ave_g-G; Ma=ave_ga-Ga; dert_=[rdert]
+    G, Ga, I, Dy, Dx, Uday, Vday, Udax, Vdax = rdert; M=ave_g-G; Ma=ave_ga-Ga; dert_=[rdert]
     # accumulation:
     for rdert in rdert_[1:]:
-        g, ga, i, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = rdert
-        I+=i; M+=ave_g-g; Ma+=ave_ga-ga; Dy+=dy; Dx+=dx; Sin_da0+=sin_da0; Cos_da0+=cos_da0; Sin_da1+=sin_da1; Cos_da1+=cos_da1
+        g, ga, i, dy, dx, uday, vday, udax, vdax = rdert
+        I+=i; M+=ave_g-g; Ma+=ave_ga-ga; Dy+=dy; Dx+=dx; Uday+=uday; Vday+=vday; Udax+=udax; Vdax+=vdax
         dert_ += [rdert]
     # re-form gradients:
-    G = np.hypot(Dy,Dx);  Ga = (Cos_da0 + 1) + (Cos_da1 + 1); L = len(rdert_)
-    P.ptuple = [I, M, Ma, [Dy, Dx], [Sin_da0, Cos_da0, Sin_da1, Cos_da1], G, Ga, L]
+    G = np.hypot(Dy,Dx);  Ga = (Vday + 1) + (Vdax + 1); L = len(rdert_)
+    P.ptuple = [I, M, Ma, [Dy, Dx], [Uday, Vday, Udax, Vdax], G, Ga, L]
     P.dert_ = dert_
     P.dert_ext_ = dert_ext_
     P.y = yleft + ry*(L//2); P.x = x0 + rx*(L//2)  # central coords, P may go up-right or down-right

@@ -87,7 +87,7 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of lateral or vertical pa
 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
-    ptuple = object  # x, L, I, M, Ma, G, Ga, angle( Dy, Dx), aangle( Sin_da0, Cos_da0, Sin_da1, Cos_da1), n, val
+    ptuple = object  # x, L, I, M, Ma, G, Ga, angle( Dy, Dx), aangle( Uday, Vday, Udax, Vdax), n, val
     x0 = int
     y = int  # for vertical gap in PP.P__
     rdn = int  # blob-level redundancy, ignore for now
@@ -222,12 +222,12 @@ def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps
     for y, (dert_, mask_) in enumerate(zip(dert__, mask__)):  # unpack lines
         P_ = []  # line of Ps
         _mask = True
-        for x, (dert, mask) in enumerate(zip(dert_, mask_)):  # dert = i, g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1
+        for x, (dert, mask) in enumerate(zip(dert_, mask_)):  # dert = i, g, ga, ri, dy, dx, uday, vday, udax, vdax
 
             if verbose: print(f"\rProcessing line {y + 1}/{height}, ", end=""); sys.stdout.flush()
             g, ga, ri, angle, aangle = dert[1], dert[2], dert[3], list(dert[4:6]), list(dert[6:])
             if not mask:  # masks: if 0,_1: P initialization, if 0,_0: P accumulation, if 1,_0: P termination
-                if _mask:  # initialize P params with first unmasked dert (m, ma, i, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1):
+                if _mask:  # initialize P params with first unmasked dert (m, ma, i, dy, dx, uday, vday, udax, vdax):
                     Pdert_ = [dert]
                     params = Cptuple(M=ave_g-g,Ma=ave_ga-ga,I=ri, angle=angle, aangle=aangle)
                 else:
@@ -239,7 +239,7 @@ def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps
                 # _dert is not masked, dert is masked, terminate P:
                 params.L = len(Pdert_)  # G, Ga are recomputed; M, Ma are not restorable from G, Ga:
                 params.G = np.hypot(*params.angle)  # Dy, Dx
-                params.Ga = (params.aangle[1] + 1) + (params.aangle[3] + 1)  # Cos_da0, Cos_da1
+                params.Ga = (params.aangle[1] + 1) + (params.aangle[3] + 1)  # Vday, Vdax
                 P_.append( CP(ptuple=params, x0=x-(params.L-1), y=y, dert_=Pdert_))
             _mask = mask
 
@@ -697,12 +697,12 @@ def comp_ptuple(_params, params):  # compare lateral or vertical tuples, similar
         dval += dangle; mval += mangle
 
         # angle of angle:
-        _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _params.aangle
-        sin_da0, cos_da0, sin_da1, cos_da1 = params.aangle
-        sin_dda0 = (cos_da0*rn * _sin_da0) - (sin_da0*rn * _cos_da0)
-        cos_dda0 = (cos_da0*rn * _cos_da0) + (sin_da0*rn * _sin_da0)
-        sin_dda1 = (cos_da1*rn * _sin_da1) - (sin_da1*rn * _cos_da1)
-        cos_dda1 = (cos_da1*rn * _cos_da1) + (sin_da1*rn * _sin_da1)
+        _uday, _vday, _udax, _vdax = _params.aangle
+        uday, vday, udax, vdax = params.aangle
+        sin_dda0 = (vday*rn * _uday) - (uday*rn * _vday)
+        cos_dda0 = (vday*rn * _vday) + (uday*rn * _uday)
+        sin_dda1 = (vdax*rn * _udax) - (udax*rn * _vdax)
+        cos_dda1 = (vdax*rn * _vdax) + (udax*rn * _udax)
         # for 2D, not reduction to 1D:
         # aaangle = (sin_dda0, cos_dda0, sin_dda1, cos_dda1)
         # day = [-sin_dda0 - sin_dda1, cos_dda0 + cos_dda1]

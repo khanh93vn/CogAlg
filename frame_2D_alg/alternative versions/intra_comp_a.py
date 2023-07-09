@@ -205,17 +205,17 @@ def comp_a(dert__, fga):  # cross-comp of a or aga in 2x2 kernels
     a__botleft = a__[:, 1:, :-1]
 
     # diagonal angle differences:
-    sin_da0__, cos_da0__ = angle_diff(a__topleft, a__botright, fga)
-    sin_da1__, cos_da1__ = angle_diff(a__topright, a__botleft, fga)
+    uday__, vday__ = angle_diff(a__topleft, a__botright, fga)
+    udax__, vdax__ = angle_diff(a__topright, a__botleft, fga)
 
-    ma__ = np.hypot(sin_da0__ + 1, cos_da0__ + 1) + np.hypot(sin_da1__ + 1, cos_da1__ + 1)
+    ma__ = np.hypot(uday__ + 1, vday__ + 1) + np.hypot(udax__ + 1, vdax__ + 1)
     # ma = inverse angle match = SAD: covert sin and cos da to 0->2 range
 
-    day__ = (-sin_da0__ - sin_da1__), (cos_da0__ + cos_da1__)
+    day__ = (-uday__ - udax__), (vday__ + vdax__)
     # angle change in y, sines are sign-reversed because da0 and da1 are top-down, no reversal in cosines
 
-    dax__ = (-sin_da0__ + sin_da1__), (cos_da0__ + cos_da1__)
-    # angle change in x, positive sign is right-to-left, so only sin_da0__ is sign-reversed
+    dax__ = (-uday__ + udax__), (vday__ + vdax__)
+    # angle change in x, positive sign is right-to-left, so only uday__ is sign-reversed
     '''
     sin(-θ) = -sin(θ), cos(-θ) = cos(θ): 
     sin(da) = -sin(-da), cos(da) = cos(-da) => (sin(-da), cos(-da)) = (-sin(da), cos(da))
@@ -231,11 +231,11 @@ def comp_a(dert__, fga):  # cross-comp of a or aga in 2x2 kernels
                         *day__,
                         *dax__,
                         ma__,
-                        cos_da0__,
-                        cos_da1__
+                        vday__,
+                        vdax__
                         ))
     '''
-    next comp_g will use g, cos_da0__, cos_da1__, dy, dx (passed to comp_rg as idy, idx)
+    next comp_g will use g, vday__, vdax__, dy, dx (passed to comp_rg as idy, idx)
     next comp_a will use ga, day, dax  # comp_aga
     '''
     return adert__
@@ -274,15 +274,15 @@ def angle_diff(a2, a1, fga):  # compare angle_1 to angle_2
 def comp_g(dert__):  # add fga if processing in comp_ga is different?
     """
     Cross-comp of g or ga in 2x2 kernels, between derts in ma.stack dert__:
-    input dert  = (i, g, dy, dx, ga, dyy, dxy, dyx, dxx, ma, cos_da0, cos_da1)
+    input dert  = (i, g, dy, dx, ga, dyy, dxy, dyx, dxx, ma, vday, vdax)
     output dert = (g, gg, dgy, dgx, gm, ga, day, dax, dy, dx)
     """
 
     dert__ = shape_check(dert__)  # remove derts of incomplete kernels
-    g__, cos_da0__, cos_da1__ = dert__[[1, -2, -1]]  # top dimension of numpy stack must be a list
+    g__, vday__, vdax__ = dert__[[1, -2, -1]]  # top dimension of numpy stack must be a list
 
-    cos_da0__ = cos_da0__[:-1, :-1]
-    cos_da1__ = cos_da1__[:-1, :-1]
+    vday__ = vday__[:-1, :-1]
+    vdax__ = vdax__[:-1, :-1]
 
     g_topleft__ = g__[:-1, :-1]
     g_topright__ = g__[:-1, 1:]
@@ -290,17 +290,17 @@ def comp_g(dert__):  # add fga if processing in comp_ga is different?
     g_bottomright__ = g__[1:, 1:]
 
     dgy__ = ((g_bottomleft__ + g_bottomright__) -
-             (g_topleft__ * cos_da0__ + g_topright__ * cos_da1__))
+             (g_topleft__ * vday__ + g_topright__ * vdax__))
     # y-decomposed cosine difference between gs
 
     dgx__ = ((g_topright__ + g_bottomright__) -
-             (g_topleft__ * cos_da0__ + g_bottomleft__ * cos_da1__))
+             (g_topleft__ * vday__ + g_bottomleft__ * vdax__))
     # x-decomposed cosine difference between gs
 
     gg__ = np.hypot(dgy__, dgx__)  # gradient of gradient
 
-    mg0__ = np.minimum(g_topleft__, (g_bottomright__ * cos_da0__))  # g match = min(g, _g*cos(da))
-    mg1__ = np.minimum(g_topright__, (g_bottomleft__ * cos_da1__))
+    mg0__ = np.minimum(g_topleft__, (g_bottomright__ * vday__))  # g match = min(g, _g*cos(da))
+    mg1__ = np.minimum(g_topright__, (g_bottomleft__ * vdax__))
     mg__ = mg0__ + mg1__
 
     gdert = ma.stack((g__[:-1, :-1],  # remove last row and column to align with derived params

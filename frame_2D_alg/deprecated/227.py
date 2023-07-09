@@ -72,7 +72,7 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of lateral or vertical pa
 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP
 
-    params = object  # x, L, I, M, Ma, G, Ga, angle( Dy, Dx), aangle( Sin_da0, Cos_da0, Sin_da1, Cos_da1)
+    params = object  # x, L, I, M, Ma, G, Ga, angle( Dy, Dx), aangle( Uday, Vday, Udax, Vdax)
     x0 = int
     x = float  # median x
     y = int  # for vertical gap in PP.P__
@@ -180,12 +180,12 @@ def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps
     for y, (dert_, mask_) in enumerate(zip(dert__, mask__)):  # unpack lines
         P_ = []  # line of Ps
         _mask = True
-        for x, (dert, mask) in enumerate(zip(dert_, mask_)):  # dert = i, g, ga, ri, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1
+        for x, (dert, mask) in enumerate(zip(dert_, mask_)):  # dert = i, g, ga, ri, dy, dx, uday, vday, udax, vdax
 
             if verbose: print(f"\rProcessing line {y + 1}/{height}, ", end=""); sys.stdout.flush()
             g, ga, ri, angle, aangle = dert[1], dert[2], dert[3], list(dert[4:6]), list(dert[6:])
             if not mask:  # masks: if 0,_1: P initialization, if 0,_0: P accumulation, if 1,_0: P termination
-                if _mask:  # initialize P params with first unmasked dert (m, ma, i, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1):
+                if _mask:  # initialize P params with first unmasked dert (m, ma, i, dy, dx, uday, vday, udax, vdax):
                     Pdert_ = [dert]
                     params = Cptuple(M=ave_g-g,Ma=ave_ga-ga,I=ri, angle=angle, aangle=aangle)
                 else:
@@ -197,7 +197,7 @@ def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps
                 # _dert is not masked, dert is masked, terminate P:
                 params.L = len(Pdert_)  # G, Ga are recomputed; M, Ma are not restorable from G, Ga:
                 params.G = np.hypot(*params.angle)  # Dy, Dx
-                params.Ga = (params.aangle[1] + 1) + (params.aangle[3] + 1)  # Cos_da0, Cos_da1
+                params.Ga = (params.aangle[1] + 1) + (params.aangle[3] + 1)  # Vday, Vdax
                 P_.append( CP(params=params, x0=x-(params.L-1), y=y, dert_=Pdert_))
             _mask = mask
 
@@ -618,12 +618,12 @@ def comp_ptuple(_params, params):  # compare lateral or vertical tuples, similar
         dval += dangle; mval += mangle
 
         # angle of angle:
-        _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _params.aangle
-        sin_da0, cos_da0, sin_da1, cos_da1 = params.aangle
-        sin_dda0 = (cos_da0 * _sin_da0) - (sin_da0 * _cos_da0)
-        cos_dda0 = (cos_da0 * _cos_da0) + (sin_da0 * _sin_da0)
-        sin_dda1 = (cos_da1 * _sin_da1) - (sin_da1 * _cos_da1)
-        cos_dda1 = (cos_da1 * _cos_da1) + (sin_da1 * _sin_da1)
+        _uday, _vday, _udax, _vdax = _params.aangle
+        uday, vday, udax, vdax = params.aangle
+        sin_dda0 = (vday * _uday) - (uday * _vday)
+        cos_dda0 = (vday * _vday) + (uday * _uday)
+        sin_dda1 = (vdax * _udax) - (udax * _vdax)
+        cos_dda1 = (vdax * _vdax) + (udax * _udax)
         # for 2D, not reduction to 1D:
         # aaangle = (sin_dda0, cos_dda0, sin_dda1, cos_dda1)
         # day = [-sin_dda0 - sin_dda1, cos_dda0 + cos_dda1]
@@ -846,12 +846,12 @@ def comp_ptuple(_params, params):  # compare 2 lataples or vertuples, similar op
         mtuple += ave - abs(mangle)
 
         # aangle
-        _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _params.aangle
-        sin_da0, cos_da0, sin_da1, cos_da1 = params.aangle
-        sin_dda0 = (cos_da0 * _sin_da0) - (sin_da0 * _cos_da0)
-        cos_dda0 = (cos_da0 * _cos_da0) + (sin_da0 * _sin_da0)
-        sin_dda1 = (cos_da1 * _sin_da1) - (sin_da1 * _cos_da1)
-        cos_dda1 = (cos_da1 * _cos_da1) + (sin_da1 * _sin_da1)
+        _uday, _vday, _udax, _vdax = _params.aangle
+        uday, vday, udax, vdax = params.aangle
+        sin_dda0 = (vday * _uday) - (uday * _vday)
+        cos_dda0 = (vday * _vday) + (uday * _uday)
+        sin_dda1 = (vdax * _udax) - (udax * _vdax)
+        cos_dda1 = (vdax * _vdax) + (udax * _udax)
         daangle = (sin_dda0, cos_dda0, sin_dda1, cos_dda1)
         # day = [-sin_dda0 - sin_dda1, cos_dda0 + cos_dda1]; dax = [-sin_dda0 + sin_dda1, cos_dda0 + cos_dda1]
 
@@ -945,9 +945,9 @@ def ave_ptuple(ptuple):
 sum_pairs.x /= n; sum_pairs.L /= n; sum_pairs.M /= n; sum_pairs.Ma /= n; sum_pairs.G /= n; sum_pairs.Ga /= n; sum_pairs.val /= n
 if isinstance(sum_pairs.angle, tuple):
     sin_da, cos_da = sum_pairs.angle[0]/n, sum_pairs.angle[1]/n
-    sin_da0, cos_da0, sin_da1, cos_da1 = sum_pairs.aangle[0]/n, sum_pairs.aangle[1]/n, sum_pairs.aangle[2]/n, sum_pairs.aangle[3]/n
+    uday, vday, udax, vdax = sum_pairs.aangle[0]/n, sum_pairs.aangle[1]/n, sum_pairs.aangle[2]/n, sum_pairs.aangle[3]/n
     sum_pairs.angle = (sin_da, cos_da)
-    sum_pairs.aangle = (sin_da0, cos_da0, sin_da1, cos_da1)
+    sum_pairs.aangle = (uday, vday, udax, vdax)
 else:
     sum_pairs.angle /= n
     sum_pairs.aangle /= n
@@ -960,13 +960,13 @@ accum_ptuple:
         sum_cos_da = (cos_da * _cos_da) - (sin_da * _sin_da)  # cos(α + β) = cos α cos β - sin α sin β
         Ptuple.angle = (sum_sin_da, sum_cos_da)
         # aangle
-        _sin_da0, _cos_da0, _sin_da1, _cos_da1 = Ptuple.aangle
-        sin_da0, cos_da0, sin_da1, cos_da1 = ptuple.aangle
-        sum_sin_da0 = (cos_da0 * _sin_da0) + (sin_da0 * _cos_da0)  # sin(α + β) = sin α cos β + cos α sin β
-        sum_cos_da0 = (cos_da0 * _cos_da0) - (sin_da0 * _sin_da0)  # cos(α + β) = cos α cos β - sin α sin β
-        sum_sin_da1 = (cos_da1 * _sin_da1) + (sin_da1 * _cos_da1)
-        sum_cos_da1 = (cos_da1 * _cos_da1) - (sin_da1 * _sin_da1)
-        Ptuple.aangle = (sum_sin_da0, sum_cos_da0, sum_sin_da1, sum_cos_da1)
+        _uday, _vday, _udax, _vdax = Ptuple.aangle
+        uday, vday, udax, vdax = ptuple.aangle
+        sum_uday = (vday * _uday) + (uday * _vday)  # sin(α + β) = sin α cos β + cos α sin β
+        sum_vday = (vday * _vday) - (uday * _uday)  # cos(α + β) = cos α cos β - sin α sin β
+        sum_udax = (vdax * _udax) + (udax * _vdax)
+        sum_vdax = (vdax * _vdax) - (udax * _udax)
+        Ptuple.aangle = (sum_uday, sum_vday, sum_udax, sum_vdax)
 '''
 
 def sub_recursion_eval(PP_):  # evaluate each PP for rng+ and der+
@@ -1274,12 +1274,12 @@ def comp_ptuple(_params, params):  # compare lateral or vertical tuples, similar
         mval += mangle
 
         # angle of angle:
-        _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _params.aangle
-        sin_da0, cos_da0, sin_da1, cos_da1 = params.aangle
-        sin_dda0 = (cos_da0 * rn * _sin_da0) - (sin_da0 * rn * _cos_da0)
-        cos_dda0 = (cos_da0 * rn * _cos_da0) + (sin_da0 * rn * _sin_da0)
-        sin_dda1 = (cos_da1 * rn * _sin_da1) - (sin_da1 * rn * _cos_da1)
-        cos_dda1 = (cos_da1 * rn * _cos_da1) + (sin_da1 * rn * _sin_da1)
+        _uday, _vday, _udax, _vdax = _params.aangle
+        uday, vday, udax, vdax = params.aangle
+        sin_dda0 = (vday * rn * _uday) - (uday * rn * _vday)
+        cos_dda0 = (vday * rn * _vday) + (uday * rn * _uday)
+        sin_dda1 = (vdax * rn * _udax) - (udax * rn * _vdax)
+        cos_dda1 = (vdax * rn * _vdax) + (udax * rn * _udax)
         # for 2D, not reduction to 1D:
         # aaangle = (sin_dda0, cos_dda0, sin_dda1, cos_dda1)
         # day = [-sin_dda0 - sin_dda1, cos_dda0 + cos_dda1]

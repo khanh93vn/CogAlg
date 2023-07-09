@@ -242,20 +242,20 @@ def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack
 
     '''
     cosine of difference between diagonally opposite angles, in vector representation
-    print(cos_da1__.shape, type(cos_da1__))
+    print(vdax__.shape, type(vdax__))
     '''
-    cos_da0__ = (cos2__ * cos0__) + (sin2__ * sin0__)  # top left to bottom right
-    cos_da1__ = (cos3__ * cos1__) + (sin3__ * sin1__)  # top right to bottom left
+    vday__ = (cos2__ * cos0__) + (sin2__ * sin0__)  # top left to bottom right
+    vdax__ = (cos3__ * cos1__) + (sin3__ * sin1__)  # top right to bottom left
 
-    dgy__[:] = ((g3__ + g2__) - (g0__ * cos_da0__ + g1__ * cos_da0__))
+    dgy__[:] = ((g3__ + g2__) - (g0__ * vday__ + g1__ * vday__))
     # y-decomposed cosine difference between gs
-    dgx__[:] = ((g1__ + g2__) - (g0__ * cos_da0__ + g3__ * cos_da1__))
+    dgx__[:] = ((g1__ + g2__) - (g0__ * vday__ + g3__ * vdax__))
     # x-decomposed cosine difference between gs
 
     gg__[:] = ma.hypot(dgy__, dgx__)  # gradient of gradient
 
-    mg0__ = ma.minimum(g0__, g2__) * (cos_da1__+1)  # +1 to make all positive
-    mg1__ = ma.minimum(g1__, g3__) * (cos_da1__+1)
+    mg0__ = ma.minimum(g0__, g2__) * (vdax__+1)  # +1 to make all positive
+    mg1__ = ma.minimum(g1__, g3__) * (vdax__+1)
     mg__[:]  = mg0__ + mg1__  # match of gradient
 
     ig__[:] = g__ [:-1, :-1]  # remove last row and column to align with derived params
@@ -446,20 +446,20 @@ def comp_g_old(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.s
 
     '''
     cosine of difference between diagonally opposite angles, in vector representation
-    print(cos_da1__.shape, type(cos_da1__))
+    print(vdax__.shape, type(vdax__))
     '''
-    cos_da0__ = (cos2__ * cos0__) + (sin2__ * sin0__)  # top left to bottom right
-    cos_da1__ = (cos3__ * cos1__) + (sin3__ * sin1__)  # top right to bottom left
+    vday__ = (cos2__ * cos0__) + (sin2__ * sin0__)  # top left to bottom right
+    vdax__ = (cos3__ * cos1__) + (sin3__ * sin1__)  # top right to bottom left
 
-    dgy__ = ((g3__ + g2__) - (g0__ * cos_da0__ + g1__ * cos_da1__))
+    dgy__ = ((g3__ + g2__) - (g0__ * vday__ + g1__ * vdax__))
     # y-decomposed cosine difference between gs
-    dgx__ = ((g1__ + g2__) - (g0__ * cos_da0__ + g3__ * cos_da1__))
+    dgx__ = ((g1__ + g2__) - (g0__ * vday__ + g3__ * vdax__))
     # x-decomposed cosine difference between gs
 
     gg__ = np.hypot(dgy__, dgx__)  # gradient of gradient
 
-    mg0__ = np.minimum(g0__, g2__) * cos_da0__  # g match = min(g, _g) *cos(da)
-    mg1__ = np.minimum(g1__, g3__) * cos_da1__
+    mg0__ = np.minimum(g0__, g2__) * vday__  # g match = min(g, _g) *cos(da)
+    mg1__ = np.minimum(g1__, g3__) * vdax__
     mg__  = mg0__ + mg1__
 
     g__ = g__ [:-1, :-1]  # remove last row and column to align with derived params

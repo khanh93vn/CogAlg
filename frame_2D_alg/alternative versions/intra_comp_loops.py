@@ -73,14 +73,14 @@ def comp_g(dert__):  # cross-comp of g in 2x2 kernels, between derts in ma.stack
 
                 # compute cosine difference
 
-                cos_da0 = (sin0 * cos0) + (sin2 * cos2)  # top left to bottom right
-                cos_da1 = (sin1 * cos1) + (sin3 * cos3)  # top right to bottom left
+                vday = (sin0 * cos0) + (sin2 * cos2)  # top left to bottom right
+                vdax = (sin1 * cos1) + (sin3 * cos3)  # top right to bottom left
 
                 # y-decomposed cosine difference between gs
-                dgy = ((g__[y+1][x] + g__[y+1][x+1]) - (g__[y][x] * cos_da0 + g__[y][x+1] * cos_da1))
+                dgy = ((g__[y+1][x] + g__[y+1][x+1]) - (g__[y][x] * vday + g__[y][x+1] * vdax))
 
                 # x-decomposed cosine difference between gs
-                dgx = ((g__[y][x+1] + g__[y+1][x+1]) - (g__[y][x] * cos_da0 + g__[y+1][x] * cos_da1))
+                dgx = ((g__[y][x+1] + g__[y+1][x+1]) - (g__[y][x] * vday + g__[y+1][x] * vdax))
 
                 # gradient of gradient
                 gg = hypot(dgy,  dgx)
@@ -201,7 +201,7 @@ def comp_r_loop(dert__, fig, root_fcr):
 
                     # differences between center dert angle and rim dert angle
 
-                    cos_da1 = (a_sin0 * a_cos0) + (a_sin1 * a_cos1)
+                    vdax = (a_sin0 * a_cos0) + (a_sin1 * a_cos1)
                     cos_da2 = (a_sin0 * a_cos0) + (a_sin2 * a_cos2)
                     cos_da3 = (a_sin0 * a_cos0) + (a_sin3 * a_cos3)
                     cos_da4 = (a_sin0 * a_cos0) + (a_sin4 * a_cos4)
@@ -212,7 +212,7 @@ def comp_r_loop(dert__, fig, root_fcr):
 
                     # cosine matches per direction
 
-                    m += (min(i_center, i__[y][x])          * cos_da1) +  \
+                    m += (min(i_center, i__[y][x])          * vdax) +  \
                          (min(i_center, i__[y][x + 1])      * cos_da2) +  \
                          (min(i_center, i__[y][x + 2])      * cos_da3) +  \
                          (min(i_center, i__[y + 1][x  + 2]) * cos_da4) +  \
@@ -223,7 +223,7 @@ def comp_r_loop(dert__, fig, root_fcr):
 
                     # cosine differences per direction
 
-                    dt1 = i_center - i__[y][x]          * cos_da1
+                    dt1 = i_center - i__[y][x]          * vdax
                     dt2 = i_center - i__[y][x + 1]      * cos_da2
                     dt3 = i_center - i__[y][x + 2]      * cos_da3
                     dt4 = i_center - i__[y + 1][x + 2]  * cos_da4

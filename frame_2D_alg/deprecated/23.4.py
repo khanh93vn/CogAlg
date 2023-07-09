@@ -402,16 +402,16 @@ def sum_ptuple(Ptuple, ptuple, fneg=0):
         Par = getattr(Ptuple, pname); par = getattr(ptuple, pname)
 
         if pname in ("angle","axis") and isinstance(Par, list):
-            sin_da0 = (Par[0] * par[1]) + (Par[1] * par[0])  # sin(A+B)= (sinA*cosB)+(cosA*sinB)
-            cos_da0 = (Par[1] * par[1]) - (Par[0] * par[0])  # cos(A+B)=(cosA*cosB)-(sinA*sinB)
-            Par = [sin_da0, cos_da0]
+            uday = (Par[0] * par[1]) + (Par[1] * par[0])  # sin(A+B)= (sinA*cosB)+(cosA*sinB)
+            vday = (Par[1] * par[1]) - (Par[0] * par[0])  # cos(A+B)=(cosA*cosB)-(sinA*sinB)
+            Par = [uday, vday]
         elif pname == "aangle" and isinstance(Par, list):
-            _sin_da0, _cos_da0, _sin_da1, _cos_da1 = Par
-            sin_da0, cos_da0, sin_da1, cos_da1 = par
-            sin_dda0 = (_sin_da0 * cos_da0) + (_cos_da0 * sin_da0)
-            cos_dda0 = (_cos_da0 * cos_da0) - (_sin_da0 * sin_da0)
-            sin_dda1 = (_sin_da1 * cos_da1) + (_cos_da1 * sin_da1)
-            cos_dda1 = (_cos_da1 * cos_da1) - (_sin_da1 * sin_da1)
+            _uday, _vday, _udax, _vdax = Par
+            uday, vday, udax, vdax = par
+            sin_dda0 = (_uday * vday) + (_vday * uday)
+            cos_dda0 = (_vday * vday) - (_uday * uday)
+            sin_dda1 = (_udax * vdax) + (_vdax * udax)
+            cos_dda1 = (_vdax * vdax) - (_udax * udax)
             Par = [sin_dda0, cos_dda0, sin_dda1, cos_dda1]
         else:
             Par += (-par if fneg else par)

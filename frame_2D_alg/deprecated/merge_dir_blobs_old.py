@@ -39,7 +39,7 @@ def splice_2dir_blobs(_blob, blob):
         _blob.P__ = _blob.P__ + blob.P__
 
     # accumulate blob numeric params:
-    # 'I', 'Dy', 'Dx', 'G', 'A', 'M', 'Sin_da0', 'Cos_da0', 'Sin_da1', 'Cos_da1', 'Ga', 'Mdx', 'Ddx', 'rdn', 'rng'
+    # 'I', 'Dy', 'Dx', 'G', 'A', 'M', 'Uday', 'Vday', 'Udax', 'Vdax', 'Ga', 'Mdx', 'Ddx', 'rdn', 'rng'
     for param_name in blob.numeric_params:
         _param = getattr(_blob,param_name)
         param = getattr(blob,param_name)

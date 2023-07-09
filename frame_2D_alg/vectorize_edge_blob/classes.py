@@ -26,7 +26,7 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of compared params in P, 
 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
-    ptuple : list = z([0,0,0,0,0,[0,0],[0,0,0,0],0])  # latuple: I,G,Ga,M,Ma, angle(Dy,Dx), aangle(Sin_da0,Cos_da0,Sin_da1,Cos_da1), L
+    ptuple : list = z([0,0,0,0,0,[0,0],[0,0,0,0],0])  # latuple: I,G,Ga,M,Ma, angle(Dy,Dx), aangle(Uday,Vday,Udax,Vdax), L
     derH : list = z([])  # [[mtuple,dtuple,mval,dval,mrdn,drdn]] vertical derivatives summed from P links
     valt : list = z([0,0])
     rdnt : list = z([1,1])

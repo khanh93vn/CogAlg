@@ -224,20 +224,20 @@ def comp_g(dert__, mask=None):  # cross-comp of g in 2x2 kernels, between derts 
 
     '''
     cosine of difference between diagonally opposite angles, in vector representation
-    print(cos_da1__.shape, type(cos_da1__))
+    print(vdax__.shape, type(vdax__))
     '''
-    cos_da0__ = (cos2__ * cos0__) + (sin2__ * sin0__)  # top left to bottom right
-    cos_da1__ = (cos3__ * cos1__) + (sin3__ * sin1__)  # top right to bottom left
+    vday__ = (cos2__ * cos0__) + (sin2__ * sin0__)  # top left to bottom right
+    vdax__ = (cos3__ * cos1__) + (sin3__ * sin1__)  # top right to bottom left
 
-    dgy__ = ((g3__ + g2__) - (g0__ * cos_da0__ + g1__ * cos_da0__))
+    dgy__ = ((g3__ + g2__) - (g0__ * vday__ + g1__ * vday__))
     # y-decomposed cosine difference between gs
-    dgx__ = ((g1__ + g2__) - (g0__ * cos_da0__ + g3__ * cos_da1__))
+    dgx__ = ((g1__ + g2__) - (g0__ * vday__ + g3__ * vdax__))
     # x-decomposed cosine difference between gs
 
     gg__ = np.hypot(dgy__, dgx__)  # gradient of gradient
 
-    mg0__ = np.minimum(g0__, g2__) * (cos_da1__+1)  # +1 to make all positive
-    mg1__ = np.minimum(g1__, g3__) * (cos_da1__+1)
+    mg0__ = np.minimum(g0__, g2__) * (vdax__+1)  # +1 to make all positive
+    mg1__ = np.minimum(g1__, g3__) * (vdax__+1)
     mg__  = mg0__ + mg1__  # match of gradient
 
     ig__ = g__ [:-1, :-1]  # remove last row and column to align with derived params
@@ -278,17 +278,17 @@ def comp_a(dert__, fga, mask=None):  # cross-comp of angle in 2x2 kernels
     a__botleft = a__[:, 1:, :-1]
 
     # diagonal angle differences:
-    sin_da0__, cos_da0__ = angle_diff(a__topleft, a__botright)
-    sin_da1__, cos_da1__ = angle_diff(a__topright, a__botleft)
+    uday__, vday__ = angle_diff(a__topleft, a__botright)
+    udax__, vdax__ = angle_diff(a__topright, a__botleft)
 
-    ma__ = np.hypot(sin_da0__ + 1, cos_da0__ + 1) + np.hypot(sin_da1__ + 1, cos_da1__ + 1)
+    ma__ = np.hypot(uday__ + 1, vday__ + 1) + np.hypot(udax__ + 1, vdax__ + 1)
     # ma = inverse angle match = SAD: covert sin and cos da to 0->2 range
 
-    day__ = (-sin_da0__ - sin_da1__), (cos_da0__ + cos_da1__)
+    day__ = (-uday__ - udax__), (vday__ + vdax__)
     # angle change in y, sines are sign-reversed because da0 and da1 are top-down, no reversal in cosines
 
-    dax__ = (-sin_da0__ + sin_da1__), (cos_da0__ + cos_da1__)
-    # angle change in x, positive sign is right-to-left, so only sin_da0__ is sign-reversed
+    dax__ = (-uday__ + udax__), (vday__ + vdax__)
+    # angle change in x, positive sign is right-to-left, so only uday__ is sign-reversed
     '''
     sin(-θ) = -sin(θ), cos(-θ) = cos(θ): 
     sin(da) = -sin(-da), cos(da) = cos(-da) => (sin(-da), cos(-da)) = (-sin(da), cos(da))
@@ -297,7 +297,7 @@ def comp_a(dert__, fga, mask=None):  # cross-comp of angle in 2x2 kernels
     # angle gradient, a scalar evaluated for comp_aga
 
     '''
-    next comp_g will use g, cos_da0__, cos_da1__, dy, dx (passed to comp_rg as idy, idx)
+    next comp_g will use g, vday__, vdax__, dy, dx (passed to comp_rg as idy, idx)
     next comp_a will use ga, day, dax  # comp_aga
     '''
     ig__ = ig__[:-1, :-1]  # for summation in Dert
@@ -305,7 +305,7 @@ def comp_a(dert__, fga, mask=None):  # cross-comp of angle in 2x2 kernels
     idy__ = idy__[:-1, :-1]
     idx__ = idx__[:-1, :-1]
 
-    return (ig__,idy__,idx__,g__,m__,ga__,day__,dax__,ma__,cos_da0__,cos_da1__), majority_mask
+    return (ig__,idy__,idx__,g__,m__,ga__,day__,dax__,ma__,vday__,vdax__), majority_mask
 
 
 def angle_diff(a2, a1):  # compare angle_1 to angle_2

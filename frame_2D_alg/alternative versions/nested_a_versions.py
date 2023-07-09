@@ -241,26 +241,26 @@ def comp_aga(dert__, ave, mask=None):  # prior fork is comp_a, cross-comp of ang
     a__botleft = nested(dcopy(a__), shift_botleft)
 
     # diagonal angle differences:
-    sin_da0__, cos_da0__ = nested2(a__topleft, a__botright, angle_diff)
-    sin_da1__, cos_da1__ = nested2(a__topright, a__botleft, angle_diff)
+    uday__, vday__ = nested2(a__topleft, a__botright, angle_diff)
+    udax__, vdax__ = nested2(a__topright, a__botleft, angle_diff)
 
-    ma1__ = nested2(sin_da0__, cos_da0__, hypot_add1_nested)
-    ma2__ = nested2(sin_da0__, cos_da0__, hypot_add1_nested)
+    ma1__ = nested2(uday__, vday__, hypot_add1_nested)
+    ma2__ = nested2(uday__, vday__, hypot_add1_nested)
     ma__ = nested2(ma1__, ma2__, add_nested)
     # ma = inverse angle match = SAD: covert sin and cos da to 0->2 range
 
-    # negative nested sin_da0
-    sin_da0_nested__ = nested(dcopy(sin_da0__), negative_nested)
+    # negative nested uday
+    uday_nested__ = nested(dcopy(uday__), negative_nested)
 
-    # day__ = (-sin_da0__ - sin_da1__), (cos_da0__ + cos_da1__)
-    day__ = [nested2(sin_da0_nested__, cos_da0__, subtract_nested),
-             nested2(cos_da0__, cos_da1__, add_nested)]
+    # day__ = (-uday__ - udax__), (vday__ + vdax__)
+    day__ = [nested2(uday_nested__, vday__, subtract_nested),
+             nested2(vday__, vdax__, add_nested)]
     # angle change in y, sines are sign-reversed because da0 and da1 are top-down, no reversal in cosines
 
-    # dax__ = (-sin_da0__ + sin_da1__), (cos_da0__ + cos_da1__)
-    dax__ = [nested2(sin_da0_nested__, cos_da0__, add_nested),
-             nested2(cos_da0__, cos_da1__, add_nested)]
-    # angle change in x, positive sign is right-to-left, so only sin_da0__ is sign-reversed
+    # dax__ = (-uday__ + udax__), (vday__ + vdax__)
+    dax__ = [nested2(uday_nested__, vday__, add_nested),
+             nested2(vday__, vdax__, add_nested)]
+    # angle change in x, positive sign is right-to-left, so only uday__ is sign-reversed
 
     # np.arctan2(*day__)
     arctan_day__ = nested2(day__[0], day__[1], arctan2_nested)

@@ -66,10 +66,10 @@ class CBlob(ClusterStructure):
     fopen : bool = False
     # intra_blob params: # or pack in intra = lambda: Cintra
     # comp_angle:
-    Sin_da0 : float = 0.0
-    Cos_da0 : float = 0.0
-    Sin_da1 : float = 0.0
-    Cos_da1 : float = 0.0
+    Uday : float = 0.0
+    Vday : float = 0.0
+    Udax : float = 0.0
+    Vdax : float = 0.0
     Ga : float = 0.0
     # comp_dx:
     Mdx : float = 0.0
@@ -193,10 +193,10 @@ def flood_fill(der__t, sign__, prior_forks, verbose=False, mask__=None, fseg=Fal
                         blob.accumulate(I  = der__t[3][y1][x1],  # rp__,
                                         Dy = der__t[4][y1][x1],
                                         Dx = der__t[5][y1][x1],
-                                        Sin_da0 = der__t[6][y1][x1],
-                                        Cos_da0 = der__t[7][y1][x1],
-                                        Sin_da1 = der__t[8][y1][x1],
-                                        Cos_da1 = der__t[9][y1][x1])
+                                        Uday = der__t[6][y1][x1],
+                                        Vday = der__t[7][y1][x1],
+                                        Udax = der__t[8][y1][x1],
+                                        Vdax = der__t[9][y1][x1])
                     else:  # comp_pixel or comp_range
                         blob.accumulate(I  = der__t[4][y1][x1],  # rp__,
                                         Dy = der__t[1][y1][x1],
@@ -239,7 +239,7 @@ def flood_fill(der__t, sign__, prior_forks, verbose=False, mask__=None, fseg=Fal
                 blob.adj_blobs = [[],[]] # iblob.adj_blobs[0] = adj blobs, blob.adj_blobs[1] = poses
                 blob.G = np.hypot(blob.Dy, blob.Dx)  # recompute G
                 if len(der__t) > 5:  # recompute Ga
-                    blob.Ga = (blob.Cos_da0 + 1) + (blob.Cos_da1 + 1)  # +1 for all positives
+                    blob.Ga = (blob.Vday + 1) + (blob.Vdax + 1)  # +1 for all positives
                 if verbose:
                     progress += blob.A * step; print(f"\rClustering... {round(progress)} %", end=""); sys.stdout.flush()
     if verbose: print("\r" + " " * 79, end=""); sys.stdout.flush(); print("\r", end="")
@@ -553,17 +553,17 @@ def comp_a(dert__, mask__=None):  # cross-comp of gradient angle in 2x2 kernels
     angle__botright = angle__[:, 1:, 1:]
     angle__botleft  = angle__[:, 1:, :-1]
 
-    sin_da0__, cos_da0__ = angle_diff(angle__botleft, angle__topright)  # dax__ contains 2 component arrays: sin(dax), cos(dax) ...
-    sin_da1__, cos_da1__ = angle_diff(angle__botright, angle__topleft)  # ... same for day
+    uday__, vday__ = angle_diff(angle__botleft, angle__topright)  # dax__ contains 2 component arrays: sin(dax), cos(dax) ...
+    udax__, vdax__ = angle_diff(angle__botright, angle__topleft)  # ... same for day
 
     with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
-        ga__ = (cos_da0__ + 1) + (cos_da1__ + 1)  # +1 for all positives
+        ga__ = (vday__ + 1) + (vdax__ + 1)  # +1 for all positives
         # or ga__ = np.hypot( np.arctan2(*day__), np.arctan2(*dax__)?
 
     # angle change in y, sines are sign-reversed because da0 and da1 are top-down, no reversal in cosines
-    day__ = [-sin_da0__ - sin_da1__, cos_da0__ + cos_da1__]
-    # angle change in x, positive sign is right-to-left, so only sin_da0__ is sign-reversed
-    dax__ = [-sin_da0__ + sin_da1__, cos_da0__ + cos_da1__]
+    day__ = [-uday__ - udax__, vday__ + vdax__]
+    # angle change in x, positive sign is right-to-left, so only uday__ is sign-reversed
+    dax__ = [-uday__ + udax__, vday__ + vdax__]
     '''
     sin(-θ) = -sin(θ), cos(-θ) = cos(θ): 
     sin(da) = -sin(-da), cos(da) = cos(-da) => (sin(-da), cos(-da)) = (-sin(da), cos(da))

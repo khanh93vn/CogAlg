@@ -47,13 +47,13 @@ ave_mPP = 10
 ave_dPP = 10
 ave_splice = 10
 
-param_names = ["x", "I", "M", "Ma", "L", "angle", "aangle"]  # angle = Dy, Dx; aangle = sin_da0, cos_da0, sin_da1, cos_da1; recompute Gs for comparison?
+param_names = ["x", "I", "M", "Ma", "L", "angle", "aangle"]  # angle = Dy, Dx; aangle = uday, vday, udax, vdax; recompute Gs for comparison?
 aves = [ave_dx, ave_I, ave_M, ave_Ma, ave_L, ave_G, ave_Ga, ave_mP, ave_dP]
 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP
 
-    params = list  # 9 compared horizontal params: x, L, I, M, Ma, G, Ga, Ds( Dy, Dx, Sin_da0), Das( Cos_da0, Sin_da1, Cos_da1)
-    # I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1 are summed from dert[3:], M, Ma from ave- g, ga
+    params = list  # 9 compared horizontal params: x, L, I, M, Ma, G, Ga, Ds( Dy, Dx) Das(Uday, Vday, Udax, Vdax)
+    # I, Dy, Dx, Uday, Vday, Udax, Vdax are summed from dert[3:], M, Ma from ave- g, ga
     # G, Ga are recomputed from Ds, Das; M, Ma are not restorable from G, Ga
     x0 = int
     x = float  # median x
@@ -163,11 +163,11 @@ def slice_blob(blob, verbose=False):  # forms horizontal blob slices: Ps, ~1D Ps
             if not mask:  # masks: if 0,_1: P initialization, if 0,_0: P accumulation, if 1,_0: P termination
                 if _mask:  # initialize P params with first unmasked dert:
                     Pdert_ = []
-                    params = [ave_g-dert[1], ave_ga-dert[2], *dert[3:]]  # m, ma, dert[3:]: i, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1
+                    params = [ave_g-dert[1], ave_ga-dert[2], *dert[3:]]  # m, ma, dert[3:]: i, dy, dx, uday, vday, udax, vdax
                 else:
                     # dert and _dert are not masked, accumulate P params from dert params:
                     params[1] += ave_g-dert[1]; params[2] += ave_ga-dert[2]  # M, Ma
-                    for i, (Param, param) in enumerate(zip(params[2:], dert[3:]), start=2):  # I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1
+                    for i, (Param, param) in enumerate(zip(params[2:], dert[3:]), start=2):  # I, Dy, Dx, Uday, Vday, Udax, Vdax
                         params[i] = Param + param
                     Pdert_.append(dert)
             elif not _mask:
@@ -409,14 +409,14 @@ def accum_layer(top_layer, der_layer):
                 sum_sin_da = (cos_da * _sin_da) + (sin_da * _cos_da)  # sin(α + β) = sin α cos β + cos α sin β
                 sum_cos_da = (cos_da * _cos_da) - (sin_da * _sin_da)  # cos(α + β) = cos α cos β - sin α sin β
                 top_layer[i] = (sum_sin_da, sum_cos_da)
-            else:  # (sin_da0, cos_da0, sin_da1, cos_da1)
-                _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _param
-                sin_da0, cos_da0, sin_da1, cos_da1 = param
-                sum_sin_da0 = (cos_da0 * _sin_da0) + (sin_da0 * _cos_da0)  # sin(α + β) = sin α cos β + cos α sin β
-                sum_cos_da0 = (cos_da0 * _cos_da0) - (sin_da0 * _sin_da0)  # cos(α + β) = cos α cos β - sin α sin β
-                sum_sin_da1 = (cos_da1 * _sin_da1) + (sin_da1 * _cos_da1)
-                sum_cos_da1 = (cos_da1 * _cos_da1) - (sin_da1 * _sin_da1)
-                top_layer[i] = (sum_sin_da0, sum_cos_da0, sum_sin_da1, sum_cos_da1)
+            else:  # (uday, vday, udax, vdax)
+                _uday, _vday, _udax, _vdax = _param
+                uday, vday, udax, vdax = param
+                sum_uday = (vday * _uday) + (uday * _vday)  # sin(α + β) = sin α cos β + cos α sin β
+                sum_vday = (vday * _vday) - (uday * _uday)  # cos(α + β) = cos α cos β - sin α sin β
+                sum_udax = (vdax * _udax) + (udax * _vdax)
+                sum_vdax = (vdax * _vdax) - (udax * _udax)
+                top_layer[i] = (sum_uday, sum_vday, sum_udax, sum_vdax)
         else:  # scalar
             top_layer[i] += param
 
@@ -424,8 +424,8 @@ def accum_layer(top_layer, der_layer):
 def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.upconnect, conditional ders from norm and DIV comp
 
     # compared P params:
-    x, L, M, Ma, I, Dx, Dy, sin_da0, cos_da0, sin_da1, cos_da1 = P.params
-    _x, _L, _M, _Ma, _I, _Dx, _Dy, _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _P.params
+    x, L, M, Ma, I, Dx, Dy, uday, vday, udax, vdax = P.params
+    _x, _L, _M, _Ma, _I, _Dx, _Dy, _uday, _vday, _udax, _vdax = _P.params
 
     dx = _x - x;  mx = ave_dx - abs(dx)  # mean x shift, if dx: rx = dx / ((L+_L)/2)? no overlap, offset = abs(x0 -_x0) + abs(xn -_xn)?
     dI = _I - I;  mI = ave_I - abs(dI)
@@ -435,7 +435,7 @@ def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.upconnect
     # G, Ga:
     G = np.hypot(Dy, Dx); _G = np.hypot(_Dy, _Dx)  # compared as scalars
     dG = _G - G;  mG = min(_G, G)
-    Ga = (cos_da0 + 1) + (cos_da1 + 1); _Ga = (_cos_da0 + 1) + (_cos_da1 + 1)  # gradient of angle, +1 for all positives?
+    Ga = (vday + 1) + (vdax + 1); _Ga = (_vday + 1) + (_vdax + 1)  # gradient of angle, +1 for all positives?
     # or Ga = np.hypot( np.arctan2(*Day), np.arctan2(*Dax)?
     dGa = _Ga - Ga;  mGa = min(_Ga, Ga)
 
@@ -448,10 +448,10 @@ def comp_P(_P, P):  # forms vertical derivatives of params per P in _P.upconnect
     mangle = ave_dangle - abs(dangle)  # indirect match of angles, not redundant as summed
 
     # comp angle of angle: forms daa, not gaa?
-    sin_dda0 = (cos_da0 * _sin_da0) - (sin_da0 * _cos_da0)
-    cos_dda0 = (cos_da0 * _cos_da0) + (sin_da0 * _sin_da0)
-    sin_dda1 = (cos_da1 * _sin_da1) - (sin_da1 * _cos_da1)
-    cos_dda1 = (cos_da1 * _cos_da1) + (sin_da1 * _sin_da1)
+    sin_dda0 = (vday * _uday) - (uday * _vday)
+    cos_dda0 = (vday * _vday) + (uday * _uday)
+    sin_dda1 = (vdax * _udax) - (udax * _vdax)
+    cos_dda1 = (vdax * _vdax) + (udax * _udax)
 
     daangle = (sin_dda0, cos_dda0, sin_dda1, cos_dda1)
     # day = [-sin_dda0 - sin_dda1, cos_dda0 + cos_dda1]
@@ -751,15 +751,15 @@ def comp_layer(_derP, derP):
                 derivatives.append(dmangle); derivatives.append(mmangle)
                 dP += dmangle; mP += mmangle
 
-        elif param_type == 8:  # dangle   (sin_da0, cos_da0, sin_da1, cos_da1)
+        elif param_type == 8:  # dangle   (uday, vday, udax, vdax)
             if isinstance(_param, tuple):  # (sin_da, cos_da)
-                _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _param
-                sin_da0, cos_da0, sin_da1, cos_da1 = param
+                _uday, _vday, _udax, _vdax = _param
+                uday, vday, udax, vdax = param
 
-                sin_dda0 = (cos_da0 * _sin_da0) - (sin_da0 * _cos_da0)
-                cos_dda0 = (cos_da0 * _cos_da0) + (sin_da0 * _sin_da0)
-                sin_dda1 = (cos_da1 * _sin_da1) - (sin_da1 * _cos_da1)
-                cos_dda1 = (cos_da1 * _cos_da1) + (sin_da1 * _sin_da1)
+                sin_dda0 = (vday * _uday) - (uday * _vday)
+                cos_dda0 = (vday * _vday) + (uday * _uday)
+                sin_dda1 = (vdax * _udax) - (udax * _vdax)
+                cos_dda1 = (vdax * _vdax) + (udax * _udax)
                 daangle = (sin_dda0, cos_dda0, sin_dda1, cos_dda1)
                 # day = [-sin_dda0 - sin_dda1, cos_dda0 + cos_dda1]
                 # dax = [-sin_dda0 + sin_dda1, cos_dda0 + cos_dda1]

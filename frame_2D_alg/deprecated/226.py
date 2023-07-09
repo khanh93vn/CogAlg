@@ -504,15 +504,15 @@ def comp_params(_params, params, nparams):
                 derivatives[0].append(dmangle); derivatives[1].append(mmangle)
                 dP += dmangle; mP += mmangle
 
-        elif param_type == 9:  # dangle   (sin_da0, cos_da0, sin_da1, cos_da1)
+        elif param_type == 9:  # dangle   (uday, vday, udax, vdax)
             if isinstance(_param, tuple):  # (sin_da, cos_da)
-                _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _param
-                sin_da0, cos_da0, sin_da1, cos_da1 = param
+                _uday, _vday, _udax, _vdax = _param
+                uday, vday, udax, vdax = param
 
-                sin_dda0 = (cos_da0 * _sin_da0) - (sin_da0 * _cos_da0)
-                cos_dda0 = (cos_da0 * _cos_da0) + (sin_da0 * _sin_da0)
-                sin_dda1 = (cos_da1 * _sin_da1) - (sin_da1 * _cos_da1)
-                cos_dda1 = (cos_da1 * _cos_da1) + (sin_da1 * _sin_da1)
+                sin_dda0 = (vday * _uday) - (uday * _vday)
+                cos_dda0 = (vday * _vday) + (uday * _uday)
+                sin_dda1 = (vdax * _udax) - (udax * _vdax)
+                cos_dda1 = (vdax * _vdax) + (udax * _udax)
                 daangle = (sin_dda0, cos_dda0, sin_dda1, cos_dda1)
                 # day = [-sin_dda0 - sin_dda1, cos_dda0 + cos_dda1]
                 # dax = [-sin_dda0 + sin_dda1, cos_dda0 + cos_dda1]
@@ -653,8 +653,8 @@ def comp_P(_P, P, instance=CderP, finP=1, foutderP=1):  # forms vertical derivat
         _P_params = _P; P_params = P
 
     # compared P params:
-    _x, _L, _M, _Ma, _I, _Dx, _Dy, _sin_da0, _cos_da0, _sin_da1, _cos_da1 = _P_params
-    x, L, M, Ma, I, Dx, Dy, sin_da0, cos_da0, sin_da1, cos_da1 = P_params
+    _x, _L, _M, _Ma, _I, _Dx, _Dy, _uday, _vday, _udax, _vdax = _P_params
+    x, L, M, Ma, I, Dx, Dy, uday, vday, udax, vdax = P_params
 
     dx = _x - x;  mx = ave_dx - abs(dx)  # mean x shift, if dx: rx = dx / ((L+_L)/2)? no overlap, offset = abs(x0 -_x0) + abs(xn -_xn)?
     dI = _I - I;  mI = ave_I - abs(dI)
@@ -664,7 +664,7 @@ def comp_P(_P, P, instance=CderP, finP=1, foutderP=1):  # forms vertical derivat
     # G, Ga:
     G = np.hypot(Dy, Dx); _G = np.hypot(_Dy, _Dx)  # compared as scalars
     dG = _G - G;  mG = min(_G, G)
-    Ga = (cos_da0 + 1) + (cos_da1 + 1); _Ga = (_cos_da0 + 1) + (_cos_da1 + 1)  # gradient of angle, +1 for all positives?
+    Ga = (vday + 1) + (vdax + 1); _Ga = (_vday + 1) + (_vdax + 1)  # gradient of angle, +1 for all positives?
     # or Ga = np.hypot( np.arctan2(*Day), np.arctan2(*Dax)?
     dGa = _Ga - Ga;  mGa = min(_Ga, Ga)
 
@@ -677,10 +677,10 @@ def comp_P(_P, P, instance=CderP, finP=1, foutderP=1):  # forms vertical derivat
     mangle = ave_dangle - abs(dangle)  # indirect match of angles, not redundant as summed
 
     # comp angle of angle: forms daa, not gaa?
-    sin_dda0 = (cos_da0 * _sin_da0) - (sin_da0 * _cos_da0)
-    cos_dda0 = (cos_da0 * _cos_da0) + (sin_da0 * _sin_da0)
-    sin_dda1 = (cos_da1 * _sin_da1) - (sin_da1 * _cos_da1)
-    cos_dda1 = (cos_da1 * _cos_da1) + (sin_da1 * _sin_da1)
+    sin_dda0 = (vday * _uday) - (uday * _vday)
+    cos_dda0 = (vday * _vday) + (uday * _uday)
+    sin_dda1 = (vdax * _udax) - (udax * _vdax)
+    cos_dda1 = (vdax * _vdax) + (udax * _udax)
 
     daangle = (sin_dda0, cos_dda0, sin_dda1, cos_dda1)
     # day = [-sin_dda0 - sin_dda1, cos_dda0 + cos_dda1]

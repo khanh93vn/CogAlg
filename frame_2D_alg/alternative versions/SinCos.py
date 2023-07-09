@@ -868,8 +868,8 @@ def comp_a_simple(dert__, ave, prior_forks, mask__=None):  # cross-comp of gradi
     a__right = a__[:, 1:, 1:]  # was botright
     a__bottom = a__[:, 1:, :-1]  # was botleft
 
-    sin_da0__, cos_da0__ = angle_diff(a__right, a__left)
-    sin_da1__, cos_da1__ = angle_diff(a__bottom, a__top)
+    uday__, vday__ = angle_diff(a__right, a__left)
+    udax__, vdax__ = angle_diff(a__bottom, a__top)
 
     ''' 
     match of angle = inverse deviation rate of SAD of angles from ave ma of all possible angles.
@@ -878,12 +878,12 @@ def comp_a_simple(dert__, ave, prior_forks, mask__=None):  # cross-comp of gradi
     there is general correlation between proximity and similarity.
     Normally, we compute match as inverse deviation: ave - value. Here match is defined directly(?), so it's value - ave
     '''
-    ma__ = (cos_da0__ + 1.001) + (cos_da1__ + 1.001) - 2  # +1 to convert to all positives, +.001 to avoid / 0, ave ma = 2
+    ma__ = (vday__ + 1.001) + (vdax__ + 1.001) - 2  # +1 to convert to all positives, +.001 to avoid / 0, ave ma = 2
 
     # angle change in y, sines are sign-reversed because da0 and da1 are top-down, no reversal in cosines
-    day__ = [-sin_da0__ - sin_da1__, cos_da0__ + cos_da1__]
-    # angle change in x, positive sign is right-to-left, so only sin_da0__ is sign-reversed
-    dax__ = [-sin_da0__ + sin_da1__, cos_da0__ + cos_da1__]
+    day__ = [-uday__ - udax__, vday__ + vdax__]
+    # angle change in x, positive sign is right-to-left, so only uday__ is sign-reversed
+    dax__ = [-uday__ + udax__, vday__ + vdax__]
     '''
     sin(-θ) = -sin(θ), cos(-θ) = cos(θ): 
     sin(da) = -sin(-da), cos(da) = cos(-da) => (sin(-da), cos(-da)) = (-sin(da), cos(da))
