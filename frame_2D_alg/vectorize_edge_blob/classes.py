@@ -1,5 +1,3 @@
-from typing import Tuple
-from numbers import Number
 from class_cluster import ClusterStructure, init_param as z
 '''
     Conventions:
@@ -26,18 +24,18 @@ class Cptuple(ClusterStructure):  # bottom-layer tuple of compared params in P, 
 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
-    ptuple : list = z([0,0,0,0,0,[0,0],[0,0,0,0],0])  # latuple: I,G,Ga,M,Ma, angle(Dy,Dx), aangle(Uday,Vday,Udax,Vdax), L
+    ptuple : list = z([0,0,0,0,0,[0,0],[0,0,0,0],0])  # latuple: I,G,Ga,M,Ma, angle(Dy,Dx), aangle(Dyy,Dyx,Dxy,Dxx), L
     derH : list = z([])  # [[mtuple,dtuple,mval,dval,mrdn,drdn]] vertical derivatives summed from P links
     valt : list = z([0,0])
     rdnt : list = z([1,1])
-    anchor : Tuple[Number, Number] = None   # prior anchor point, init 0,0
-    axis : Tuple[Number, Number] = (0,1)    # prior slice angle, init sin=0,cos=1
-    dert_ : list = z([])                    # array of pixel-level derts, redundant to uplink_, only per blob?
-    dert_ext_: list = z([])                 # external params: roots and coords per dert
-    dert_olp_: set = z(set())               # overlap with pixel derts
-    link_ : list = z([])                    # all links
-    link_t: list = z([[],[]])               # +ve rlink_, dlink_
-    roott : list = z([None, None])          # mPP,dPP that contain this P
+    axis : list = z([0,1])  # prior slice angle, init sin=0,cos=1
+    dert_ : list = z([])  # array of pixel-level derts, redundant to uplink_, only per blob?
+    dert_ext_: list = z([])  # external params: roots and coords per dert
+    dert_olp_: list = z(set())
+    link_ : list = z([])  # all links
+    link_t: list = z([[],[]])  # +ve rlink_, dlink_
+    roott : list = z([None, None])  # mPP,dPP that contain this P
+    yx : list = z([])
     ''' 
     add L,S,A from links?
     optional:
@@ -58,7 +56,7 @@ class CderP(ClusterStructure):  # tuple of derivatives in P link: binary tree wi
     box : list = z([0,0,0,0])  # y0,yn, x0,xn: P.box+_P.box, or center+_center?
     S : float = 0.0  # sparsity: distance between centers
     A : list = z([0,0])  # angle: dy,dx between centers
-    fdx : object = None  # if comp_dx
+    # fdx : object = None  # if comp_dx
 
 '''
 max n of tuples per der layer = summed n of tuples in all lower layers: 1, 1, 2, 4, 8..:
@@ -80,7 +78,7 @@ class CPP(CderP):
     rng : int = 1  # sum of rng+: odd forks in last layer?
     box : list = z([0,0,0,0])  # y0,yn,x0,xn
     # temporary:
-    fback_t : list = z([])  # [feedback derT,valT,rdnT per node]
+    fback_t : list = z([[],[]])  # [feedback derH,valt,rdnt per node]
     coPP_ : list = z([])  # rdn reps in other PPPs, to eval and remove?
     Rdn : int = 0  # for accumulation or separate recursion count?
     # fdiv = NoneType  # if div_comp?

@@ -39,7 +39,7 @@ def intra_blob_root(root_blob, render, verbose, fBa):  # recursive evaluation of
 
         if blob_height > 3 and blob_width > 3:  # min blob dimensions: Ly, Lx
             if root_blob.fBa:  # vectorize fork in angle blobs
-                if (blob.G - aveA*(blob.rdn+2)) + (aveA*(blob.rdn+2) - blob.Ga) > 0 and blob.sign:  # G * angle match, x2 costs? Positive angle blob
+                if (blob.G - aveA*(blob.rdn+2)) + (aveA*(blob.rdn+2) - blob.Ga) > 0 and blob.sign:  # G * angle match, x2 costs
                     blob.fBa = 0; blob.rdn = root_blob.rdn+1
                     blob.prior_forks += 'v'
                     if verbose: print('fork: v')  # if render and blob.A < 100: deep_blobs += [blob]

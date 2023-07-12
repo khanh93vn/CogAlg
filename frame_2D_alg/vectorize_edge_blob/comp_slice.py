@@ -3,7 +3,6 @@ from itertools import zip_longest
 from copy import copy, deepcopy
 from .classes import CderP, CPP
 from .filters import ave, aves, vaves, ave_dangle, ave_daangle,med_decay, aveB, P_aves
-from dataclasses import replace
 
 '''
 comp_slice traces edge blob axis by cross-comparing vertically adjacent Ps: slices across edge blob, along P.G angle.
@@ -59,7 +58,7 @@ def comp_P(_P,P, fd=0, derP=None):  #  derP if der+, S if rng+
 
     if fd:  # der+: extend old link derP
         rn *= len(_P.link_t[1]) / len(P.link_t[1])  # derH is summed from links
-        dderH, valt, rdnt = comp_derH(_P.derH, P.derH, rn)
+        dderH, valt, rdnt = comp_derH(_P.derH, P.derH, rn)  # +=fork rdn
         derP.derH += [dderH]  # flat, appended with each der+
         for i in 0,1:
             derP.valt[i]+=valt[i]; derP.rdnt[i]+=rdnt[i]
@@ -102,31 +101,32 @@ def form_PP_t(P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps val
 
     PP_t = []
     for fd in 0,1:
-        qPP_ = []  # initial sequence-PPs
+        qPP_ = []  # initial sequence_PPs
         for P in P_:
             if not P.roott[fd]:  # else already packed in qPP
-                qPP = [[P]]  # init PP is 2D queue of Ps, + valt of all layers?
-                P.roott[fd]=qPP; valt = [0,0]
+                qPP = [[P]]  # init PP is 2D queue of (P,val)s of all layers?
+                P.roott[fd]=qPP; val = 0
                 uplink_ = P.link_t[fd]
                 uuplink_ = []  # next layer of links
                 while uplink_:
                     for derP in uplink_:
                         _P = derP._P; _qPP = _P.roott[fd]
-                        if _qPP:  # merge _qPP in qPP:
-                            for i in 0, 1: valt[i] += _qPP[1][i]
-                            for qP in _qPP[0]:
-                                qP.roott[fd] = qPP; qPP[0] += [qP]  # append qP_
-                            qPP_.remove(_qPP)
+                        if _qPP:
+                            if _qPP is not qPP:  # _P may be added to qPP via other downlinked P
+                                val += _qPP[1]  # merge _qPP in qPP:
+                                for qP in _qPP[0]:
+                                    qP.roott[fd] = qPP; qPP[0] += [qP]  # append qP_
+                                qPP_.remove(_qPP)
                         else:
                             qPP[0] += [_P]  # pack bottom up
                             _P.roott[fd] = qPP
-                            for i in 0,1: valt[i] += derP.valt[i]
+                            val += derP.valt[fd]
                             uuplink_ += derP._P.link_t[fd]
                     uplink_ = uuplink_
                     uuplink_ = []
-                qPP += [valt,ave+1]  # ini reval=ave+1, keep qPP same object for ref in P.roott
+                qPP += [val,ave+1]  # ini reval=ave+1, keep qPP same object for ref in P.roott
                 qPP_ += [qPP]
-        # prune qPPs by med links val:
+        # prune qPPs by mediated links vals:
         rePP_= reval_PP_(qPP_, fd)  # PP = [qPP,valt,reval]
         CPP_ = [sum2PP(qPP, base_rdn, fd) for qPP in rePP_]
         PP_t += [CPP_]  # may be empty
@@ -138,14 +138,14 @@ def reval_PP_(PP_, fd):  # recursive eval / prune Ps for rePP
 
     rePP_ = []
     while PP_:  # init P__
-        P_, valt, reval = PP_.pop(0)
-        Ave = ave * 1+(valt[fd] < valt[1-fd])  # * PP.rdnT[fd]?
-        if valt[fd] > Ave:
-            if reval < Ave:  # same graph, skip re-evaluation:
-                rePP_ += [[P_,valt,0]]  # reval=0
+        P_, val, reval = PP_.pop(0)
+        # Ave = ave * 1+(valt[fd] < valt[1-fd])  # * PP.rdn for more selective clustering?
+        if val > ave:
+            if reval < ave:  # same graph, skip re-evaluation:
+                rePP_ += [[P_,val,0]]  # reval=0
             else:
                 rePP = reval_P_(P_,fd)  # recursive node and link revaluation by med val
-                if valt[fd] > Ave:  # min adjusted val
+                if val > ave:  # min adjusted val
                     rePP_ += [rePP]
     if rePP_ and max([rePP[2] for rePP in rePP_]) > ave:  # recursion if any min reval:
         rePP_ = reval_PP_(rePP_,fd)
@@ -154,7 +154,7 @@ def reval_PP_(PP_, fd):  # recursive eval / prune Ps for rePP
 
 def reval_P_(P_, fd):  # prune qPP by link_val + mediated link__val
 
-    prune_=[]; Valt=[0,0]; reval=0  # comb PP value and recursion value
+    prune_=[]; Val=0; reval=0  # comb PP value and recursion value
 
     for P in P_:
         P_val = 0; remove_ = []
@@ -168,7 +168,7 @@ def reval_P_(P_, fd):  # prune qPP by link_val + mediated link__val
         if P_val * P.rdnt[fd] < vaves[fd]:
             prune_ += [P]
         else:
-            Valt[fd] += P_val * P.rdnt[fd]
+            Val += P_val * P.rdnt[fd]
     for P in prune_:
         for link in P.link_t[fd]:  # prune direct links only?
             _P = link._P
@@ -177,8 +177,8 @@ def reval_P_(P_, fd):  # prune qPP by link_val + mediated link__val
                 _link_.remove(link); reval += link.valt[fd]
 
     if reval > aveB:
-        P_, Valt, reval = reval_P_(P_, fd)  # recursion
-    return [P_, Valt, reval]
+        P_, Val, reval = reval_P_(P_, fd)  # recursion
+    return [P_, Val, reval]
 
 
 def sum2PP(qPP, base_rdn, fd):  # sum links in Ps and Ps in PP
@@ -190,7 +190,7 @@ def sum2PP(qPP, base_rdn, fd):  # sum links in Ps and Ps in PP
         P.roott[fd] = PP
         sum_ptuple(PP.ptuple, P.ptuple)
         L = P.ptuple[-1]
-        Dy = P.axis[0]*L/2; Dx = P.axis[1]*L/2; y=P.y; x=P.x
+        Dy = P.axis[0]*L/2; Dx = P.axis[1]*L/2; y,x =P.yx
         if i: Y0=min(Y0,(y-Dy)); Yn=max(Yn,(y+Dy)); X0=min(X0,(x-Dx)); Xn=max(Xn,(x+Dx))
         else: Y0=y-Dy; Yn=y+Dy; X0=x-Dx; Xn=x+Dx  # init
 
@@ -205,6 +205,7 @@ def sum2PP(qPP, base_rdn, fd):  # sum links in Ps and Ps in PP
 
     PP.box =(Y0,Yn,X0,Xn)
     return PP
+
 
 def sum_derH(T, t, base_rdn):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
 
