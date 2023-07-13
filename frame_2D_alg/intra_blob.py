@@ -139,7 +139,6 @@ def extend_der__t(blob):  # extend dert borders (+1 dert to boundaries)
     blob.der__t_roots = [[[] for _ in range(x0e, xne)] for _ in range(y0e, yne)]
     blob.box = (y0e, yne, x0e, xne)
 
-
 def print_deep_blob_forking(deep_layers):
 
     def check_deep_blob(deep_layer,i):
