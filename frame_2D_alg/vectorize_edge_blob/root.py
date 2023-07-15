@@ -58,7 +58,7 @@ def vectorize_root(blob, verbose=False):  # always angle blob, composite dert co
     comp_slice(blob, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
     for fd, PP_ in enumerate([blob.PPm_, blob.PPd_]):
         # intra PP, no fback to blob:
-        sub_recursion_eval(blob, PP_, ifd=fd)
+        sub_recursion_eval(blob, PP_)
         # cross-compare PPs, cluster them in graphs:
         if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
             agg_recursion_eval(blob, copy(PP_), fd=fd)  # comp sub_PPs, form intermediate PPs
@@ -101,7 +101,9 @@ def slice_blob(blob, verbose=False):  # form blob slices nearest to slice Ga: Ps
     return P_
 
 def term_P(I, M, Ma, Dy, Dx, Dyy, Dyx, Dxy, Dxx, y,x, Pdert_):
-    G = recompute_dert(Dy, Dx); Ga, Dyy, Dyx, Dxy, Dxx = recompute_adert(Dyy, Dyx, Dxy, Dxx)    # recompute G,Ga, it can't reconstruct M,Ma
+
+    G = recompute_dert(Dy, Dx)  # recompute G,Ga, it can't reconstruct M,Ma
+    Ga, Dyy, Dyx, Dxy, Dxx = recompute_adert(Dyy, Dyx, Dxy, Dxx)
     L = len(Pdert_)  # params.valt = [params.M+params.Ma, params.G+params.Ga]?
     P = CP(ptuple=[I, G, Ga, M, Ma, [Dy, Dx], [Dyy, Dyx, Dxy, Dxx], L], dert_=Pdert_)
     P.dert_ext_ = [(y, kx) for kx in range(x-L+1, x+1)]  # +1 to compensate for x-1 in slice_blob
