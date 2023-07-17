@@ -47,6 +47,8 @@ octants = lambda: [
     [-0.38 ≤ sin ≤ 0.38, cos < -0.38]
 ]
 '''
+oct_sep = 0.3826834323650898
+
 def vectorize_root(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
 
     slice_blob(blob, verbose)  # form 2D array of Ps: horizontal blob slices in der__t
@@ -328,12 +330,12 @@ def slice_blob_flow(blob, verbose=False):  # version of slice_blob_ortho
     uv_ = np.zeros_like(sc_)        # (u, v) points to one of the eight neighbor cells
     u_, v_ = uv_.T                  # unpack u, v
     s_, c_ = sc_.T                  # unpack sin, cos
-    u_[0.5 <= s_] = 1              # down, down left or down right
-    u_[(-0.5 < s_) & (s_ < 0.5)] = 0  # left or right
-    u_[s_ <= -0.5] = -1              # up, up-left or up-right
-    v_[0.5 <= c_] = 1              # right, up-right or down-right
-    v_[(-0.5 < c_) & (c_ < 0.5)] = 0  # up or down
-    v_[c_ <= -0.5] = -1              # left, up-left or down-left
+    u_[oct_sep <= s_] = 1              # down, down left or down right
+    u_[(-oct_sep < s_) & (s_ < oct_sep)] = 0  # left or right
+    u_[s_ <= -oct_sep] = -1              # up, up-left or up-right
+    v_[oct_sep <= c_] = 1              # right, up-right or down-right
+    v_[(-oct_sep < c_) & (c_ < oct_sep)] = 0  # up or down
+    v_[c_ <= -oct_sep] = -1              # left, up-left or down-left
     yx_ = _yx_ + uv_                # compute target cell position
     m__ = (yx_.reshape(-1, 1, 2) == _yx_).all(axis=2)   # mapping from _yx_ to yx_
     def get_p(a):
@@ -345,24 +347,20 @@ def slice_blob_flow(blob, verbose=False):  # version of slice_blob_ortho
     n_ = m__.sum(axis=0) # find n, number of gradient sources per cell
 
     # cluster Ps, start from cells without any gradient source
-    P_ = []
+    blob.P_ = []
     for i in range(len(n_)):
         if n_[i] == 0:                  # start from cell without any gradient source
             I = 0; M = 0; Ma = 0; Dy = 0; Dx = 0; Dyy = 0; Dyx = 0; Dxy = 0; Dxx = 0
             dert_ = []
-            y, x = _yx_[i]
-            box = [y, y, x, x]
+            dert_ext_ = []
             j = i
             while True:      # while there is a dert to follow
                 y, x = _yx_[j]      # get dert position
-                dert = [par__[y, x] for par__ in blob.der__t[1:]]  # dert params at _y, _x, skip i
+                dert = tuple(par__[y, x] for par__ in blob.der__t[1:])  # dert params at _y, _x, skip i
                 g, ga, ri, dy, dx, dyy, dyx, dxy, dxx = dert
                 I+=i; M+=ave_g-g; Ma+=ave_ga-ga; Dy+=dy; Dx+=dx; Dyy+=dyy; Dyx+=dyx; Dxy+=dxy; Dxx+=dxx
-                dert_ += [(y, x, *dert)]
-                if y < box[0]: box[0] = y
-                if y > box[1]: box[1] = y
-                if x < box[2]: box[2] = x
-                if x > box[3]: box[3] = x
+                dert_ += [dert]
+                dert_ext_ += [(y, x)]
 
                 # remove all gradient sources from the cell
                 while True:
@@ -377,13 +375,13 @@ def slice_blob_flow(blob, verbose=False):  # version of slice_blob_ortho
                     j = p_[j]
                 else:
                     break
-            G = np.hypot(Dy, Dx); Ga = (Dyx + 1) + (Dxx + 1)
-            L = len(dert_) # params.valt=[params.M+params.Ma,params.G+params.Ga]
-            P_ += [CP(ptuple=[I,M,Ma,[Dy,Dx],[Dyy,Dyx,Dxy,Dxx], G, Ga, L], box=[y,y, x-L,x-1], dert_=dert_)]
+            G = recompute_dert(Dy, Dx); Ga, Dyy, Dyx, Dxy, Dxx = recompute_adert(Dyy, Dyx, Dxy, Dxx)
+            L = len(dert_)
+            blob.P_ += [CP(ptuple=[I,M,Ma,G,Ga,[Dy,Dx],[Dyy,Dyx,Dxy,Dxx],L],
+                           yx=dert_ext_[L//2], axis=(Dy/G, Dx/G),
+                           dert_=dert_, dert_ext_=dert_ext_, dert_olp_=dert_ext_)]
 
-    blob.P__ = [P_]
-
-    return blob.P__
+    return blob.P_
 
 def append_P(P__, P):  # pack P into P__ in top down sequence
 
