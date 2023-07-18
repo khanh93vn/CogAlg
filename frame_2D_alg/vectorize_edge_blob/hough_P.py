@@ -5,13 +5,21 @@ RHO_TOL_BINS = 10       # tolerance for rho (number of bins)
 THETA_TOL_BINS = 10     # tolerance for theta (number of bins)
 THETA_TOL = THETA_TOL_BINS / THETA_RES * np.pi
 
-def hough_check(rt_olp__, x, y, t):
+def hough_check(rt_olp__, x, y, t, zx, zy):
+    # get zero
+    zr = rt_olp__.shape[1] / 2 / UNIT_RHO_RES
+
+    # transform the line with angle t that goes through (x, y) into Hesse normal form
     new_rt__ = np.zeros_like(rt_olp__, dtype=bool)
 
+    # Compute theta
     thetas = np.linspace(t - THETA_TOL, t + THETA_TOL, 2 * THETA_TOL_BINS + 1)
     thetas[thetas < 0] += np.pi
-    thetas[thetas > np.pi] -= np.pi
-    rhos = np.abs(np.hypot(y, x)*np.cos(thetas - np.arctan2(y, x)))         # Hough transform
+    thetas[thetas >= np.pi] -= np.pi
+
+    # Compute rho
+    y0, x0 = y - zy, x - zx
+    rhos = np.hypot(y0, x0)*np.cos(thetas - np.arctan2(y0, x0)) + zr     # Hough transform
     rho_bins = np.round(rhos * UNIT_RHO_RES).astype(int)
     theta_bins = np.round(thetas * THETA_RES / np.pi).astype(int)
 
