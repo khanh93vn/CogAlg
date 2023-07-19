@@ -255,6 +255,57 @@ def form_link_(P, cP_, blob):  # trace adj Ps up and down by adj dert roots, fil
 
 
 def slice_blob_ortho(blob, verbose=False):  # slice_blob with axis-orthogonal Ps
+    from frame_blob import UNFILLED, EXCLUDED_ID
+    Y, X = blob.mask__.shape
+    yx_ = sort_cell_by_da(blob)
+    idmap = np.full(blob.mask__.shape, UNFILLED, dtype=bool)
+    idmap[blob.mask__] = EXCLUDED_ID
+
+    blob.P_ = []
+    for y, x in yx_:
+        if idmap[y, x] == UNFILLED:
+            pass
+            # TODO: form P with y, x as pivot
+
+            # TODO: check for adjacent Ps using idmap
+
+            # TODO: fill idmap at P.dert_olp_ with P.id
+
+    return blob.P_
+
+def sort_cell_by_da(blob):   # sort derts by angle deviation of derts
+    with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
+        included = np.pad(~blob.mask__, 1, 'constant', constant_values=False)
+
+        uv__ = np.pad(blob.der__t[1:3] / blob.der__t.g,
+                      [(0, 0), (1, 1), (1, 1)], 'constant', constant_values=0)
+        if np.isnan(uv__[:, included]).any():
+            raise ValueError("g = 0 in edge blob")
+
+        # Get angle deviation of derts
+        from utils import kernel_slice_3x3 as ks
+        rim_slices = (
+            ks.tl, ks.tc, ks.tr,
+            ks.ml, ks.mr,
+            ks.bl, ks.bc, ks.br)
+        rim___ = [included[sl] for sl in rim_slices]
+        rim_da___ = [(1 - (uv__[ks.mc] * uv__[sl]).sum(axis=0))
+                     for sl in rim_slices]
+
+        # Set irrelevant rim = 0
+        for rim__, rim_da__ in zip(rim___, rim_da___):
+            rim_da__[~rim__] = 0
+
+        # Get average angle deviation
+        da__ = sum(rim_da___) / sum(rim___)
+
+        # Get in-blob cells
+        yx_ = sorted(zip(*np.indices(da__.shape)[:, included[ks.mc]]),
+                     key=lambda yx: da__[yx[0], yx[1]])
+
+    return yx_
+
+def slice_blob_hough(blob, verbose=False):  # slice_blob with axis-orthogonal Ps, using Hough transform
 
     Y, X = blob.mask__.shape
     # Get thetas and positions:
