@@ -127,20 +127,18 @@ class CEdge(ClusterStructure):  # edge blob
     longer names are normally classes
 '''
 
-def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=False):
+def frame_blobs_root(image, intra=False, render=False, verbose=False):
 
     if verbose: start_time = time()
     Y, X = image.shape[:2]
 
     id__tt = comp_axis(image)  # nested tuple of 2D arrays: [4|8 axes][i,d]: single difference per axis
-    sign__ = ave - id__tt[1] > 0
-    # select max d in each id__t for flood_fill(id__tt, sign__)?
+    sign__, der__t = comp_axes(id__tt) # select max d in each id__t for flood_fill(id__tt, sign__)?
 
     # form der__t from id__tt, for negative edge blobs only:
-    der__t = comp_pixel(image)
-    sign__ = ave - der__t[3] > 0   # sign is positive for below-average g in [i__, dy__, dx__, g__, ri]
+    gsign__ = ave - der__t[3] > 0   # sign is positive for below-average g in [i__, dy__, dx__, g__, ri]
     # https://en.wikipedia.org/wiki/Flood_fill:
-    blob_, idmap, adj_pairs = flood_fill(der__t, sign__, prior_forks='', verbose=verbose)
+    blob_, idmap, adj_pairs = flood_fill(der__t, gsign__, prior_forks='', verbose=verbose)
     assign_adjacents(adj_pairs)  # forms adj_blobs per blob in adj_pairs
     I, Dy, Dx = 0, 0, 0
     for blob in blob_: I += blob.I; Dy += blob.Dy; Dx += blob.Dx
@@ -164,53 +162,35 @@ def frame_blobs_root(image, intra=False, render=False, verbose=False, use_c=Fals
     if render: visualize_blobs(frame)
     return frame
 
-def comp_pixel(image):
 
+def comp_axis(image):
     pi__ = np.pad(image, pad_width=1, mode='edge')  # pad image with edge values
+
+    # compute sign of difference per axis:
+    sign__ =
+
     # compute directional derivatives:
-    dy__ = (
-        (pi__[ks.bl] - pi__[ks.tl]) * 0.25 +            # left column
-        (pi__[ks.bc] - pi__[ks.tc]) * 0.50 +            # middle column
-        (pi__[ks.br] - pi__[ks.tr]) * 0.25              # right column
-    )
-    dx__ = (
-        (pi__[ks.tr] - pi__[ks.tl]) * 0.25 +            # top row
-        (pi__[ks.mr] - pi__[ks.mc]) * 0.50 *            # middle row
-        (pi__[ks.br] - pi__[ks.bl]) * 0.25              # bottom row
-    )
-    G__ = np.hypot(dy__, dx__)                          # compute gradient magnitude
-    rp__ = (                                            # mean of 3x3 kernel
-        pi__[ks.tl] + pi__[ks.tc] + pi__[ks.tr] +       # top row
-        pi__[ks.ml] + pi__[ks.mc] + pi__[ks.mr] +       # middle row
-        pi__[ks.bl] + pi__[ks.bc] + pi__[ks.br]         # bottom row
-    ) / 9
-    return idert(pi__[ks.mc], dy__, dx__, G__, rp__)
+    bottom_left__   = pi__[ks.bl] - pi[ks.tr]   # 135 deg
+    bottom__        = pi__[ks.bc] - pi[ks.tc]   # 90 deg (y axis)
+    bottom_right__  = pi__[ks.br] - pi[ks.tl]   # 45 deg
+    right__         = pi__[ks.mr] - pi[ks.ml]   # 0 deg (x axis)
 
-def comp_pixel_2x2(image):  # 2x2 pixel cross-correlation within image, see comp_pixel_versions file for other versions and more explanation
+    return (pi__[ks.mc], (bottom_left__, bottom__, bottom_right__, right__))
 
-    # input slices into sliding 2x2 kernel, each slice is a shifted 2D frame of grey-scale pixels:
-    topleft__ = image[:-1, :-1]
-    topright__ = image[:-1, 1:]
-    bottomleft__ = image[1:, :-1]
-    bottomright__ = image[1:, 1:]
 
-    d_upright__ = bottomleft__ - topright__
-    d_upleft__ = bottomright__ - topleft__
+def comp_axes(id__tt):
+    pi__, (bottom_left__, bottom__, bottom_right__, right__) = id__tt
 
-    # rotate back to 0 deg:
-    dy__ = 0.5 * (d_upleft__ + d_upright__)
-    dx__ = 0.5 * (d_upleft__ - d_upright__)
+    # compute sign from max d in each direction
+    sign__ = (aves - np.max((bottom_left__, bottom__, bottom_right__, right__), axis=0)) > 0
 
-    G__ = np.hypot(d_upright__, d_upleft__)  # 2x2 kernel gradient (variation), match = inverse deviation, for sign_ only
-    rp__ = topleft__ + topright__ + bottomleft__ + bottomright__  # sum of 4 rim pixels -> mean, not summed in blob param
+    # compute gradient:
+    dy__ = (bottom_right__+bottom_left__) * 0.25 + bottom__ * 0.5
+    dx__ = (bottom_right__-bottom_left__) * 0.25 + right__ * 0.5
+    G__ = np.hypot(dy__, dx__)  # gradient magnitude
 
-    return (topleft__, dy__, dx__, G__, rp__)  # tuple of 2D arrays per param of dert (derivatives' tuple)
-    # renamed der__t = (i__, dy__, dx__, g__, ri__) for readability in deeper functions
-'''
-    old version:
-    Gy__ = ((bottomleft__ + bottomright__) - (topleft__ + topright__))  # decomposition of two diagonal differences into Gy
-    Gx__ = ((topright__ + bottomright__) - (topleft__ + bottomleft__))  # decomposition of two diagonal differences into Gx
-'''
+    return sign__, idert(pi__[ks.mc], dy__, dx__, G__, rp__)
+
 
 def flood_fill(der__t, sign__, prior_forks, verbose=False, mask__=None, fseg=False):
 
