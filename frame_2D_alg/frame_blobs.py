@@ -131,16 +131,21 @@ def frame_blobs_root(image, intra=False, render=False, verbose=False):
     Y, X = image.shape[:2]
 
     dir__t = comp_axis(image)  # nested tuple of 2D arrays: [i,[4|8 ds]]: single difference per axis
-    i__, g___ = dir__t
+    i__, g__t = dir__t
     # combine ds: (diagonal is projected to orthogonal, cos(45) = sin(45) = 0.5**0.5)
-    dy__ = (g___[3]-g___[2])*(0.5**0.5) + g___[0]
-    dx__ = (g___[2]-g___[3])*(0.5**0.5) + g___[1]
+    dy__ = (g__t[3]-g__t[2])*(0.5**0.5) + g__t[0]
+    dx__ = (g__t[2]-g__t[3])*(0.5**0.5) + g__t[1]
     g__ = np.hypot(dy__, dx__)  # gradient magnitude
     der__t = i__, dy__, dx__, g__
 
     # compute signs
-    g_sqr___ = g___*g___
-    val__ = np.sqrt(g_sqr___[:4].sum(axis=0) / g_sqr___.sum(axis=0))
+    g_sqr__t = g__t*g__t
+    val__ = np.sqrt(
+        # value is ratio between edge ones and the rest:
+        # https://www.rastergrid.com/blog/2011/01/frei-chen-edge-detector/#:~:text=When%20we%20are%20using%20the%20Frei%2DChen%20masks%20for%20edge%20detection%20we%20are%20searching%20for%20the%20cosine%20defined%20above%20and%20we%20use%20the%20first%20four%20masks%20as%20the%20elements%20of%20importance%20so%20the%20first%20sum%20above%20goes%20from%20one%20to%20four.
+        (g_sqr__t[0] + g_sqr__t[1] + g_sqr__t[2] + g_sqr__t[3]) /
+        (g_sqr__t[0] + g_sqr__t[1] + g_sqr__t[2] + g_sqr__t[3] + g_sqr__t[4] + g_sqr__t[5] + g_sqr__t[6] + g_sqr__t[7] + g_sqr__t[8])
+    )
     dsign__ = ave - val__ > 0   # max d per kernel
     gsign__ = ave - g__   > 0   # below-average g
     # https://en.wikipedia.org/wiki/Flood_fill
@@ -183,14 +188,17 @@ def comp_axis(image):
 
     # apply Frei-chen filter to image:
     # https://www.rastergrid.com/blog/2011/01/frei-chen-edge-detector/
+    # First 4 values are edges:
     g___[0] = (tl+tr-bl-br)/DIAG_DIST + (tc-bc)/ORTHO_DIST
     g___[1] = (tl+bl-tr-br)/DIAG_DIST + (ml-mr)/ORTHO_DIST
     g___[2] = (ml+bc-tc-mr)/DIAG_DIST + (tr-bl)/ORTHO_DIST
     g___[3] = (mr+bc-tc-ml)/DIAG_DIST + (tr-bl)/ORTHO_DIST
+    # The next 4 are lines
     g___[4] = (tc+bc-ml-mr)/ORTHO_DIST
     g___[5] = (tr+bl-tl-br)/ORTHO_DIST
     g___[6] = (mc*4-(tc+bc+ml+mr)*2+(tl+tr+bl+br))/6
     g___[7] = (mc*4-(tl+br+tr+bl)*2+(tc+bc+ml+mr))/6
+    # The last one is average
     g___[8] = (tl+tc+tr+ml+mc+mr+bl+bc+br)/9
 
     return (pi__[ks.mc], g___)
