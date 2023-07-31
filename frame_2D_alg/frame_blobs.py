@@ -49,7 +49,6 @@ UNFILLED = -1
 EXCLUDED_ID = -2
 
 idert = namedtuple('idert', 'i, dy, dx, g')
-adert = namedtuple('adert', 'i, g, ga, dy, dx, dyy, dyx, dxy, dxx')
 
 class CBlob(ClusterStructure):
     # comp_pixel:
@@ -63,17 +62,11 @@ class CBlob(ClusterStructure):
     M : float = 0.0 # summed PP.M, for both types of recursion?
     box : tuple = (0,0,0,0)  # y0, yn, x0, xn
     mask__ : object = None
-    der__t : Union[idert, adert] = None
+    der__t : idert = None
     der__t_roots : object = None  # map to der__t
     adj_blobs : list = z([])  # adjacent blobs
     fopen : bool = False
     # intra_blob params: # or pack in intra = lambda: Cintra
-    # comp_angle:
-    Dyy : float = 0.0
-    Dyx : float = 0.0
-    Dxy : float = 0.0
-    Dxx : float = 0.0
-    Ga : float = 0.0
     # comp_dx:
     Mdx : float = 0.0
     Ddx : float = 0.0
@@ -181,18 +174,9 @@ def flood_fill(der__t, sign__, prior_forks, verbose=False, mask__=None, fseg=Fal
                 while unfilled_derts:
                     y1, x1 = unfilled_derts.popleft()
                     # add dert to blob
-                    if len(der__t) > 5: # comp_angle
-                        blob.accumulate(I  = der__t[0][y1][x1],  # rp__,
-                                        Dy = der__t[3][y1][x1],
-                                        Dx = der__t[4][y1][x1],
-                                        Dyy = der__t[5][y1][x1],
-                                        Dyx = der__t[6][y1][x1],
-                                        Dxy = der__t[7][y1][x1],
-                                        Dxx = der__t[8][y1][x1])
-                    else:  # comp_pixel or comp_range
-                        blob.accumulate(I  = der__t[0][y1][x1],  # rp__,
-                                        Dy = der__t[1][y1][x1],
-                                        Dx = der__t[2][y1][x1])
+                    blob.accumulate(I  = der__t[0][y1][x1],  # rp__,
+                                    Dy = der__t[1][y1][x1],
+                                    Dx = der__t[2][y1][x1])
                     blob.A += 1
                     if y1 < y0:   y0 = y1
                     elif y1 > yn: yn = y1
@@ -226,31 +210,16 @@ def flood_fill(der__t, sign__, prior_forks, verbose=False, mask__=None, fseg=Fal
                 # terminate blob
                 yn += 1; xn += 1
                 blob.box = y0, yn, x0, xn
-                blob.der__t = type(der__t)(
+                blob.der__t = idert(
                     *(par__[y0:yn, x0:xn] for par__ in der__t))
                 blob.mask__ = (idmap[y0:yn, x0:xn] != blob.id)
                 blob.adj_blobs = [[],[]] # iblob.adj_blobs[0] = adj blobs, blob.adj_blobs[1] = poses
-                blob.G = recompute_dert(blob.Dy, blob.Dx)
-                if len(der__t) > 5:
-                    blob.Ga, blob.Dyy, blob.Dyx, blob.Dxy, blob.Dxx = recompute_adert(blob.Dyy, blob.Dyx, blob.Dxy, blob.Dxx)
+                blob.G = np.hypot(blob.Dy, blob.Dx)
                 if verbose:
                     progress += blob.A * step; print(f"\rClustering... {round(progress)} %", end=""); sys.stdout.flush()
     if verbose: print("\r" + " " * 79, end=""); sys.stdout.flush(); print("\r", end="")
 
     return blob_, idmap, adj_pairs
-
-
-def recompute_dert(Dy, Dx):   # recompute params after accumulation
-    return np.hypot(Dy, Dx)  # recompute G from Dy, Dx
-
-
-def recompute_adert(Dyy, Dyx, Dxy, Dxx):  # recompute angle fork params after accumulation
-    # normalize
-    Dyy, Dyx = [Dyy, Dyx] / np.hypot(Dyy, Dyx)
-    Dxy, Dxx = [Dxy, Dxx] / np.hypot(Dxy, Dxx)
-    # recompute Ga
-    Ga = (1 - Dyx) + (1 - Dxx)  # +1 for all positives
-    return Ga, Dyy, Dyx, Dxy, Dxx
 
 
 def assign_adjacents(adj_pairs):  # adjacents are connected opposite-sign blobs

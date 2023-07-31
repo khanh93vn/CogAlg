@@ -5,7 +5,7 @@ Cross-comparison of pixels or gradient angles in 2x2 kernels
 import numpy as np
 from collections import namedtuple
 
-from frame_blobs import idert, adert
+from frame_blobs import idert
 from utils import kernel_slice_3x3 as ks
 # no ave_ga = .78, ave_ma = 2  # at 22.5 degrees
 # https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_diagrams.png
@@ -105,7 +105,7 @@ def comp_a(dert__, mask__=None):  # cross-comp of gradient angle in 3x3 kernels
     dx__ = dx__[ks.mc]
     g__ = g__[ks.mc]
 
-    return adert(g__, ga__, i__, dy__, dx__, dyy__, dyx__, dxy__, dxx__), majority_mask__
+    return (g__, ga__, i__, dy__, dx__, dyy__, dyx__, dxy__, dxx__), majority_mask__
 
 def angle_diff(uv2, uv1):  # compare angles of uv1 to uv2 (uv1 to uv2)
 
