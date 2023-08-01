@@ -46,7 +46,7 @@ aveB = 50
 aveBa = 1.5
 ave_mP = 100
 UNFILLED = -1
-EXCLUDED_ID = -2
+EXCLUDED = -2
 
 idert = namedtuple('idert', 'i, dy, dx, g')
 
@@ -63,7 +63,6 @@ class CBlob(ClusterStructure):
     box : tuple = (0,0,0,0)  # y0, yn, x0, xn
     mask__ : object = None
     der__t : idert = None
-    der__t_roots : object = None  # map to der__t
     adj_blobs : list = z([])  # adjacent blobs
     fopen : bool = False
     # intra_blob params: # or pack in intra = lambda: Cintra
@@ -76,7 +75,6 @@ class CBlob(ClusterStructure):
     fBa : bool = False  # in root_blob: next fork is comp angle, else comp_r
     rdn : float = 1.0  # redundancy to higher blob layers, or combined?
     rng : int = 1  # comp range, set before intra_comp
-    P_ : list = z([])  # input + derPs, no internal sub-recursion
     rlayers : list = z([])  # list of layers across sub_blob derivation tree, deeper layers are nested with both forks
     dlayers : list = z([])  # separate for range and angle forks per blob
     PPm_ : list = z([])  # mblobs in frame
@@ -152,7 +150,7 @@ def flood_fill(der__t, sign__, prior_forks, verbose=False, mask__=None, fseg=Fal
 
     idmap = np.full((height, width), UNFILLED, 'int64')  # blob's id per dert, initialized UNFILLED
     if mask__ is not None:
-        idmap[mask__] = EXCLUDED_ID
+        idmap[mask__] = EXCLUDED
     if verbose:
         n_masked = 0 if mask__ is None else mask__.sum()
         step = 100 / (height * width - n_masked)  # progress % percent per pixel
@@ -196,7 +194,7 @@ def flood_fill(der__t, sign__, prior_forks, verbose=False, mask__=None, fseg=Fal
                         # image boundary is reached:
                         if (y2 < 0 or y2 >= height or
                             x2 < 0 or x2 >= width or
-                            idmap[y2, x2] == EXCLUDED_ID):
+                            idmap[y2, x2] == EXCLUDED):
                             blob.fopen = True
                         # pixel is filled:
                         elif idmap[y2, x2] == UNFILLED:

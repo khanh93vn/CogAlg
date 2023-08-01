@@ -2,8 +2,8 @@ import sys
 import numpy as np
 from copy import copy, deepcopy
 from itertools import product
-from frame_blobs import recompute_dert, recompute_adert, CEdge
-from .classes import CP, CPP, CderP, Cgraph
+from frame_blobs import UNFILLED, EXCLUDED
+from .classes import CEdge, CP, CPP, CderP, Cgraph
 from .filters import ave, ave_g, ave_ga, ave_rotate
 from .comp_slice import comp_slice, comp_angle, sum_derH
 from .hough_P import new_rt_olp_array, hough_check
@@ -50,8 +50,20 @@ octants = lambda: [
 oct_sep = 0.3826834323650898
 
 
-def vectorize_root(edge, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
-
+def vectorize_root(blob, verbose=False):  # always negativ blob, core param is v_g
+    # convert Cblob to Cedge:
+    edge = CEdge(
+        I=blob.I,
+        Dy=blob.Dy,
+        Dx=blob.Dx,
+        G=blob.G,
+        A=blob.A,
+        M=blob.M,
+        box=blob.box,
+        mask__=blob.mask__,
+        der__t=blob.der__t,
+        der__t_roots=[[[] for col in row] for row in blob.der__t[0]],
+        adj_blobs=blob.adj_blobs)
 
     slice_edge(edge, verbose)  # form 2D array of Ps: horizontal blob slices in dir__t
     rotate_P_(edge, verbose)  # re-form Ps around centers along P.G, P sides may overlap, if sum(P.M s + P.Ma s)?
@@ -273,7 +285,7 @@ def slice_edge_ortho(edge, verbose=False):  # slice_blob with axis-orthogonal Ps
     Y, X = edge.mask__.shape
     yx_ = sort_cell_by_da(edge)
     idmap = np.full(edge.mask__.shape, UNFILLED, dtype=int)
-    idmap[edge.mask__] = EXCLUDED_ID
+    idmap[edge.mask__] = EXCLUDED
 
     edge.P_ = []
     adj_pairs = set()
@@ -290,7 +302,7 @@ def slice_edge_ortho(edge, verbose=False):  # slice_blob with axis-orthogonal Ps
 
             for _y, _x in P.dert_olp_:
                 for __y, __x in product(range(_y-1,y+2), range(x-1,x+2)):
-                    if (0 <= __y < Y) and (0 <= __x < X) and idmap[__y, __x] not in (UNFILLED, EXCLUDED_ID):
+                    if (0 <= __y < Y) and (0 <= __x < X) and idmap[__y, __x] not in (UNFILLED, EXCLUDED):
                         adj_pairs.add((idmap[__y, __x], P.id))
 
             # check for adjacent Ps using idmap

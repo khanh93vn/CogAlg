@@ -55,69 +55,6 @@ def comp_r(dert__, rng, mask__=None):
     return idert(i__topleft, d_upleft__, d_upright__, g__), majority_mask__
 
 
-def comp_a(dert__, mask__=None):  # cross-comp of gradient angle in 3x3 kernels
-
-    if mask__ is not None:
-        majority_mask__ = np.sum(
-            (
-                mask__[ks.tl], mask__[ks.tc], mask__[ks.tr],
-                mask__[ks.ml], mask__[ks.mc], mask__[ks.mr],
-                mask__[ks.bl], mask__[ks.bc], mask__[ks.br],
-            ),
-            axis=0) > 2.25  # 1/4 of maximum values?
-    else:
-        majority_mask__ = None
-
-    i__, dy__, dx__, g__= dert__[:4]  # day__,dax__,ma__ are recomputed
-
-    with np.errstate(divide='ignore', invalid='ignore'):  # suppress numpy RuntimeWarning
-        uv__ = dert__[1:3] / g__
-        uv__[np.where(np.isnan(uv__))] = 0  # set nan to 0, to avoid error later
-
-    # uv__ comparison in 3x3 kernels:
-    lcol = angle_diff(uv__[ks.br], uv__[ks.tr])  # left col
-    ccol = angle_diff(uv__[ks.bc], uv__[ks.tc])  # central col
-    rcol = angle_diff(uv__[ks.bl], uv__[ks.tl])  # right col
-    trow = angle_diff(uv__[ks.tr], uv__[ks.tl])  # top row
-    mrow = angle_diff(uv__[ks.mr], uv__[ks.ml])  # middle row
-    brow = angle_diff(uv__[ks.br], uv__[ks.bl])  # bottom row
-
-    # compute mean vectors
-    mday__ = 0.25*lcol + 0.5*ccol + 0.25*rcol
-    mdax__ = 0.25*trow + 0.5*mrow + 0.25*brow
-
-    # normalize mean vectors into unit vectors
-    dyy__, dyx__ = mday__ / np.hypot(*mday__)
-    dxy__, dxx__ = mdax__ / np.hypot(*mdax__)
-
-    # v component of mean unit vector represents similarity of angles
-    # between compared vectors, goes from -1 (opposite) to 1 (same)
-    ga__ = np.hypot(1-dyx__, 1-dxx__)     # +1 for all positives
-    # or ga__ = np.hypot(np.pi + np.arctan2(dyy__, dyx__), np.pi + np.arctan2(dxy__, dxx__)?
-
-    '''
-    sin(-θ) = -sin(θ), cos(-θ) = cos(θ): 
-    sin(da) = -sin(-da), cos(da) = cos(-da) => (sin(-da), cos(-da)) = (-sin(da), cos(da))
-    in conventional notation: G = (Ix, Iy), A = (Ix, Iy) / hypot(G), DA = (dAdx, dAdy), abs_GA = hypot(DA)?
-    '''
-    i__ = i__[ks.mc]
-    dy__ = dy__[ks.mc]
-    dx__ = dx__[ks.mc]
-    g__ = g__[ks.mc]
-
-    return (g__, ga__, i__, dy__, dx__, dyy__, dyx__, dxy__, dxx__), majority_mask__
-
-def angle_diff(uv2, uv1):  # compare angles of uv1 to uv2 (uv1 to uv2)
-
-    u2, v2 = uv2[:]
-    u1, v1 = uv1[:]
-
-    # sine and cosine of difference between angles of uv1 and uv2:
-    u3 = (v1 * u2) - (u1 * v2)
-    v3 = (v1 * v2) + (u1 * u2)
-
-    return np.stack((u3, v3))
-
 '''
 alternative versions below:
 '''
