@@ -41,8 +41,8 @@ def intra_blob_root(root_blob, render, verbose):  # recursive evaluation of cros
             *(par__[y0e:yne, x0e:xne] for par__ in blob.root_der__t))
         # extend mask__:
         blob.mask__ = np.pad(
-            blob.mask__, constant_values=True, mode='constant',
-            pad_with=((y0 - y0e, yne - yn), (x0 - x0e, xne - xn)))
+            blob.mask__, ((y0 - y0e, yne - yn), (x0 - x0e, xne - xn)),
+            constant_values=True, mode='constant')
         # extends blob box
         blob.box = (y0e, yne, x0e, xne)
         Ye = yne - y0e; Xe = xne - x0e
@@ -87,7 +87,7 @@ def intra_blob_root(root_blob, render, verbose):  # recursive evaluation of cros
     return spliced_layers
 
 
-def comp_r(dert__, ave, rng, root_fia, mask__=None):
+def comp_r(dert__, ave, rng, mask__=None):
     '''
     Selective sampling: skipping current rim derts as kernel-central derts in following comparison kernels.
     Skipping forms increasingly sparse output dert__ for greater-range cross-comp, hence

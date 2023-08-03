@@ -116,7 +116,7 @@ def frame_blobs_root(image, intra=False, render=False, verbose=False):
         if verbose: print("\rRunning frame's intra_blob...")
         from intra_blob import intra_blob_root
 
-        frame.rlayers += intra_blob_root(frame, render, verbose, fBa=0)  # recursive eval cross-comp range| angle| slice per blob
+        frame.rlayers += intra_blob_root(frame, render, verbose)  # recursive eval cross-comp range| angle| slice per blob
         if verbose: print("\rFinished intra_blob")  # print_deep_blob_forking(deep_blobs)
         # sublayers[0] is fork-specific, deeper sublayers combine sub-blobs of both forks
 
