@@ -129,14 +129,14 @@ def comp_pixel(image):
     pi__ = np.pad(image, pad_width=1, mode='edge')  # pad image with edge values
     # compute directional derivatives:
     dy__ = (
-        (pi__[ks.bl] - pi__[ks.tl]) * 0.25 +            # left column
-        (pi__[ks.bc] - pi__[ks.tc]) * 0.50 +            # middle column
-        (pi__[ks.br] - pi__[ks.tr]) * 0.25              # right column
+        (pi__[ks.bl] - pi__[ks.tr]) * 0.25 +
+        (pi__[ks.bc] - pi__[ks.tc]) * 0.50 +
+        (pi__[ks.br] - pi__[ks.tl]) * 0.25
     )
     dx__ = (
-        (pi__[ks.tr] - pi__[ks.tl]) * 0.25 +            # top row
-        (pi__[ks.mr] - pi__[ks.mc]) * 0.50 *            # middle row
-        (pi__[ks.br] - pi__[ks.bl]) * 0.25              # bottom row
+        (pi__[ks.tr] - pi__[ks.bl]) * 0.25 +
+        (pi__[ks.mr] - pi__[ks.mc]) * 0.50 +
+        (pi__[ks.br] - pi__[ks.tl]) * 0.25
     )
     G__ = np.hypot(dy__, dx__)                          # compute gradient magnitude
 
