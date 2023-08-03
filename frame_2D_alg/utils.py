@@ -377,6 +377,7 @@ def blank_image(shape, fill_val=None):
         fill_val = masking_val
     return np.full((height, width, 3), fill_val, 'uint8')
 
+
 def print_deep_blob_forking(deep_layers):
 
     def check_deep_blob(deep_layer,i):

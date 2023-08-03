@@ -87,11 +87,6 @@ def intra_blob_root(root_blob, render, verbose):  # recursive evaluation of cros
     return spliced_layers
 
 
-def extend_der__t(blob):  # extend dert borders (+1 dert to boundaries)
-
-
-
-
 def comp_r(dert__, ave, rng, root_fia, mask__=None):
     '''
     Selective sampling: skipping current rim derts as kernel-central derts in following comparison kernels.
@@ -99,8 +94,7 @@ def comp_r(dert__, ave, rng, root_fia, mask__=None):
     rng (distance between centers of compared derts) increases as 2^n, with n starting at 0:
     rng = 1: 3x3 kernel,
     rng = 2: 5x5 kernel,
-    rng = 3: 9x9 kernel,
-    ...
+    rng = 3: 9x9 kernel.
     Sobel coefficients to decompose ds into dy and dx:
     YCOEFs = np.array([-1, -2, -1, 0, 1, 2, 1, 0])
     XCOEFs = np.array([-1, 0, 1, 2, 1, 0, -1, -2])
@@ -161,7 +155,6 @@ def comp_r(dert__, ave, rng, root_fia, mask__=None):
     m__ = dert__[4][1:-1:2, 1:-1:2].copy()
 
     # compare four diametrically opposed pairs of rim pixels, with Sobel coeffs * rim skip ratio:
-
     rngSkip = 1
     if rng>2: rngSkip *= (rng-2)*2  # *2 for 9x9, *4 for 17x17
 
@@ -177,7 +170,7 @@ def comp_r(dert__, ave, rng, root_fia, mask__=None):
 
     g__ = np.hypot(dy__, dx__) - ave  # gradient, recomputed at each comp_r
     '''
-    inverse match = SAD, direction-invariant and more precise measure of variation than g
+    currently not used: inverse match = SAD, direction-invariant and more precise measure of variation than g
     (all diagonal derivatives can be imported from prior 2x2 comp)
     '''
     m__ += ( abs(i__center - i__topleft) * 1 * rngSkip
@@ -190,7 +183,6 @@ def comp_r(dert__, ave, rng, root_fia, mask__=None):
            + abs(i__center - i__left) * 2 * rngSkip
            )
     return idert(i__center, dy__, dx__, g__), majority_mask__
-
 
 def comp_r_2x2(dert__, rng, mask__=None):
     '''
@@ -234,4 +226,3 @@ def comp_r_2x2(dert__, rng, mask__=None):
     ri__ = i__topleft + i__topright + i__bottomleft + i__bottomright
 
     return idert(i__topleft, d_upleft__, d_upright__, g__), majority_mask__
-
