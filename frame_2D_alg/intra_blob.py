@@ -127,8 +127,8 @@ def comp_r(dert__, rng, mask__=None):
     # unpack dert__:
     i__, dy__, dx__, g__ = dert__  # i is pixel intensity, g is gradient
     si__ = i__[::2, ::2]  # sparse_i, i is pixel intensity
-    sdy__ = dy__[::2, ::2].copy()  # sparse_dy, for accumulation
-    sdx__ = dx__[::2, ::2].copy()  # sparse_dx, for accumulation
+    sdy__ = dy__[::2, ::2][ks.mc].copy()  # sparse_dy, for accumulation
+    sdx__ = dx__[::2, ::2][ks.mc].copy()  # sparse_dx, for accumulation
 
     # Find coefficient = (sparsity / dist) -------------------------------------------
     # Distance of rim:
@@ -169,13 +169,13 @@ def comp_r(dert__, rng, mask__=None):
     coeff = (3*(1<<rng) + 2) / 16
 
     # compare opposed pairs of rim pixels, project onto x, y:
-    sdy__[ks.mc] += (
+    sdy__ += (
         (si__[ks.bl] - si__[ks.tr]) * 0.5 +
         (si__[ks.bc] - si__[ks.tc]) +
         (si__[ks.br] - si__[ks.tl]) * 0.5
     ) * coeff
 
-    sdx__[ks.mc] += (
+    sdx__ += (
         (si__[ks.tr] - si__[ks.bl]) * 0.5 +
         (si__[ks.mr] - si__[ks.mc]) +
         (si__[ks.br] - si__[ks.tl]) * 0.5
