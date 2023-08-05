@@ -4,6 +4,7 @@
     - vectorize_root: forms roughly edge-orthogonal Ps, evaluated for rotation, comp_slice, etc.
 '''
 import numpy as np
+from scipy.signal import convolve2d
 from itertools import zip_longest
 from frame_blobs import assign_adjacents, flood_fill, idert
 from vectorize_edge_blob.root import vectorize_root
@@ -52,7 +53,8 @@ def intra_blob_root(root_blob, render, verbose):  # recursive evaluation of cros
         # increment forking sequence: g -> r|v
         if Ye > 3 and Xe > 3:  # min blob dimensions: Ly, Lx
             # <--- r fork
-            if blob.G < aveR * blob.rdn and blob.sign:  # below-average G, eval for comp_r
+            if (blob.G < aveR * blob.rdn and blob.sign and
+                    Ye > root_blob.rng*2 + 3 and Xe > root_blob.rng*2 + 3):  # below-average G, eval for comp_r
                 blob.rng = root_blob.rng + 1; blob.rdn = root_blob.rdn + 1.5  # sub_blob root values
                 new_der__t, new_mask__ = comp_r(blob.der__t, blob.rng, blob.mask__)
                 if new_mask__.shape[0] > 2 and new_mask__.shape[1] > 2 and False in new_mask__:
@@ -109,77 +111,51 @@ def comp_r(dert__, rng, mask__=None):
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_diagrams.png
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/intra_comp_d.drawio
     '''
-
+    ky, kx, km = compute_kernel(rng)
 
     # unmask all derts in kernels with only one masked dert (can be set to any number of masked derts),
     # to avoid extreme blob shrinking and loss of info in other derts of partially masked kernels
     # unmasked derts were computed due to extend_dert() in intra_blob
     if mask__ is not None:
-        smsk__ = mask__[::2, ::2]     # sparse_mask__
-        majority_mask__ = (
-                smsk__[ks.tl].astype(int) + smsk__[ks.tc].astype(int) + smsk__[ks.tr].astype(int) +
-                smsk__[ks.ml].astype(int) + smsk__[ks.mc].astype(int) + smsk__[ks.mr].astype(int) +
-                smsk__[ks.bl].astype(int) + smsk__[ks.bc].astype(int) + smsk__[ks.br].astype(int)
-            ) > 1
+        try:
+            majority_mask__ = convolve2d(mask__.astype(int), km, mode='valid') > 1
+        except ValueError as e:
+            print('mask__ shape:', mask__.shape, 'km shape:', km.shape)
+            raise e
     else:
         majority_mask__ = None  # returned at the end of function
 
     # unpack dert__:
     i__, dy__, dx__, g__ = dert__  # i is pixel intensity, g is gradient
-    si__ = i__[::2, ::2]  # sparse_i, i is pixel intensity
-    sdy__ = dy__[::2, ::2].copy()  # sparse_dy, for accumulation
-    sdx__ = dx__[::2, ::2].copy()  # sparse_dx, for accumulation
-
-    # Find coefficient = (sparsity / dist) -------------------------------------------
-    # Distance of rim:
-    # dist = 2**rng
-    # _dist = 2**(rng-1) = dist/2
-    #
-    # Number of rim derts at dist:
-    # n_rim_dert(dist) = dist*4
-    # for example:
-    # - dist 2 : 3x3 has rng=1 => dist=2 => n_rim_dert=8
-    # - dist 4 : 5x5 has rng=2 => dist=4 => n_rim_dert=16
-    # - dist 8 : 9x9 has rng=3 => dist=8 => n_rim_dert=32
-    #
-    # Skipped derts since last rng:
-    # n_skipped = n_rim_dert(_dist) + n_rim_dert(_dist+1)... + n_rim_dert(dist)
-    #           = (_dist+1)*4 + (_dist+2)*4 + ... + dist*4    (exclude rim at rng-1)
-    #           = 4*((_dist+1) ... + dist)
-    #           = 4*(dist + (_dist+1))*(dist-(_dist+1)+1)/2
-    #           = 2*(dist +_dist+1)*(dist-_dist)
-    #
-    # Since _dist = dist/2:
-    # n_skipped = 2*(3*dist/2+1)*(dist/2)
-    #           = dist*(3*dist+2)/2
-    #
-    # Sparsity compensation:
-    # sparsity = n_skipped / 8, with 8 == number of compared derts
-    #
-    # Substitude n_skipped:
-    #          = dist*(3*dist+2) / 16
-    #
-    # Coefficient is:
-    # coeff = (sparsity / dist)
-    #       = (3*dist+2) / 16
-    #
-    # Substitude dist = 2**rng:
-    # coeff = (3*(2**rng) + 2) / 16
-    #       = (3*(1 << rng) + 2) / 16
-    coeff = (3*(1<<rng) + 2) / 16
 
     # compare opposed pairs of rim pixels, project onto x, y:
-    sdy__[ks.mc] += (
-        (si__[ks.bl] - si__[ks.tr]) * 0.5 +
-        (si__[ks.bc] - si__[ks.tc]) +
-        (si__[ks.br] - si__[ks.tl]) * 0.5
-    ) * coeff
+    new_dy__ = dy__[rng:-rng, rng:-rng] + convolve2d(i__, ky, mode='valid')
+    new_dx__ = dx__[rng:-rng, rng:-rng] + convolve2d(i__, kx, mode='valid')
 
-    sdx__[ks.mc] += (
-        (si__[ks.tr] - si__[ks.bl]) * 0.5 +
-        (si__[ks.mr] - si__[ks.mc]) +
-        (si__[ks.br] - si__[ks.tl]) * 0.5
-    ) * coeff
-    sg__ = np.hypot(sdy__, sdx__)  # gradient, recomputed at each comp_r
+    new_g__ = np.hypot(sdy__, sdx__)  # gradient, recomputed at each comp_r
+    new_i__ = i__[rng:-rng, rng:-rng]
 
-    return idert(si__[ks.mc], sdy__, sdx__, sg__), majority_mask__
+    return idert(new_i__, new_dy__, new_dx__, new_g__), majority_mask__
+
+def compute_kernel(rng):
+    # kernel_coefficient = projection_coefficient / distance
+    #                    = [sin(angle), cos(angle)] / distance
+    #
+    # With: distance = sqrt(x*x + y*y)
+    #       sin(angle) = y / sqrt(x*x + y*y) = y / distance
+    #       cos(angle) = x / sqrt(x*x + y*y) = x / distance
+    #
+    # Therefore:
+    # kernel_coefficient = [y / sqrt(x*x + y*y), x / sqrt(x*x + y*y)] / sqrt(x*x + y*y)
+    #                    = [y, x] / (x*x + y*y)
+    ksize = rng*2+1  # kernel size
+    y, x = k = np.indices((ksize, ksize)) - rng  # kernel span around (0, 0)
+    km = np.ones((ksize, ksize), dtype=int)  # kernel of mask
+    sqr_dist = x*x + y*y  # squared distance
+    sqr_dist[rng, rng] = 1  # avoid division by 0
+    coeff = k / sqr_dist # kernel coefficient
+    coeff[ks.mc] = 0  # take the rim
+    km[ks.mc] = 0  # take the rim
+
+    return (*coeff, km)
+
