@@ -117,11 +117,7 @@ def comp_r(dert__, rng, mask__=None):
     # to avoid extreme blob shrinking and loss of info in other derts of partially masked kernels
     # unmasked derts were computed due to extend_dert() in intra_blob
     if mask__ is not None:
-        try:
-            majority_mask__ = convolve2d(mask__.astype(int), km, mode='valid') > 1
-        except ValueError as e:
-            print('mask__ shape:', mask__.shape, 'km shape:', km.shape)
-            raise e
+        majority_mask__ = convolve2d(mask__.astype(int), km, mode='valid') > 1
     else:
         majority_mask__ = None  # returned at the end of function
 
@@ -132,7 +128,7 @@ def comp_r(dert__, rng, mask__=None):
     new_dy__ = dy__[rng:-rng, rng:-rng] + convolve2d(i__, ky, mode='valid')
     new_dx__ = dx__[rng:-rng, rng:-rng] + convolve2d(i__, kx, mode='valid')
 
-    new_g__ = np.hypot(sdy__, sdx__)  # gradient, recomputed at each comp_r
+    new_g__ = np.hypot(new_dy__, new_dx__)  # gradient, recomputed at each comp_r
     new_i__ = i__[rng:-rng, rng:-rng]
 
     return idert(new_i__, new_dy__, new_dx__, new_g__), majority_mask__
