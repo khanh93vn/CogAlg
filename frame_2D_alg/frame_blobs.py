@@ -111,7 +111,6 @@ def frame_blobs_root(i__, intra=False, render=False, verbose=False):
         frame.accumulate(I  = blob.I,
                          Dy = blob.Dy,
                          Dx = blob.Dx)
-
     # dlayers = []: no comp_a yet
     if verbose: print(f"{len(frame.rlayers[0])} blobs formed in {time() - start_time} seconds")
 
@@ -125,7 +124,6 @@ def frame_blobs_root(i__, intra=False, render=False, verbose=False):
 
     if render: visualize_blobs(frame)
     return frame
-
 
 def comp_pixel(pi__):
     # compute directional derivatives:
