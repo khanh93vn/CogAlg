@@ -50,6 +50,49 @@ octants = lambda: [
 oct_sep = 0.3826834323650898
 
 
+def vectorize_root(blob, verbose=False):
+    # Non-max suppression:
+    new_der__t = non_max_suppression(blob)  # new_der__t contain suppressed dy, dx, g
+
+    # Use Otsu's method to determine ave
+    # https://en.wikipedia.org/wiki/Otsu%27s_method
+    ave = otsu(new_der__t.g)
+    sedge_mask__ = ave - new_der__t.g > 0   # mask of strong edges
+    wedge_mask__ = (ave/2) - new_der__t.g > 0   # mask of weak edges
+
+    # Edge tracking by hysteresis, forming edge structure:
+    edge_ = form_edge_(sedge_mask__, wedge_mask__)
+
+    # ... continue with edge_ as input
+    comp_slice(edge_, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
+    # rng+ in comp_slice adds edge.node_T[0]:
+    for edge in edge_:
+        for fd, PP_ in enumerate(edge.node_T[0]):  # [rng+ PPm_,PPd_, der+ PPm_,PPd_]
+            # sub+, intra PP:
+            sub_recursion_eval(edge, PP_)
+            # agg+, inter-PP, 1st layer is two forks only:
+            if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
+                node_= []
+                for PP in PP_: # CPP -> Cgraph:
+                    derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
+                    node_ += [Cgraph(ptuple=PP.ptuple, derH=[derH,valt,rdnt], valt=valt,rdnt=rdnt, L=len(PP.node_),
+                                     box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
+                    sum_derH([edge.derH,edge.valt,edge.rdnt], [derH,valt,rdnt], 0)
+                edge.node_T[0][fd][:] = node_
+                # node_[:] = new node_tt in the end:
+                agg_recursion(edge, node_)
+
+
+def non_max_suppression(blob):
+    pass
+
+def otsu(g):
+    pass
+
+def form_edge_(sedge_mask__, wedge_mask__):
+    pass
+
+"""
 def vectorize_root(blob, verbose=False):  # always angle blob, composite dert core param is v_g + iv_ga
     # Cblob-> Cedge:
     edge = CEdge( I=blob.I, Dy=blob.Dy, Dx=blob.Dx, G=blob.G, A=blob.A, M=blob.M, box=blob.box, mask__=blob.mask__,
@@ -517,3 +560,4 @@ def copy_P(P, Ptype=None):  # Ptype =0: P is CP | =1: P is CderP | =2: P is CPP 
         new_P.mlevels, new_P.dlevels = copy(mlevels), copy(dlevels)
 
     return new_P
+"""
