@@ -43,9 +43,9 @@ def vectorize_root(blob, verbose=False):
     max_mask__ = non_max_suppression(blob)  # mask of local directional maxima of dy, dx, g
 
     # Otsu's method to determine ave: https://en.wikipedia.org/wiki/Otsu%27s_method
-    ave = otsu(blob.der__t.g)
-    st_mask__ = (ave - blob.der__t.g > 0) & max_mask__   # mask of strong edges
-    wk_mask__ = ((ave/2) - blob.der__t.g > 0) & max_mask__   # mask of weak edges
+    ave = otsu(blob.der__t.g[max_mask__])
+    st_mask__ = (blob.der__t.g >= ave) & max_mask__   # mask of strong edges
+    wk_mask__ = (blob.der__t.g >= ave/2) & max_mask__   # mask of weak edges
 
     # Edge tracking by hysteresis, forming edge structure:
     edge_ = form_edge_(st_mask__, wk_mask__)
@@ -117,13 +117,13 @@ def non_max_suppression(blob):
     return max_mask__
 
 
-def otsu(g__):
-    g_ = np.sort(g__.reshape(-1))
+def otsu(g_):
+    g_ = np.sort(g_.reshape(-1))
     n = len(g_)
     sg0 = 0; sg0_sqr = 0
-    sg1 = np.sum(g_); sg1_sqr = np.sum(g_*g_)
+    sg1 = g_.sum(); sg1_sqr = (g_*g_).sum()
     ave = 0; min_var = np.inf
-    for i in range(0, n):
+    for i in range(n-1):
         g = g_[i]; g_sqr = g*g
         sg0 += g; sg0_sqr += g_sqr
         sg1 -= g; sg1_sqr -= g_sqr
@@ -133,11 +133,12 @@ def otsu(g__):
         # mu = [g*p for g, p in zip(g_, p_)]
         # var = [(g - mu)**2*p for g, p in zip(g_, p_)]
         # var = [p*(g**2 - mu**2) +  for g, p in zip(g_, p_)]
-        var0 = (sg0_sqr - sg0*sg0) / (i+1); var1 = (sg1_sqr - sg1*sg1) / (n-i-1)
+        mean0, mean1 = sg0/(i+1), sg1/(n-i-1)
+        var0 = sg0_sqr/(i+1) - mean0*mean0; var1 = sg1_sqr/(n-i-1) - mean1*mean1
         wei0 = (i+1) / n; wei1 = 1 - wei0
         if (var0*wei0 + var1*wei1) < min_var:
             min_var = var0*wei0 + var1*wei1
-            ave = (sg0 + sg1) / n
+            ave = g
     return ave
 
 def form_edge_(sedge_mask__, wedge_mask__):
