@@ -44,8 +44,8 @@ def vectorize_root(blob, verbose=False):
 
     # Otsu's method to determine ave: https://en.wikipedia.org/wiki/Otsu%27s_method
     ave = otsu(blob.der__t.g[max_mask__])
-    st_mask__ = (blob.der__t.g >= ave) & max_mask__   # mask of strong edges
-    wk_mask__ = (blob.der__t.g >= ave/2) & max_mask__   # mask of weak edges
+    st_mask__ = (blob.der__t.g > ave) & max_mask__   # mask of strong edges
+    wk_mask__ = (blob.der__t.g > ave/2) & max_mask__   # mask of weak edges
 
     # Edge tracking by hysteresis, forming edge structure:
     edge_ = form_edge_(st_mask__, wk_mask__)
@@ -118,28 +118,59 @@ def non_max_suppression(blob):
 
 
 def otsu(g_):
+    # Mean and variance of g_, with probability distribution p_:
+    # mu = sum([p*g for p, g in zip(p_, g_)])
+    # var = sum([p*(g - mu)**2 for p, g in zip(p_, g_)])
+    # Expand the terms:
+    # var = sum([(p*g**2 - 2*p*g*mu + p*mu**2) for p, g in zip(p_, g_)])
+    # Split the sum:
+    # var = sum([p*g**2 for p, g in zip(p_, g_)])
+    #     - 2*mu*sum([p*g for p, g in zip(p_, g_)])
+    #     + mu**2*sum([p for p in p_])
+    # Since p_ sums up to 1 and mu = sum([p*g for p, g in zip(p_, g_)]):
+    # var = [p*g**2 for g, p in zip(g_, p_)] - 2*mu*mu + mu**2
+    # Simplify:
+    # var = [p*g**2 for g, p in zip(g_, p_)] - mu**2
+    # Intra-class variance of Otsu's method:
+    # var = var0*wei0 + var1*wei1
+    # With:
+    # var0 = sum([g**2 for g in g0_])/len(g0_) - (sum(g0_)/len(g0_))**2
+    # Factor out (1/len(g0_)):
+    # var0 = (sum([g**2 for g in g0_]) - sum(g0_)**2/len(g0_))/len(g0_)
+    # Weight of class 0:
+    # wei0 = len(g0_)/len(g_)
+    # The product of the two:
+    # var0*wei0 = (sum([g**2 for g in g0_]) - sum(g0_)**2/len(g0_))/len(g_)
+    # Same with var1, wei1. Substitute var0, wei0, var1, wei1 into var and factor out (1/len(g_)):
+    # var = (sum([g**2 for g in g0_]) + sum([g**2 for g in g1_])
+    #      - sum(g0_)**2/len(g0_) - sum(g1_)**2/len(g1_)) / len(g_)
+    # Simplify:
+    # var = (sum([g**2 for g in g_]) - sum(g0_)**2/len(g0_) - sum(g1_)**2/len(g1_)) / len(g_)
+    #
+    # sum([g**2 for g in g_]) and len(g_) is the same for all classes. Therefore, we can simplify the formula:
+    # ┌───────────────────────────────────────────────────┐
+    # │ val = sum(g0_)**2/len(g0_) + sum(g1_)**2/len(g1_) │
+    # └───────────────────────────────────────────────────┘
+    # with val = sg_sqr - var * lg, where lg = len(g_), sg = sum([g*g for g in g_])
+    # The threshold at which var is minimal is the threshold at which val is maximal.
+
+    if len(g_) <= 1: return g_[0]
+
     g_ = np.sort(g_.reshape(-1))
-    n = len(g_)
-    sg0 = 0; sg0_sqr = 0
-    sg1 = g_.sum(); sg1_sqr = (g_*g_).sum()
-    ave = 0; min_var = np.inf
-    for i in range(n-1):
-        g = g_[i]; g_sqr = g*g
-        sg0 += g; sg0_sqr += g_sqr
-        sg1 -= g; sg1_sqr -= g_sqr
-        if i < n - 1 and g == g_[i+1]:
-            continue
-        # mean and variance of g_, with probability distribution p_:
-        # mu = [g*p for g, p in zip(g_, p_)]
-        # var = [(g - mu)**2*p for g, p in zip(g_, p_)]
-        # var = [p*(g**2 - mu**2) +  for g, p in zip(g_, p_)]
-        mean0, mean1 = sg0/(i+1), sg1/(n-i-1)
-        var0 = sg0_sqr/(i+1) - mean0*mean0; var1 = sg1_sqr/(n-i-1) - mean1*mean1
-        wei0 = (i+1) / n; wei1 = 1 - wei0
-        if (var0*wei0 + var1*wei1) < min_var:
-            min_var = var0*wei0 + var1*wei1
-            ave = g
-    return ave
+
+    # lengths of g0_ and g1_ through all possible thresholds:
+    lg0_ = np.arange(1, len(g_))
+    lg1_ = len(g_) - lg0_
+
+    # sums of g0_ and g1_ through all possible thresholds:
+    sg0_ = np.cumsum(g_)[:-1]
+    sg1_ = g_.sum() - sg0_
+
+    # value for threshold selection:
+    val_ = sg0_*sg0_/lg0_ + sg1_*sg1_/lg1_
+
+    return g_[val_.argmax()]
+
 
 def form_edge_(sedge_mask__, wedge_mask__):
     pass
