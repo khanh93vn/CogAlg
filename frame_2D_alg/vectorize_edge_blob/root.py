@@ -42,31 +42,36 @@ def vectorize_root(blob, verbose=False):
 
     max_mask__ = non_max_suppression(blob)  # mask of local directional maxima of dy, dx, g
 
-    # Otsu's method to determine ave: https://en.wikipedia.org/wiki/Otsu%27s_method
-    ave = otsu(blob.der__t.g[max_mask__])
-    st_mask__ = (blob.der__t.g > ave) & max_mask__   # mask of strong edges
-    wk_mask__ = (blob.der__t.g > ave/2) & max_mask__   # mask of weak edges
+    # # Otsu's method to determine ave: https://en.wikipedia.org/wiki/Otsu%27s_method
+    # ave = otsu(blob.der__t.g[max_mask__])
+    # st_mask__ = (blob.der__t.g > ave) & max_mask__   # mask of strong edges
+    # wk_mask__ = (blob.der__t.g > ave/2) & max_mask__   # mask of weak edges
+    #
+    # # Edge tracking by hysteresis, forming edge structure:
+    # edge_ = form_edge_(st_mask__, wk_mask__)
+    # comp_slice(edge_, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
+    # for edge in edge_:
+    # Or:
 
-    # Edge tracking by hysteresis, forming edge structure:
-    edge_ = form_edge_(st_mask__, wk_mask__)
+    # form Ps from max_mask__ and form links by tracing max_mask__
+    edge = slice_blob_ortho(blob, max_mask__, verbose=verbose)
 
-    comp_slice(edge_, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
+    comp_slice(edge, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
     # rng+ in comp_slice adds edge.node_T[0]:
-    for edge in edge_:
-        for fd, PP_ in enumerate(edge.node_T[0]):  # [rng+ PPm_,PPd_, der+ PPm_,PPd_]
-            # sub+, intra PP:
-            sub_recursion_eval(edge, PP_)
-            # agg+, inter-PP, 1st layer is two forks only:
-            if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
-                node_= []
-                for PP in PP_: # CPP -> Cgraph:
-                    derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
-                    node_ += [Cgraph(ptuple=PP.ptuple, derH=[derH,valt,rdnt], valt=valt,rdnt=rdnt, L=len(PP.node_),
-                                     box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
-                    sum_derH([edge.derH,edge.valt,edge.rdnt], [derH,valt,rdnt], 0)
-                edge.node_T[0][fd][:] = node_
-                # node_[:] = new node_tt in the end:
-                agg_recursion(edge, node_)
+    for fd, PP_ in enumerate(edge.node_T[0]):  # [rng+ PPm_,PPd_, der+ PPm_,PPd_]
+        # sub+, intra PP:
+        sub_recursion_eval(edge, PP_)
+        # agg+, inter-PP, 1st layer is two forks only:
+        if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
+            node_= []
+            for PP in PP_: # CPP -> Cgraph:
+                derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
+                node_ += [Cgraph(ptuple=PP.ptuple, derH=[derH,valt,rdnt], valt=valt,rdnt=rdnt, L=len(PP.node_),
+                                 box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
+                sum_derH([edge.derH,edge.valt,edge.rdnt], [derH,valt,rdnt], 0)
+            edge.node_T[0][fd][:] = node_
+            # node_[:] = new node_tt in the end:
+            agg_recursion(edge, node_)
 
 
 def non_max_suppression(blob):
@@ -117,6 +122,88 @@ def non_max_suppression(blob):
     return max_mask__
 
 
+def slice_blob_ortho(blob, max_mask__, verbose=False):
+    pass
+
+def form_P(P, dir__t, mask__, axis):
+
+    rdert_, dert_yx_ = [P.dert_[len(P.dert_)//2]],[P.yx]      # include pivot
+    dert_olp_ = {(round(P.yx[0]), round(P.yx[1]))}
+    rdert_,dert_yx_,dert_olp_ = scan_direction(rdert_,dert_yx_,dert_olp_, P.yx, axis, dir__t,mask__, fleft=1)  # scan left
+    rdert_,dert_yx_,dert_olp_ = scan_direction(rdert_,dert_yx_,dert_olp_, P.yx, axis, dir__t,mask__, fleft=0)  # scan right
+    # initialization
+    rdert = rdert_[0]
+    I, Dy, Dx, G = rdert; M=ave_g-G; dert_=[rdert]
+    # accumulation:
+    for rdert in rdert_[1:]:
+        i, dy, dx, g = rdert
+        I+=i; M+=ave_g-g; Dy+=dy; Dx+=dx
+        dert_ += [rdert]
+    L = len(dert_)
+    P.dert_ = dert_; P.dert_yx_ = dert_yx_  # new dert and dert_yx
+    P.yx = P.dert_yx_[L//2]              # new center
+    G = np.hypot(Dy, Dx)  # recompute G
+    P.ptuple = [I,G,M,[Dy,Dx], L]
+    P.axis = axis
+    P.dert_olp_ = dert_olp_
+    return P
+
+def scan_direction(rdert_,dert_yx_,dert_olp_, yx, axis, dir__t,mask__, fleft):  # leftward or rightward from y,x
+    Y, X = mask__.shape # boundary
+    y, x = yx
+    sin,cos = axis      # unpack axis
+    r = cos*y - sin*x   # from P line equation: cos*y - sin*x = r = constant
+    _cy,_cx = round(y), round(x)  # keep previous cell
+    y, x = (y-sin,x-cos) if fleft else (y+sin, x+cos)   # first dert position in the direction of axis
+    while True:                   # start scanning, stop at boundary or edge of blob
+        x0, y0 = int(x), int(y)   # floor
+        x1, y1 = x0 + 1, y0 + 1   # ceiling
+        if x0 < 0 or x1 >= X or y0 < 0 or y1 >= Y: break  # boundary check
+        kernel = [  # cell weighing by inverse distance from float y,x:
+            # https://www.researchgate.net/publication/241293868_A_study_of_sub-pixel_interpolation_algorithm_in_digital_speckle_correlation_method
+            (y0, x0, (y1 - y) * (x1 - x)),
+            (y0, x1, (y1 - y) * (x - x0)),
+            (y1, x0, (y - y0) * (x1 - x)),
+            (y1, x1, (y - y0) * (x - x0))]
+        cy, cx = round(y), round(x)                         # nearest cell of (y, x)
+        if mask__[cy, cx]: break                            # mask check of (y, x)
+        if abs(cy-_cy) + abs(cx-_cx) == 2:                  # mask check of intermediate cell between (y, x) and (_y, _x)
+            # Determine whether P goes above, below or crosses the middle point:
+            my, mx = (_cy+cy) / 2, (_cx+cx) / 2             # Get middle point
+            myc1 = sin * mx + r                             # my1: y at mx on P; myc1 = my1*cos
+            myc = my*cos                                    # multiply by cos to avoid division
+            if cos < 0: myc, myc1 = -myc, -myc1             # reverse sign for comparison because of cos
+            if abs(myc-myc1) > 1e-5:                        # check whether myc!=myc1, taking precision error into account
+                # y is reversed in image processing, so:
+                # - myc1 > myc: P goes below the middle point
+                # - myc1 < myc: P goes above the middle point
+                # - myc1 = myc: P crosses the middle point, there's no intermediate cell
+                ty, tx = (
+                    ((_cy, cx) if _cy < cy else (cy, _cx))
+                    if myc1 < myc else
+                    ((_cy, cx) if _cy > cy else (cy, _cx))
+                )
+                if mask__[ty, tx]: break    # if the cell is masked, stop
+                dert_olp_ |= {(ty,tx)}
+        ptuple = [
+            sum((par__[ky, kx] * dist for ky, kx, dist in kernel))
+            for par__ in dir__t]
+        dert_olp_ |= {(cy, cx)}  # add current cell to overlap
+        _cy, _cx = cy, cx
+        if fleft:
+            rdert_ = [ptuple] + rdert_          # append left
+            dert_yx_ = [(y,x)] + dert_yx_     # append left coords per dert
+            y -= sin; x -= cos  # next y,x
+        else:
+            rdert_ = rdert_ + [ptuple]  # append right
+            dert_yx_ = dert_yx_ + [(y,x)]
+            y += sin; x += cos  # next y,x
+
+    return rdert_,dert_yx_,dert_olp_
+
+
+# -------------- Alternatives
+
 def otsu(g_):
     # Mean and variance of g_, with probability distribution p_:
     # mu = sum([p*g for p, g in zip(p_, g_)])
@@ -155,7 +242,6 @@ def otsu(g_):
     # The threshold at which var is minimal is the threshold at which val is maximal.
 
     if len(g_) <= 1: return g_[0]
-
     g_ = np.sort(g_.reshape(-1))
 
     # lengths of g0_ and g1_ through all possible thresholds:
@@ -173,4 +259,22 @@ def otsu(g_):
 
 
 def form_edge_(sedge_mask__, wedge_mask__):
-    pass
+    # start from strong edge pixels, trace through weak edges. Unconnected weak edges are discarded.
+    # edge is a 1D structure, when it encounters a fork, it creates new edges
+
+    edge_ = []
+    for y, x in zip(*sedge_mask__.nonzero()):
+        if not wedge_mask__[y, x]: continue     # already traced in some previous edge
+        # initialize edge:
+        edge = CEdge(); edge_ += [edge]
+
+        untraced = [(y, x)]
+        while untraced:
+            _y, _x = untraced.pop()
+            wedge_mask__[_y, _x] = False
+
+            # TODO: form_segment with dert at (_y, _x)
+            # In this scheme, an edge is a graph of segments - non-straight lines - instead of Ps
+            # untraced += form_segment((_y, _x), wedge_mask__, edge)
+
+    return edge_
