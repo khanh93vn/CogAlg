@@ -70,7 +70,7 @@ class CEdge(ClusterStructure):  # edge blob
 
 class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
-    ptuple : list = z([0,0,0,[0,0],0])  # latuple: I,G,M,angle(Dy,Dx), L
+    ptuple : tuple = (0,0,0,(0,0),0)  # latuple: I,G,M,angle(Dy,Dx), L
     derH : list = z([])  # [[tuplet,valt,rdnt]] vertical derivatives summed from P links
     valt : list = z([0,0])  # summed from the whole derH
     rdnt : list = z([1,1])
@@ -78,9 +78,9 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     link_H : list = z([[]])  # +ve rlink_, dlink_ H from lower sub+
     root_tt : list = z([[None,None],[None,None]])  # PPrm,PPrd, PPdm,PPdd that contain this P, single-layer
     dert_yx_ : list = z([])  # mappings to blob der_t
-    dert_olp_: list = z(set())
-    axis : list = z([0,1])  # prior slice angle, init sin=0,cos=1
-    yx : list = z([])
+    dert_olp_: set = z(set())
+    axis : tuple = (0, 1)  # prior slice angle, init sin=0,cos=1
+    yx : tuple = None
     ''' 
     add L,S,A from links?
     optional:
