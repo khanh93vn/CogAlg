@@ -115,7 +115,8 @@ def slice_blob_ortho(blob, max_mask__, verbose=False):
     for y, x in zip(*max_mask__.nonzero()):
         i = blob.i__[blob.ibox.slice()][y, x]
         dy, dx, g = blob.der__t.get_pixel(y, x)
-        P = form_P(CP(yx=(y, x), axis=(dy, dx), dert_yx_=[(y, x)], dert_olp_={(y, x)}, dert_=[(i, dy, dx, g)]),
+        assert g > 0, "g must be positive"
+        P = form_P(CP(yx=(y, x), axis=(dy/g, dx/g), dert_yx_=[(y, x)], dert_olp_={(y, x)}, dert_=[(i, dy, dx, g)]),
                    blob)
         blob.P_ += [P]
 
@@ -142,7 +143,7 @@ def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
     while True:                   # start scanning, stop at boundary or edge of blob
         x0, y0 = int(x), int(y)   # floor
         x1, y1 = x0 + 1, y0 + 1   # ceiling
-        if x0 < 0 or x1 >= X or y0 < 0 or y1 >= Y: break  # boundary check
+        if x0 < 0 or x1 >= X or y0 < 0 or y1 >= Y: break   # boundary check
         kernel = [  # cell weighing by inverse distance from float y,x:
             # https://www.researchgate.net/publication/241293868_A_study_of_sub-pixel_interpolation_algorithm_in_digital_speckle_correlation_method
             (y0, x0, (y1 - y) * (x1 - x)),
@@ -150,7 +151,7 @@ def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
             (y1, x0, (y - y0) * (x1 - x)),
             (y1, x1, (y - y0) * (x - x0))]
         cy, cx = round(y), round(x)                         # nearest cell of (y, x)
-        if blob.mask__[cy, cx]: break                            # mask check of (y, x)
+        if blob.mask__[cy, cx]: break                       # mask check of (y, x)
         if abs(cy-_cy) + abs(cx-_cx) == 2:                  # mask check of intermediate cell between (y, x) and (_y, _x)
             # Determine whether P goes above, below or crosses the middle point:
             my, mx = (_cy+cy) / 2, (_cx+cx) / 2             # Get middle point
