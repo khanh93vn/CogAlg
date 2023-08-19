@@ -42,26 +42,26 @@ def vectorize_root(blob, verbose=False):
 
     max_mask__ = non_max_suppression(blob)  # mask of local directional maxima of dy, dx, g
 
-    # form Ps from max_mask__ and form links by tracing max_mask__
+    # form slices (Ps) from max_mask__ and form links by tracing max_mask__:
     edge = slice_blob_ortho(blob, max_mask__, verbose=verbose)
-
-    # comp_slice(edge, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
-    # # rng+ in comp_slice adds edge.node_T[0]:
-    # for fd, PP_ in enumerate(edge.node_T[0]):  # [rng+ PPm_,PPd_, der+ PPm_,PPd_]
-    #     # sub+, intra PP:
-    #     sub_recursion_eval(edge, PP_)
-    #     # agg+, inter-PP, 1st layer is two forks only:
-    #     if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
-    #         node_= []
-    #         for PP in PP_: # CPP -> Cgraph:
-    #             derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
-    #             node_ += [Cgraph(ptuple=PP.ptuple, derH=[derH,valt,rdnt], valt=valt,rdnt=rdnt, L=len(PP.node_),
-    #                              box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
-    #             sum_derH([edge.derH,edge.valt,edge.rdnt], [derH,valt,rdnt], 0)
-    #         edge.node_T[0][fd][:] = node_
-    #         # node_[:] = new node_tt in the end:
-    #         agg_recursion(edge, node_)
-
+    '''
+    comp_slice(edge, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
+    # rng+ in comp_slice adds edge.node_T[0]:
+    for fd, PP_ in enumerate(edge.node_T[0]):  # [rng+ PPm_,PPd_, der+ PPm_,PPd_]
+        # sub+, intra PP:
+        sub_recursion_eval(edge, PP_)
+        # agg+, inter-PP, 1st layer is two forks only:
+        if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
+            node_= []
+            for PP in PP_: # CPP -> Cgraph:
+                derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
+                node_ += [Cgraph(ptuple=PP.ptuple, derH=[derH,valt,rdnt], valt=valt,rdnt=rdnt, L=len(PP.node_),
+                                 box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
+                sum_derH([edge.derH,edge.valt,edge.rdnt], [derH,valt,rdnt], 0)
+            edge.node_T[0][fd][:] = node_
+            # node_[:] = new node_tt in the end:
+            agg_recursion(edge, node_)
+    '''
 
 def non_max_suppression(blob):
     Y, X = blob.mask__.shape
@@ -185,3 +185,4 @@ def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
             P.dert_ = P.dert_ + [dert]              # append right
             P.dert_yx_ = P.dert_yx_ + [(y,x)]
             y += sin; x += cos  # next y,x
+
