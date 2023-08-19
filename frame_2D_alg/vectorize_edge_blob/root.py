@@ -86,7 +86,7 @@ def non_max_suppression(blob):
     max_mask__ = np.zeros_like(blob.mask__, dtype=bool)
     for dir_mask__, (ry, rx) in zip(dir_mask___, ryx_):
         # get indices of pixels in blob with corresponding direction
-        mask__ = dir_mask__ & (~blob.mask__)    # and with blob mask
+        mask__ = dir_mask__ & blob.mask__       # and with blob mask
         y_, x_ = mask__.nonzero()
 
         # get neighbor pixel indices
@@ -151,7 +151,7 @@ def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
             (y1, x0, (y - y0) * (x1 - x)),
             (y1, x1, (y - y0) * (x - x0))]
         cy, cx = round(y), round(x)                         # nearest cell of (y, x)
-        if blob.mask__[cy, cx]: break                       # mask check of (y, x)
+        if not blob.mask__[cy, cx]: break                   # mask check of (y, x)
         if abs(cy-_cy) + abs(cx-_cx) == 2:                  # mask check of intermediate cell between (y, x) and (_y, _x)
             # Determine whether P goes above, below or crosses the middle point:
             my, mx = (_cy+cy) / 2, (_cx+cx) / 2             # Get middle point
@@ -168,7 +168,7 @@ def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
                     if myc1 < myc else
                     ((_cy, cx) if _cy > cy else (cy, _cx))
                 )
-                if blob.mask__[ty, tx]: break    # if the cell is masked, stop
+                if not blob.mask__[ty, tx]: break    # if the cell is masked, stop
                 P.dert_olp_ |= {(ty,tx)}
 
         ider__t = (blob.i__[blob.ibox.slice()],) + blob.der__t
@@ -185,4 +185,3 @@ def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
             P.dert_ = P.dert_ + [dert]              # append right
             P.dert_yx_ = P.dert_yx_ + [(y,x)]
             y += sin; x += cos  # next y,x
-
