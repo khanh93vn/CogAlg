@@ -1,6 +1,6 @@
 import sys
 import numpy as np
-from copy import copy, deepcopy
+from collections import namedtuple
 from itertools import product
 from frame_blobs import Tdert
 from .classes import CEdge, CP, CPP, CderP, Cgraph
@@ -35,6 +35,8 @@ This process is a reduced-dimensionality (2D->1D) version of cross-comp and clus
 As we add higher dimensions (3D and time), this dimensionality reduction is done in salient high-aspect blobs
 (likely edges in 2D or surfaces in 3D) to form more compressed "skeletal" representations of full-dimensional patterns.
 '''
+
+Tptuple = namedtuple("Tptuple", "I Dy Dx G M L")
 
 oct_sep = 0.3826834323650898
 
@@ -112,12 +114,25 @@ def non_max_suppression(blob):
 
 
 def slice_blob_ortho(blob, max_mask__, verbose=False):
-    for y, x in zip(*max_mask__.nonzero()):
+    y_, x_ = max_mask__.nonzero()
+    der_t = blob.der__t.get_pixel(y_, x_)
+    yxdydxg_ = sorted(zip(y_, x_, *der_t), key=lambda t: t[-1]) # sort by g
+    filled = set()
+    for y, x, dy, dx, g in yxdydxg_:
         i = blob.i__[blob.ibox.slice()][y, x]
-        dy, dx, g = blob.der__t.get_pixel(y, x)
         assert g > 0, "g must be positive"
         P = form_P(CP(yx=(y, x), axis=(dy/g, dx/g), dert_yx_=[(y, x)], dert_olp_={(y, x)}, dert_=[(i, dy, dx, g)]),
                    blob)
+
+        # filter out inconsistent axis
+        maxis = (P.axis[0]*P.ptuple.Dy + P.axis[1]*P.ptuple.Dx) / P.ptuple.G
+        if abs(maxis) < 0.74:
+            continue
+
+        # Check for over 50% overlap
+        if len(filled & P.dert_olp_) / len(P.dert_olp_) >= 0.5:
+            continue
+        filled.update(P.dert_olp_)
         blob.P_ += [P]
 
 
@@ -129,9 +144,10 @@ def form_P(P, blob):
     L = len(P.dert_)
     M = ave_g*L - G
     G = np.hypot(Dy, Dx)           # recompute G
-    P.ptuple = I, G, M, (Dy, Dx), L
+    P.ptuple = Tptuple(I, Dy, Dx, G, M, L)
     P.yx = P.dert_yx_[L//2]              # new center
     return P
+
 
 def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
     Y, X = blob.mask__.shape # boundary
