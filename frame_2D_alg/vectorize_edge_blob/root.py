@@ -42,7 +42,7 @@ oct_sep = 0.3826834323650898
 
 def vectorize_root(blob, verbose=False):
 
-    max_mask__ = non_max_suppression(blob)  # mask of local directional maxima of dy, dx, g
+    max_mask__ = max_selection(blob)  # mask of local directional maxima of dy, dx, g
 
     # form slices (Ps) from max_mask__ and form links by tracing max_mask__:
     edge = slice_blob_ortho(blob, max_mask__, verbose=verbose)
@@ -65,7 +65,7 @@ def vectorize_root(blob, verbose=False):
             agg_recursion(edge, node_)
     '''
 
-def non_max_suppression(blob):
+def max_selection(blob):
     Y, X = blob.mask__.shape
     g__ = blob.der__t.g
 
@@ -84,13 +84,12 @@ def non_max_suppression(blob):
     ]
     ryx_ = [(0, 1), (1, 1), (1, 0), (1, -1)]
 
-    # for each direction, find local maximum by comparing with neighboring pixels
     max_mask__ = np.zeros_like(blob.mask__, dtype=bool)
+    # local max by comparing neighboring pixels per direction:
     for dir_mask__, (ry, rx) in zip(dir_mask___, ryx_):
-        # get indices of pixels in blob with corresponding direction
-        mask__ = dir_mask__ & blob.mask__       # and with blob mask
+        # direction pixels AND blob mask:
+        mask__ = dir_mask__ & blob.mask__
         y_, x_ = mask__.nonzero()
-
         # get neighbor pixel indices
         yn1_, xn1_ = y_ + ry, x_ + rx
         yn2_, xn2_ = y_ - ry, x_ - rx
@@ -114,29 +113,29 @@ def non_max_suppression(blob):
 
 
 def slice_blob_ortho(blob, max_mask__, verbose=False):
+
     y_, x_ = max_mask__.nonzero()
     der_t = blob.der__t.get_pixel(y_, x_)
-    yxdydxg_ = sorted(zip(y_, x_, *der_t), key=lambda t: t[-1]) # sort by g
+    deryx_ = sorted(zip(y_, x_, *der_t), key=lambda t: t[-1]) # sort by g
     filled = set()
-    for y, x, dy, dx, g in yxdydxg_:
+
+    for y, x, dy, dx, g in deryx_:
         i = blob.i__[blob.ibox.slice()][y, x]
         assert g > 0, "g must be positive"
-        P = form_P(CP(yx=(y, x), axis=(dy/g, dx/g), dert_yx_=[(y, x)], dert_olp_={(y, x)}, dert_=[(i, dy, dx, g)]),
-                   blob)
+        P = form_P(CP(yx=(y, x), axis=(dy/g, dx/g), dert_yx_=[(y,x)], dert_olp_={(y,x)}, dert_=[(i, dy, dx, g)]), blob)
 
-        # filter out inconsistent axis
         maxis = (P.axis[0]*P.ptuple.Dy + P.axis[1]*P.ptuple.Dx) / P.ptuple.G
+        # exclude cells with different angle:
         if abs(maxis) < 0.74:
             continue
-
-        # Check for over 50% overlap
+        # exclude >=50% overlap:
         if len(filled & P.dert_olp_) / len(P.dert_olp_) >= 0.5:
             continue
         filled.update(P.dert_olp_)
         blob.P_ += [P]
 
-
 def form_P(P, blob):
+
     scan_direction(P, blob, fleft=1)  # scan left
     scan_direction(P, blob, fleft=0)  # scan right
     # initialization
@@ -148,8 +147,8 @@ def form_P(P, blob):
     P.yx = P.dert_yx_[L//2]              # new center
     return P
 
-
 def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
+
     Y, X = blob.mask__.shape # boundary
     y, x = P.yx
     sin,cos = P.axis      # unpack axis
