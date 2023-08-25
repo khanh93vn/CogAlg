@@ -193,12 +193,7 @@ def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
                 P.dert_olp_ |= {(ty,tx)}
 
         ider__t = (blob.i__[blob.ibox.slice()],) + blob.der__t
-        _, _, i, dy, dx, g = dert = (
-            y, x,
-            *(sum((par__[ky, kx] * dist
-                   for ky, kx, dist in kernel))
-              for par__ in ider__t)
-        )
+        _,_, i,dy,dx,g = dert = (y,x, *(sum((par__[ky, kx] * dist for ky, kx, dist in kernel)) for par__ in ider__t))
         mangle,dangle = comp_angle((_dy,_dx), (dy, dx))
         if mangle < 0:  # terminate P if angle miss
             return
