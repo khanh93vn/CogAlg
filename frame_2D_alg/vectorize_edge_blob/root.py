@@ -196,7 +196,7 @@ def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
         _,_, i,dy,dx,g = dert = (y,x, *(sum((par__[ky, kx] * dist for ky, kx, dist in kernel)) for par__ in ider__t))
         mangle,dangle = comp_angle((_dy,_dx), (dy, dx))
         if mangle < 0:  # terminate P if angle miss
-            return
+            return True
         P.dert_olp_ |= {(cy, cx)}  # add current cell to overlap
         _cy, _cx, _dy, _dx = cy, cx, dy, dx
         if fleft:
