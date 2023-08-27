@@ -1,6 +1,6 @@
 import sys
 import numpy as np
-from collections import namedtuple
+from collections import namedtuple, deque, defaultdict
 from itertools import product
 from frame_blobs import Tdert
 from .classes import CEdge, CP, CPP, CderP, Cgraph
@@ -45,7 +45,10 @@ def vectorize_root(blob, verbose=False):
     max_mask__ = max_selection(blob)  # mask of local directional maxima of dy, dx, g
 
     # form slices (Ps) from max_mask__ and form links by tracing max_mask__:
-    edge = slice_blob_ortho(blob, max_mask__, verbose=verbose)
+    slice_blob_ortho(blob, max_mask__, verbose=verbose)
+
+    form_link_(blob, max_mask__)
+
     '''
     comp_slice(edge, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
     # rng+ in comp_slice adds edge.node_T[0]:
@@ -112,9 +115,9 @@ def max_selection(blob):
     return max_mask__
 
 
-def slice_blob_ortho(blob, max_mask__, verbose=False):
+def slice_blob_ortho(blob, mask__, verbose=False):
 
-    y_, x_ = max_mask__.nonzero()
+    y_, x_ = mask__.nonzero()
     der_t = blob.der__t.get_pixel(y_, x_)
     deryx_ = sorted(zip(y_, x_, *der_t), key=lambda t: t[-1]) # sort by g
     filled = set()
@@ -206,3 +209,31 @@ def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
         else:
             P.dert_ = P.dert_ + [[y,x,*dert]]  # append right
             y += sin; x += cos  # next y,x
+
+def form_link_(blob, mask__):
+    max_ = set(zip(*mask__.nonzero()))  # extract mask__ coordinates
+
+    # get dert_root_
+    dert_root_ = defaultdict(set)
+    for P in blob.P_:
+        for y, x in P.dert_olp_ & max_:
+            dert_root_[y, x].add(P)
+
+    # trace edge from each P
+    blob.P_link_ = set()    # clear P_link_
+    for P in blob.P_:
+        traceq_ = deque(P.dert_olp_ & max_)  # start with dert_olp_ & max_
+        traced_ = set(traceq_)
+        while traceq_:   # trace adjacent through max_
+            _y, _x = traceq_.popleft()
+            # check for root
+            stop = False
+            for _P in (dert_root_[_y, _x] - {P}):
+                link = (P, _P) if P.id < _P.id else (_P, P)
+                blob.P_link_.add(link)
+                stop = True     # stop when a root is reached
+            if not stop:    # continue
+                yx_ = {*product(range(_y-1,_y+2), range(_x-1,_x+2))}
+                yx_ = (yx_ & max_) - traced_
+                traceq_.extend(yx_)
+                traced_.add(yx_)
