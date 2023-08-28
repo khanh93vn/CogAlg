@@ -47,7 +47,7 @@ def vectorize_root(blob, verbose=False):
     # form slices (Ps) from max_mask__ and form links by tracing max_mask__:
     slice_blob_ortho(blob, max_mask__, verbose=verbose)
 
-    form_link_(blob, max_mask__)
+    # form_link_(blob, max_mask__)
 
     '''
     comp_slice(edge, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
@@ -190,18 +190,17 @@ def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
                 P.dert_olp_ |= {(ty,tx)}
 
         ider__t = (blob.i__[blob.ibox.slice()],) + blob.der__t
-        dert = (sum((par__[ky, kx] * dist for ky, kx, dist in kernel)) for par__ in ider__t)
-        i,dy,dx,g = dert
+        i,dy,dx,g = (sum((par__[ky, kx] * dist for ky, kx, dist in kernel)) for par__ in ider__t)
         mangle,dangle = comp_angle((_dy,_dx), (dy, dx))
         if mangle < 0:  # terminate P if angle miss
             break
         P.dert_olp_ |= {(cy, cx)}  # add current cell to overlap
         _cy, _cx, _dy, _dx = cy, cx, dy, dx
         if fleft:
-            P.dert_ = [[y,x,*dert]] + P.dert_  # append left
+            P.dert_ = [(y,x,i,dy,dx,g)] + P.dert_  # append left
             y -= sin; x -= cos  # next y,x
         else:
-            P.dert_ = P.dert_ + [[y,x,*dert]]  # append right
+            P.dert_ = P.dert_ + [(y,x,i,dy,dx,g)]  # append right
             y += sin; x += cos  # next y,x
 
 # not revised:
