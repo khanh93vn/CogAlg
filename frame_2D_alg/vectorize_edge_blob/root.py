@@ -4,7 +4,7 @@ from collections import namedtuple, deque, defaultdict
 from itertools import product
 from frame_blobs import Tdert
 from .classes import CEdge, CP, CPP, CderP, Cgraph
-from .filters import ave, ave_g, ave_ga, ave_rotate
+from .filters import ave, ave_g, ave_dangle
 from .comp_slice import comp_slice, comp_angle, sum_derH
 from .hough_P import new_rt_olp_array, hough_check
 from .agg_recursion import agg_recursion, sum_aggH
@@ -36,7 +36,7 @@ As we add higher dimensions (3D and time), this dimensionality reduction is done
 (likely edges in 2D or surfaces in 3D) to form more compressed "skeletal" representations of full-dimensional patterns.
 '''
 
-Tptuple = namedtuple("Tptuple", "I Dy Dx G M L")
+Tptuple = namedtuple("Tptuple", "I Dy Dx G M Ma L")
 
 oct_sep = 0.3826834323650898
 
@@ -51,22 +51,22 @@ def vectorize_root(blob, verbose=False):
     form_link_(blob, max_mask__)
 
     # not revised:
-    comp_slice(edge, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
-    # rng+ in comp_slice adds edge.node_T[0]:
-    for fd, PP_ in enumerate(edge.node_tt[0]):  # [rng+ PPm_,PPd_, der+ PPm_,PPd_]
-        # sub+, intra PP:
-        sub_recursion_eval(edge, PP_)
-        # agg+, inter-PP, 1st layer is two forks only:
-        if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
-            node_= []
-            for PP in PP_: # CPP -> Cgraph:
-                derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
-                node_ += [Cgraph(ptuple=PP.ptuple, derH=[derH,valt,rdnt], valt=valt,rdnt=rdnt, L=len(PP.node_),
-                                 box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
-                sum_derH([edge.derH,edge.valt,edge.rdnt], [derH,valt,rdnt], 0)
-            edge.node_tt[0][fd][:] = node_
-            # node_[:] = new node_tt in the end:
-            agg_recursion(edge, node_)
+    # comp_slice(edge, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
+    # # rng+ in comp_slice adds edge.node_T[0]:
+    # for fd, PP_ in enumerate(edge.node_tt[0]):  # [rng+ PPm_,PPd_, der+ PPm_,PPd_]
+    #     # sub+, intra PP:
+    #     sub_recursion_eval(edge, PP_)
+    #     # agg+, inter-PP, 1st layer is two forks only:
+    #     if sum([PP.valt[fd] for PP in PP_]) > ave * sum([PP.rdnt[fd] for PP in PP_]):
+    #         node_= []
+    #         for PP in PP_: # CPP -> Cgraph:
+    #             derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
+    #             node_ += [Cgraph(ptuple=PP.ptuple, derH=[derH,valt,rdnt], valt=valt,rdnt=rdnt, L=len(PP.node_),
+    #                              box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
+    #             sum_derH([edge.derH,edge.valt,edge.rdnt], [derH,valt,rdnt], 0)
+    #         edge.node_tt[0][fd][:] = node_
+    #         # node_[:] = new node_tt in the end:
+    #         agg_recursion(edge, node_)
 
 def max_selection(blob):
     Y, X = blob.mask__.shape
@@ -124,11 +124,11 @@ def slice_blob_ortho(blob, mask__, verbose=False):
     for y, x, dy, dx, g in deryx_:
         i = blob.i__[blob.ibox.slice()][y, x]
         assert g > 0, "g must be positive"
-        P = form_P(CP(yx=(y, x), axis=(dy/g, dx/g), dert_olp_={(y,x)}, dert_=[(y, x, i, dy, dx, g)]), blob)
+        P = form_P(CP(yx=(y, x), axis=(dy/g, dx/g), box_olp_={(y,x)}, dert_=[(y, x, i, dy, dx, g, ave_dangle)]), blob)
         # exclude >=50% overlap:
-        if len(filled & P.dert_olp_) / len(P.dert_olp_) >= 0.5:
+        if len(filled & P.box_olp_) / len(P.box_olp_) >= 0.5:
             continue
-        filled.update(P.dert_olp_)
+        filled.update(P.box_olp_)
         blob.P_ += [P]
 
         if verbose:
@@ -141,11 +141,11 @@ def form_P(P, blob):
     scan_direction(P, blob, fleft=1)  # scan left
     scan_direction(P, blob, fleft=0)  # scan right
     # init:
-    _, _, I, Dy, Dx, G = map(sum, zip(*P.dert_))
+    _, _, I, Dy, Dx, G, Ma = map(sum, zip(*P.dert_))
     L = len(P.dert_)
     M = ave_g*L - G
     G = np.hypot(Dy, Dx)  # recompute G
-    P.ptuple = Tptuple(I, Dy, Dx, G, M, L)
+    P.ptuple = Tptuple(I, Dy, Dx, G, M, Ma, L)
     P.yx = P.dert_[L//2][:2]  # new center
 
     return P
@@ -186,14 +186,14 @@ def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
                     ((_cy, cx) if _cy > cy else (cy, _cx))
                 )
                 if not blob.mask__[ty, tx]: break    # if the cell is masked, stop
-                P.dert_olp_ |= {(ty,tx)}
+                P.box_olp_ |= {(ty,tx)}
 
         ider__t = (blob.i__[blob.ibox.slice()],) + blob.der__t
         i,dy,dx,g = (sum((par__[ky, kx] * dist for ky, kx, dist in kernel)) for par__ in ider__t)
         mangle,dangle = comp_angle((_dy,_dx), (dy, dx))
         if mangle < 0:  # terminate P if angle miss
             break
-        P.dert_olp_ |= {(cy, cx)}  # add current cell to overlap
+        P.box_olp_ |= {(cy, cx)}  # add current cell to overlap
         _cy, _cx, _dy, _dx = cy, cx, dy, dx
         if fleft:
             P.dert_ = [(y,x,i,dy,dx,g,mangle)] + P.dert_  # append left
@@ -209,13 +209,13 @@ def form_link_(blob, mask__):
     # I don't think this is needed:
     dert_root_ = defaultdict(set)
     for P in blob.P_:
-        for y,x in P.olp_yx_ & max_yx_:
+        for y,x in P.box_olp_ & max_yx_:
             dert_root_[y,x].add(P)
 
     # trace edge from each P
     blob.P_link_ = set()    # clear P_link_
     for P in blob.P_:
-        traceq_ = deque(P.olp_yx_ & max_yx_)  # start with dert_olp_ & max_
+        traceq_ = deque(P.box_olp_ & max_yx_)  # start with box_olp_ & max_
         traced_ = set(traceq_)
         while traceq_:   # trace adjacent through max_
             _y, _x = traceq_.popleft()
@@ -229,4 +229,4 @@ def form_link_(blob, mask__):
                 yx_ = {*product(range(_y-1,_y+2), range(_x-1,_x+2))}
                 yx_ = (yx_ & max_yx_) - traced_
                 traceq_.extend(yx_)
-                traced_.add(yx_)
+                traced_ |= yx_
