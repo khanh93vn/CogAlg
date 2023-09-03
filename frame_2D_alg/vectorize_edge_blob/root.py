@@ -45,9 +45,7 @@ def vectorize_root(blob, verbose=False):
     max_mask__ = max_selection(blob)  # mask of local directional maxima of dy, dx, g
 
     # form slices (Ps) from max_mask__ and form links by tracing max_mask__:
-    edge = slice_blob_ortho(blob, max_mask__, verbose=verbose)
-    # prune_P_(): P_ = [P for P in P_ if P.G*P.Ma > ave*P.rdn]
-    form_link_(blob, max_mask__)
+    blob.P_, blob.P_link_ = trace_max(blob, max_mask__, verbose=verbose)
 
     # not revised:
     # comp_slice(edge, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
@@ -107,35 +105,52 @@ def max_selection(blob):
     return max_mask__
 
 
-def slice_blob_ortho(blob, mask__, verbose=False):
+def trace_max(blob, mask__, verbose=False):
 
-    y_, x_ = mask__.nonzero()
-    der_t = blob.der__t.get_pixel(y_, x_)
-    deryx_ = sorted(zip(y_, x_, *der_t), key=lambda t: t[-1]) # sort by g
-    filled = set()  # filled with P boxes?
+    max_ = {*zip(*mask__.nonzero())}     # convert mask__ into a set of (y, x)
+
     if verbose:
-        step = 100 / len(deryx_)  # progress % percent per pixel
-        progress = 0.0; print(f"\rSlicing... {round(progress)} %", end="");  sys.stdout.flush()
+        step = 100 / len(max_)  # progress % percent per pixel
+        progress = 0.0; print(f"\rTracing max... {round(progress)} %", end="");  sys.stdout.flush()
 
-    for y, x, dy, dx, g in deryx_:
-        i = blob.i__[blob.ibox.slice()][y, x]
-        assert g > 0, "g must be positive"
-        P = form_P(CP(yx=(y, x), axis=(dy/g, dx/g), box_olp_={(y,x)}, dert_=[(y, x, i, dy, dx, g, ave_dangle)]), blob)
-        # exclude >=50% overlap:
-        if len(filled & P.box_olp_) / len(P.box_olp_) >= 0.5:
-            continue
-        filled.update(P.box_olp_)
-        blob.P_ += [P]
+    P_ = []         # list of all formed Ps
+    link_ = set()   # set of P links
+    while max_:     # do until max_ is depleted
+        # queue element is (y,x,P)
+        y, x = max_.pop()
+        qtrace = deque([(y, x, None)])    # queue tp trace start with (y, x) from max_
 
-        if verbose:
-            progress += step; print(f"\rSlicing... {round(progress)} %", end=""); sys.stdout.flush()
+        while qtrace:
+            # initialize dert to form P
+            y, x, _P = qtrace.popleft()     # pop from queue
+            i = blob.i__[blob.ibox.slice()][y, x]   # get i
+            dy, dx, g = blob.der__t.get_pixel(y, x) # get dy, dx, g
+            m = ave_dangle     # m is at maximum value because P direction is the same as dert gradient direction
+            assert g > 0, "g must be positive"
+            P = form_P(blob, CP(yx=(y, x), axis=(dy/g, dx/g), box_olp_={(y,x)}, dert_=[(y, x, i, dy, dx, g, m)]))
+            P_ += [P]
+            if _P is not None:
+                link_ |= {(_P, P)}
+
+            # search in max_ path
+            adjacents = max_ & {*product(range(y-1,y+2), range(x-1,x+2))}   # search neighbors
+            qtrace.extend(((_y, _x, P) for _y, _x in adjacents))
+            max_ -= adjacents # search for max_ path
+
+            if verbose:
+                progress += step; print(f"\rTracing max... {round(progress)} %", end=""); sys.stdout.flush()
+
     if verbose: print("\r" + " " * 79, end=""); sys.stdout.flush(); print("\r", end="")
 
+    # TODO: prune P and forward links to linked Ps
+    # prune_P_(): P_ = [P for P in P_ if P.G*P.Ma > ave*P.rdn]:
 
-def form_P(P, blob):
+    return P_, link_
 
-    scan_direction(P, blob, fleft=1)  # scan left
-    scan_direction(P, blob, fleft=0)  # scan right
+def form_P(blob, P):
+
+    scan_direction(blob, P, fleft=1)  # scan left
+    scan_direction(blob, P, fleft=0)  # scan right
     # init:
     _, _, I, Dy, Dx, G, Ma = map(sum, zip(*P.dert_))
     L = len(P.dert_)
@@ -146,7 +161,7 @@ def form_P(P, blob):
 
     return P
 
-def scan_direction(P, blob, fleft):  # leftward or rightward from y,x
+def scan_direction(blob, P, fleft):  # leftward or rightward from y,x
 
     Y, X = blob.mask__.shape    # boundary
     sin,cos = _dy,_dx = P.axis  # unpack axis
