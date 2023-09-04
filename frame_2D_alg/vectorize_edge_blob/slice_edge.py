@@ -1,14 +1,10 @@
 import sys
 import numpy as np
 from collections import namedtuple, deque, defaultdict
-from itertools import product
-from frame_blobs import Tdert
-from .classes import CEdge, CP, CPP, CderP, Cgraph
-from .filters import ave, ave_g, ave_dangle
-from .comp_slice import comp_slice, comp_angle, sum_derH
-from .hough_P import new_rt_olp_array, hough_check
-from .agg_recursion import agg_recursion, sum_aggH
-from .sub_recursion import sub_recursion_eval
+from itertools import product, combinations
+from .classes import CEdge, CP
+from .filters import ave_g, ave_dangle
+from .comp_slice import comp_angle
 
 '''
 In natural images, objects look very fuzzy and frequently interrupted, only vaguely suggested by initial blobs and contours.
@@ -73,7 +69,6 @@ def max_selection(blob):
 
     return max_mask__
 
-
 def trace_max(blob, mask__, verbose=False):
 
     max_ = {*zip(*mask__.nonzero())}  # convert mask__ into a set of (y,x)
@@ -84,8 +79,10 @@ def trace_max(blob, mask__, verbose=False):
 
     P_ = []
     link_ = set()
-    while max_:  # queue of (y,x,P)s
-        y, x = max_.pop()
+    remaining_max_ = set(max_)
+    max_olps = defaultdict(list)
+    while remaining_max_:  # queue of (y,x,P)s
+        y, x = remaining_max_.pop()
         qtrace = deque([(y, x, None)])    # queue tp trace start with (y, x) from max_
 
         while qtrace:
@@ -99,18 +96,50 @@ def trace_max(blob, mask__, verbose=False):
             P_ += [P]
             if _P is not None:
                 link_ |= {(_P, P)}
+            for olp_yx in P.cells & max_:
+                max_olps[olp_yx] += [P]
 
             # search in max_ path
-            adjacents = max_ & {*product(range(y-1,y+2), range(x-1,x+2))}   # search neighbors
+            adjacents = remaining_max_ & {*product(range(y-1,y+2), range(x-1,x+2))}   # search neighbors
             qtrace.extend(((_y, _x, P) for _y, _x in adjacents))
-            max_ -= adjacents
-            # set difference = first set AND not both sets: https://www.scaler.com/topics/python-set-difference/#
+            remaining_max_ -= adjacents   # set difference = first set AND not both sets: https://www.scaler.com/topics/python-set-difference/
             if verbose:
                 progress += step; print(f"\rTracing max... {round(progress)} %", end=""); sys.stdout.flush()
 
     if verbose: print("\r" + " " * 79, end=""); sys.stdout.flush(); print("\r", end="")
 
+    # determine pairs of nearly identical Ps
+    olp_pairs = set()
+    for yx in max_olps:
+        for _P, P in combinations(max_olps[yx], r=2):  # loop thru the rest
+            assert _P.id < P.id
+            yx_dist = np.hypot(*np.subtract(P.yx, _P.yx))   # compute distance
+            axis_diff, axis_match = comp_angle(P.axis, _P.axis) # compute angle match
+            if yx_dist >= 1.0 or axis_match < ave_dangle - 0.1:
+                continue
+            olp_pairs |= {(_P, P)}
+
+    # merge groups of identical Ps
+    for merging_P_ in connected_groups(P_, olp_pairs):
+        # initialize merged P
+        y, x = np.mean([merging_P.yx for merging_P in merging_P_], axis=0)
+        summed_axis = np.sum([merging_P.axis for merging_P in merging_P_], axis=0)
+        axis = summed_axis / hypot(*summed_axis)
+        i, dy, dx, g = interpolate_dert(blob, y, x)
+        m = ave_dangle
+        merged_P = form_P(blob, CP(yx=(y,x), axis=axis, cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,m)]))
+
+        link_ -= combinations(merging_P_, r=2)      # remove links between merged Ps, if any
+        P_ = [P for P in P_ if P not in merging_P_] # remove merging_P_
+        P_ += [merged_P]   # add merged P to P_
+        # TODO: merge links
+
     return P_, link_
+
+def connected_groups(nodes, edges):
+    # TODO: implement connected_groups
+    # https://www.geeksforgeeks.org/connected-components-in-an-undirected-graph/
+    return []
 
 def form_P(blob, P):
 
@@ -128,7 +157,6 @@ def form_P(blob, P):
 
 def scan_direction(blob, P, fleft):  # leftward or rightward from y,x
 
-    Y, X = blob.mask__.shape    # boundary
     sin,cos = _dy,_dx = P.axis  # unpack axis
     _y, _x = P.yx               # start with pivot
     r = cos*_y - sin*_x  # from P line equation: cos*y - sin*x = r = constant
@@ -136,18 +164,11 @@ def scan_direction(blob, P, fleft):  # leftward or rightward from y,x
     y, x = (_y-sin,_x-cos) if fleft else (_y+sin, _x+cos)  # first dert in the direction of axis
 
     while True:  # scan to blob boundary or angle miss
-        x0, y0 = int(x), int(y)  # floor
-        x1, y1 = x0 + 1, y0 + 1  # ceiling
-        if x0 < 0 or x1 >= X or y0 < 0 or y1 >= Y: break   # boundary check
-        kernel = [  # cell weighing by inverse distance from float y,x:
-            # https://www.researchgate.net/publication/241293868_A_study_of_sub-pixel_interpolation_algorithm_in_digital_speckle_correlation_method
-            (y0, x0, (y1 - y) * (x1 - x)),
-            (y0, x1, (y1 - y) * (x - x0)),
-            (y1, x0, (y - y0) * (x1 - x)),
-            (y1, x1, (y - y0) * (x - x0))]
-        cy, cx = round(y), round(x)  # nearest cell of (y, x)
-        if not blob.mask__[cy, cx]:
-            break
+        ret = interpolate_dert(blob, y, x)
+        if ret is None: break               # boundary check
+        i, dy, dx, g = ret                  # unpack result
+        cy, cx = round(y), round(x)         # nearest cell of (y, x)
+        if not blob.mask__[cy, cx]: break
         if abs(cy-_cy) + abs(cx-_cx) == 2:  # mask of cell between (y,x) and (_y,_x)
             my = (_cy+cy) / 2  # midpoint cell, P axis is above, below or over it
             mx = (_cx+cx) / 2
@@ -157,13 +178,10 @@ def scan_direction(blob, P, fleft):  # leftward or rightward from y,x
             if abs(my_cos-_my_cos) > 1e-5:
                 ty, tx = (  # deviation from P axis: above/_y>y, below/_y<y, over/_y~=y, with reversed y:
                     ((_cy, cx) if _cy < cy else (cy, _cx)) if _my_cos < my_cos else
-                    ((_cy, cx) if _cy > cy else (cy, _cx))
-                )
+                    ((_cy, cx) if _cy > cy else (cy, _cx)))
                 if not blob.mask__[ty, tx]: break    # if the cell is masked, stop
                 P.cells |= {(ty,tx)}
 
-        ider__t = (blob.i__[blob.ibox.slice()],) + blob.der__t
-        i,dy,dx,g = (sum((par__[ky, kx] * dist for ky, kx, dist in kernel)) for par__ in ider__t)
         mangle,dangle = comp_angle((_dy,_dx), (dy, dx))
         if mangle < 0:  # terminate P if angle miss
             break
@@ -176,30 +194,16 @@ def scan_direction(blob, P, fleft):  # leftward or rightward from y,x
             P.dert_ = P.dert_ + [(y,x,i,dy,dx,g,mangle)]  # append right
             y += sin; x += cos  # next y,x
 
-# not revised:
-def form_link_(blob, mask__):
-
-    max_yx_ = set(zip(*mask__.nonzero()))  # mask__ coordinates
-    dert_root_ = defaultdict(set)
-    for P in blob.P_:
-        for y,x in P.cells & max_yx_:
-            dert_root_[y,x].add(P)
-
-    # trace edge from each P
-    blob.P_link_ = set()    # clear P_link_
-    for P in blob.P_:
-        traceq_ = deque(P.cells & max_yx_)  # start with cells & max_
-        traced_ = set(traceq_)
-        while traceq_:   # trace adjacent through max_
-            _y, _x = traceq_.popleft()
-            # check for root
-            stop = False
-            for _P in (dert_root_[_y, _x] - {P}):
-                link = (P, _P) if P.id < _P.id else (_P, P)
-                blob.P_link_.add(link)
-                stop = True     # stop when a root is reached
-            if not stop:    # continue
-                yx_ = {*product(range(_y-1,_y+2), range(_x-1,_x+2))}
-                yx_ = (yx_ & max_yx_) - traced_
-                traceq_.extend(yx_)
-                traced_ |= yx_
+def interpolate_dert(blob, y, x):
+    Y, X = blob.mask__.shape    # boundary
+    x0, y0 = int(x), int(y)     # floor
+    x1, y1 = x0 + 1, y0 + 1     # ceiling
+    if x0 < 0 or x1 >= X or y0 < 0 or y1 >= Y: return None  # boundary check
+    kernel = [  # cell weighing by inverse distance from float y,x:
+        # https://www.researchgate.net/publication/241293868_A_study_of_sub-pixel_interpolation_algorithm_in_digital_speckle_correlation_method
+        (y0, x0, (y1 - y) * (x1 - x)),
+        (y0, x1, (y1 - y) * (x - x0)),
+        (y1, x0, (y - y0) * (x1 - x)),
+        (y1, x1, (y - y0) * (x - x0))]
+    ider__t = (blob.i__[blob.ibox.slice()],) + blob.der__t
+    return (sum((par__[ky, kx] * dist for ky, kx, dist in kernel)) for par__ in ider__t)

@@ -1,13 +1,8 @@
-import sys
-import numpy as np
-from collections import namedtuple, deque, defaultdict
-from itertools import product
 from .slice_edge import slice_edge
-from .classes import CEdge, CP, CPP, CderP, Cgraph
-from .filters import ave, ave_g, ave_dangle
-from .comp_slice import comp_slice, comp_angle, sum_derH
-from .hough_P import new_rt_olp_array, hough_check
-from .agg_recursion import agg_recursion, sum_aggH
+from .classes import Cgraph
+from .filters import ave
+from .comp_slice import comp_slice, sum_derH
+from .agg_recursion import agg_recursion
 from .sub_recursion import sub_recursion_eval
 
 '''
