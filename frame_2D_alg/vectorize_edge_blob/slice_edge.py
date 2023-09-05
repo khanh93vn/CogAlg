@@ -21,14 +21,13 @@ A stable combination of a core flat blob with adjacent edge blobs is a potential
 '''
 
 Tptuple = namedtuple("Tptuple", "I Dy Dx G M Ma L")
-
 octant = 0.3826834323650898
 
 def slice_edge(blob, verbose=False):
 
     max_mask__ = max_selection(blob)  # mask of local directional maxima of dy, dx, g
     # form slices (Ps) from max_mask__ and form links by tracing max_mask__:
-    blob.P_, blob.P_link_ = trace_max(blob, max_mask__, verbose=verbose)
+    blob.P_, blob.P_link_ = trace_edge(blob, max_mask__, verbose=verbose)
 
 def max_selection(blob):
 
@@ -47,7 +46,8 @@ def max_selection(blob):
         (dwn__ | up__) & mdlx__,  (dwn__ & lft__) | (up__ & rgt__),     # 90, 135 deg
     ]
     max_mask__ = np.zeros_like(blob.mask__, dtype=bool)
-    # local max from cross-comp in each axis:
+    # local max from cross-comp within axis,
+    # switch to max within kernel for omnidirectional sparsity
     for axis_mask__, (ydir, xdir) in zip(axes_mask__, ((0,1),(1,1),(1,0),(1,-1))):  # y,x direction per axis
         # axis AND mask:
         mask__ = axis_mask__ & blob.mask__
@@ -69,7 +69,7 @@ def max_selection(blob):
 
     return max_mask__
 
-def trace_max(blob, mask__, verbose=False):
+def trace_edge(blob, mask__, verbose=False):
 
     max_ = {*zip(*mask__.nonzero())}  # convert mask__ into a set of (y,x)
 
@@ -83,16 +83,16 @@ def trace_max(blob, mask__, verbose=False):
     max_olps = defaultdict(list)
     while remaining_max_:  # queue of (y,x,P)s
         y, x = remaining_max_.pop()
-        qtrace = deque([(y, x, None)])    # queue tp trace start with (y, x) from max_
+        maxQue = deque([(y, x, None)])    # queue tp trace start with (y, x) from max_
 
-        while qtrace:
+        while maxQue:
             # initialize dert to form P
-            y, x, _P = qtrace.popleft()     # pop from queue
+            y, x, _P = maxQue.popleft()     # pop from queue
             i = blob.i__[blob.ibox.slice()][y, x]   # get i
             dy, dx, g = blob.der__t.get_pixel(y, x) # get dy, dx, g
-            m = ave_dangle     # m is at maximum value because P direction is the same as dert gradient direction
+            ma = ave_dangle     # m is at maximum value because P direction is the same as dert gradient direction
             assert g > 0, "g must be positive"
-            P = form_P(blob, CP(yx=(y, x), axis=(dy/g, dx/g), cells={(y,x)}, dert_=[(y, x, i, dy, dx, g, m)]))
+            P = form_P(blob, CP(yx=(y, x), axis=(dy/g, dx/g), cells={(y,x)}, dert_=[(y, x, i, dy, dx, g, ma)]))
             P_ += [P]
             if _P is not None:
                 link_ |= {(_P, P)}
@@ -101,14 +101,14 @@ def trace_max(blob, mask__, verbose=False):
 
             # search in max_ path
             adjacents = remaining_max_ & {*product(range(y-1,y+2), range(x-1,x+2))}   # search neighbors
-            qtrace.extend(((_y, _x, P) for _y, _x in adjacents))
+            maxQue.extend(((_y, _x, P) for _y, _x in adjacents))
             remaining_max_ -= adjacents   # set difference = first set AND not both sets: https://www.scaler.com/topics/python-set-difference/
             if verbose:
                 progress += step; print(f"\rTracing max... {round(progress)} %", end=""); sys.stdout.flush()
 
     if verbose: print("\r" + " " * 79, end=""); sys.stdout.flush(); print("\r", end="")
 
-    # determine pairs of nearly identical Ps
+    # likely irrelevant:
     olp_pairs = set()
     for yx in max_olps:
         for _P, P in combinations(max_olps[yx], r=2):  # loop thru the rest
@@ -118,21 +118,18 @@ def trace_max(blob, mask__, verbose=False):
             if yx_dist >= 1.0 or axis_match < ave_dangle - 0.1:
                 continue
             olp_pairs |= {(_P, P)}
-
-    # merge groups of identical Ps
     for merging_P_ in connected_groups(P_, olp_pairs):
         # initialize merged P
         y, x = np.mean([merging_P.yx for merging_P in merging_P_], axis=0)
         summed_axis = np.sum([merging_P.axis for merging_P in merging_P_], axis=0)
-        axis = summed_axis / hypot(*summed_axis)
-        i, dy, dx, g = interpolate_dert(blob, y, x)
-        m = ave_dangle
-        merged_P = form_P(blob, CP(yx=(y,x), axis=axis, cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,m)]))
+        axis = summed_axis / np.hypot(*summed_axis)
+        i, dy, dx, g = interpolate2dert(blob, y, x)
+        ma = ave_dangle
+        merged_P = form_P(blob, CP(yx=(y,x), axis=axis, cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,ma)]))
 
         link_ -= combinations(merging_P_, r=2)      # remove links between merged Ps, if any
         P_ = [P for P in P_ if P not in merging_P_] # remove merging_P_
         P_ += [merged_P]   # add merged P to P_
-        # TODO: merge links
 
     return P_, link_
 
@@ -164,10 +161,11 @@ def scan_direction(blob, P, fleft):  # leftward or rightward from y,x
     y, x = (_y-sin,_x-cos) if fleft else (_y+sin, _x+cos)  # first dert in the direction of axis
 
     while True:  # scan to blob boundary or angle miss
-        ret = interpolate_dert(blob, y, x)
-        if ret is None: break               # boundary check
-        i, dy, dx, g = ret                  # unpack result
-        cy, cx = round(y), round(x)         # nearest cell of (y, x)
+
+        dert = interpolate2dert(blob, y, x)
+        if dert is None: break  # blob boundary
+        i, dy, dx, g = dert
+        cy, cx = round(y), round(x)  # nearest cell of (y, x)
         if not blob.mask__[cy, cx]: break
         if abs(cy-_cy) + abs(cx-_cx) == 2:  # mask of cell between (y,x) and (_y,_x)
             my = (_cy+cy) / 2  # midpoint cell, P axis is above, below or over it
@@ -176,11 +174,11 @@ def scan_direction(blob, P, fleft):  # leftward or rightward from y,x
             my_cos = my * cos       # new cell
             if cos < 0: my_cos, _my_cos = -my_cos, -_my_cos   # reverse sign for comparison because of cos
             if abs(my_cos-_my_cos) > 1e-5:
-                ty, tx = (  # deviation from P axis: above/_y>y, below/_y<y, over/_y~=y, with reversed y:
+                adj_y, adj_x = (  # deviation from P axis: above/_y>y, below/_y<y, over/_y~=y, with reversed y:
                     ((_cy, cx) if _cy < cy else (cy, _cx)) if _my_cos < my_cos else
                     ((_cy, cx) if _cy > cy else (cy, _cx)))
-                if not blob.mask__[ty, tx]: break    # if the cell is masked, stop
-                P.cells |= {(ty,tx)}
+                if not blob.mask__[adj_y, adj_x]: break    # if the cell is masked, stop
+                P.cells |= {(adj_y, adj_x)}
 
         mangle,dangle = comp_angle((_dy,_dx), (dy, dx))
         if mangle < 0:  # terminate P if angle miss
@@ -194,7 +192,8 @@ def scan_direction(blob, P, fleft):  # leftward or rightward from y,x
             P.dert_ = P.dert_ + [(y,x,i,dy,dx,g,mangle)]  # append right
             y += sin; x += cos  # next y,x
 
-def interpolate_dert(blob, y, x):
+def interpolate2dert(blob, y, x):
+
     Y, X = blob.mask__.shape    # boundary
     x0, y0 = int(x), int(y)     # floor
     x1, y1 = x0 + 1, y0 + 1     # ceiling
@@ -206,4 +205,5 @@ def interpolate_dert(blob, y, x):
         (y1, x0, (y - y0) * (x1 - x)),
         (y1, x1, (y - y0) * (x - x0))]
     ider__t = (blob.i__[blob.ibox.slice()],) + blob.der__t
+
     return (sum((par__[ky, kx] * dist for ky, kx, dist in kernel)) for par__ in ider__t)
