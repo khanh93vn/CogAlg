@@ -1,1 +1,1 @@
-from .root import *
+from .comp_slice import *

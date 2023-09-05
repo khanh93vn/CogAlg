@@ -12,7 +12,7 @@ import weakref
 # ClusterStructure class
 @dataclass
 class ClusterStructure:
-    _id: int = field(default_factory=count().__next__, init=False, repr=False)
+    _id: int = field(default_factory=count().__next__, init=False, repr=True)
 
     @property
     def id(self):

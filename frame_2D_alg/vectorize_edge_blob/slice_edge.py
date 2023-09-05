@@ -4,7 +4,6 @@ from collections import namedtuple, deque, defaultdict
 from itertools import product, combinations
 from .classes import CEdge, CP
 from .filters import ave_g, ave_dangle
-from .comp_slice import comp_angle
 
 '''
 In natural images, objects look very fuzzy and frequently interrupted, only vaguely suggested by initial blobs and contours.
@@ -113,30 +112,36 @@ def trace_edge(blob, mask__, verbose=False):
     for yx in max_olps:
         for _P, P in combinations(max_olps[yx], r=2):  # loop thru the rest
             assert _P.id < P.id
-            yx_dist = np.hypot(*np.subtract(P.yx, _P.yx))   # compute distance
-            axis_diff, axis_match = comp_angle(P.axis, _P.axis) # compute angle match
-            if yx_dist >= 1.0 or axis_match < ave_dangle - 0.1:
+            yx_dist = np.hypot(*np.subtract(P.yx, _P.yx))   # compute distance between yx s
+            axis_match, axis_diff = comp_angle(P.axis, _P.axis) # compute angle match
+            if yx_dist >= 1.0 or axis_match < ave_dangle - 0.15:
                 continue
             olp_pairs |= {(_P, P)}
-    for merging_P_ in connected_groups(P_, olp_pairs):
-        # initialize merged P
-        y, x = np.mean([merging_P.yx for merging_P in merging_P_], axis=0)
-        summed_axis = np.sum([merging_P.axis for merging_P in merging_P_], axis=0)
+    for blending_P_ in unconnected_groups(P_, olp_pairs):
+        if len(blending_P_) <= 1: continue   # skip single P
+        # initialize blended P
+        y, x = np.mean([blending_P.yx for blending_P in blending_P_], axis=0)
+        summed_axis = np.sum([blending_P.axis for blending_P in blending_P_], axis=0)
         axis = summed_axis / np.hypot(*summed_axis)
         i, dy, dx, g = interpolate2dert(blob, y, x)
         ma = ave_dangle
-        merged_P = form_P(blob, CP(yx=(y,x), axis=axis, cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,ma)]))
+        blended_P_ = form_P(blob, CP(yx=(y,x), axis=axis, cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,ma)]))
 
-        link_ -= combinations(merging_P_, r=2)      # remove links between merged Ps, if any
-        P_ = [P for P in P_ if P not in merging_P_] # remove merging_P_
-        P_ += [merged_P]   # add merged P to P_
+        # apply
+        link_ -= {*combinations(blending_P_, r=2)}   # remove links between blending Ps, if any
+        P_ = [P for P in P_ if P not in blending_P_] # remove blending_P_
+        P_ += [blended_P_]   # add blended P to P_
+        # replace old links with new ones
+        new_link_ = set()
+        for _P, P in link_:                                     # loop through links
+            if _P not in blending_P_ and P not in blending_P_:    # preserve unrelated link
+                new_link_ |= {(_P, P)}
+                continue
+            # if link is from one of blending Ps:
+            new_link_ |= {(P, blended_P_)} if _P in blending_P_ else {(_P, blended_P_)}  # replace with new link of blended P
+        link_ = new_link_
 
     return P_, link_
-
-def connected_groups(nodes, edges):
-    # TODO: implement connected_groups
-    # https://www.geeksforgeeks.org/connected-components-in-an-undirected-graph/
-    return []
 
 def form_P(blob, P):
 
@@ -207,3 +212,35 @@ def interpolate2dert(blob, y, x):
     ider__t = (blob.i__[blob.ibox.slice()],) + blob.der__t
 
     return (sum((par__[ky, kx] * dist for ky, kx, dist in kernel)) for par__ in ider__t)
+
+def comp_angle(_angle, angle):  # rn doesn't matter for angles
+
+    # angle = [dy,dx]
+    (_sin, sin), (_cos, cos) = [*zip(_angle, angle)] / np.hypot(*zip(_angle, angle))
+
+    dangle = (cos * _sin) - (sin * _cos)  # sin(α - β) = sin α cos β - cos α sin β
+    # cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
+    mangle = ave_dangle - abs(dangle)  # inverse match, not redundant if sum cross sign
+
+    return [mangle, dangle]
+
+def unconnected_groups(nodes, edges): # similar to flood-fill
+    # https://www.geeksforgeeks.org/connected-components-in-an-undirected-graph/
+    unvisited = {*nodes}             # all nodes to visit
+    groups = []                     # groups that are not connected to each others
+    while unvisited:
+        group = []
+        to_visit = [unvisited.pop()]
+        while to_visit:
+            node = to_visit.pop()
+            group += [node]
+            connected = {
+                edge[0] if edge[1] is node else edge[1]     # connected node of current node
+                for edge in edges if node in edge           # search for edge of current node
+            } & unvisited
+            to_visit = [*connected] + to_visit              # append left
+            unvisited -= connected                          # remove from unvisited
+
+        groups += [group]
+
+    return groups

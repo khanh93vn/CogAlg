@@ -1,8 +1,8 @@
 import numpy as np
 from copy import copy, deepcopy
 from itertools import zip_longest
-from .slice_edge import slice_edge
-from .agg_recursion import agg_recursion
+from .slice_edge import slice_edge, comp_angle
+# from .agg_recursion import agg_recursion
 from .classes import Cgraph, CP, CderP, CPP
 from .filters import ave, aves, vaves, ave_dangle, ave_daangle, med_decay, aveB, P_aves, PP_aves, G_aves, ave_nsubt
 from dataclasses import replace
@@ -278,18 +278,6 @@ def comp_ptuple(_ptuple, ptuple, rn):  # 0der
         dtuple+=[d]
         Mtuple+=[maxv]
     return [mtuple, dtuple, Mtuple]
-
-
-def comp_angle(_angle, angle):  # rn doesn't matter for angles
-
-    # angle = [dy,dx]
-    (_sin, sin), (_cos, cos) = [*zip(_angle, angle)] / np.hypot(*zip(_angle, angle))
-
-    dangle = (cos * _sin) - (sin * _cos)  # sin(α - β) = sin α cos β - cos α sin β
-    # cos_da = (cos * _cos) + (sin * _sin)  # cos(α - β) = cos α cos β + sin α sin β
-    mangle = ave_dangle - abs(dangle)  # inverse match, not redundant if sum cross sign
-
-    return [mangle, dangle]
 
 def comp_aangle(_aangle, aangle):  # currently not used
 
