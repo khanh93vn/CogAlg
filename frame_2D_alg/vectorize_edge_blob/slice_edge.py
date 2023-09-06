@@ -23,10 +23,10 @@ Tptuple = namedtuple("Tptuple", "I G M Ma angle L")
 octant = 0.3826834323650898
 
 def slice_edge(blob, verbose=False):
-
     max_mask__ = max_selection(blob)  # mask of local directional maxima of dy, dx, g
     # form slices (Ps) from max_mask__ and form links by tracing max_mask__:
-    blob.P_, blob.P_link_ = trace_edge(blob, max_mask__, verbose=verbose)
+    edge = trace_edge(blob, max_mask__, verbose=verbose)
+    return edge
 
 def max_selection(blob):
 
@@ -69,21 +69,18 @@ def max_selection(blob):
     return max_mask__
 
 def trace_edge(blob, mask__, verbose=False):
-
-    max_ = {*zip(*mask__.nonzero())}  # convert mask__ into a set of (y,x)
+    edge = CEdge(blob=blob)             # form edge
+    blob.dlayers = [[edge]]             # add to dlayer
+    max_ = {*zip(*mask__.nonzero())}    # convert mask__ into a set of (y,x)
 
     if verbose:
         step = 100 / len(max_)  # progress % percent per pixel
         progress = 0.0; print(f"\rTracing max... {round(progress)} %", end="");  sys.stdout.flush()
-    P_ = []
-    link_ = set()
-    remaining_max_ = set(max_)
-    max_olps = defaultdict(list)
-
-    while remaining_max_:  # queue of (y,x,P)s
-        y,x = remaining_max_.pop()
+    edge.P_ = []
+    while max_:  # queue of (y,x,P)s
+        y,x = max_.pop()
         maxQue = deque([(y,x,None)])
-        while maxQue:  # trace remaining_max_
+        while maxQue:  # trace max_
             # initialize dert to form P
             y,x,_P = maxQue.popleft()
             i = blob.i__[blob.ibox.slice()][y, x]
@@ -91,43 +88,23 @@ def trace_edge(blob, mask__, verbose=False):
             ma = ave_dangle  # max value because P direction is the same as dert gradient direction
             assert g > 0, "g must be positive"
             P = form_P(blob, CP(yx=(y,x), axis=(dy/g, dx/g), cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,ma)]))
-            P_ += [P]
-            if _P is not None:
-                link_ |= {(_P, P)}
-            for olp_yx in P.cells & max_:
-                max_olps[olp_yx] += [P]
+            edge.P_ += [P]
+            if _P is not None:  # form link
+                _P.link_H[0] += [(P, None)]    # None : place holder for link params
+                P.link_H[0] += [(_P, None)]
+
             # search in max_ path
-            adjacents = remaining_max_ & {*product(range(y-1,y+2), range(x-1,x+2))}   # search neighbors
+            adjacents = max_ & {*product(range(y-1,y+2), range(x-1,x+2))}   # search neighbors
             maxQue.extend(((_y, _x, P) for _y, _x in adjacents))
-            remaining_max_ -= adjacents  # set difference = first set AND not both sets: https://www.scaler.com/topics/python-set-difference/
+            max_ -= adjacents   # set difference = first set AND not both sets: https://www.scaler.com/topics/python-set-difference/
+            max_ -= P.cells     # remove all maxes in the way
+
             if verbose:
                 progress += step; print(f"\rTracing max... {round(progress)} %", end=""); sys.stdout.flush()
 
     if verbose: print("\r" + " " * 79, end=""); sys.stdout.flush(); print("\r", end="")
 
-    # likely irrelevant, removed merging, need to return to link_H per P?
-    # distance and angle should be compared between consecutive derts, not Ps
-    olp_pairs = set()
-    for yx in max_olps:
-        for _P, P in combinations(max_olps[yx], r=2):  # loop thru the rest
-            assert _P.id < P.id
-            yx_dist = np.hypot(*np.subtract(P.yx, _P.yx))   # compute distance
-            # axis_diff, axis_match = comp_angle(P.axis, _P.axis) # compute angle match
-            if yx_dist >= 1.0:  # or axis_match < ave_dangle - 0.1:
-                continue
-            olp_pairs |= {(_P, P)}
-    for P in P_:
-        y,x = P.yx
-        summed_axis = np.sum([P.axis for P in P_], axis=0)
-        axis = summed_axis / np.hypot(*summed_axis)
-        i, dy, dx, g = interpolate2dert(blob, y, x)
-        ma = ave_dangle
-        P = form_P(blob, CP(yx=(y,x), axis=axis, cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,ma)]))
-        # link_ -= combinations(P_, r=2)      # remove links between merged Ps, if any
-        # P_ = [P for P in P_ if P not in P_] # remove P
-        P_ += [P]
-
-    return P_, link_
+    return edge
 
 def form_P(blob, P):
 

@@ -76,8 +76,6 @@ class CBlob(ClusterStructure):
     der__t : Tdert = None   # tuple of derivatives arrays, consistent in shape
     adj_blobs : list = z([])  # adjacent blobs
     fopen : bool = False
-    P_ : list = z([])
-    P_link_ : set = z(set())
     # intra_blob params: # or pack in intra = lambda: Cintra
     # comp_dx:
     Mdx : float = 0.0

@@ -33,9 +33,9 @@ There are concepts that include same matching vars: size, density, color, stabil
 Weak value vars are combined into higher var, so derivation fork can be selected on different levels of param composition.
 '''
 
-def vectorize_root(edge, verbose=False):
+def vectorize_root(blob, verbose=False):
 
-    slice_edge(edge, verbose=False)
+    edge = slice_edge(blob, verbose=False)
     comp_slice(edge, verbose=verbose)  # scan rows top-down, compare y-adjacent, x-overlapping Ps to form derPs
     # not revised:
     for fd, PP_ in enumerate(edge.node_tt[0]):  # [rng+ PPm_,PPd_, der+ PPm_,PPd_]
