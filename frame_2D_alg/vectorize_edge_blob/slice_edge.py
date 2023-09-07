@@ -45,8 +45,7 @@ def max_selection(blob):
         (dwn__ | up__) & mdlx__,  (dwn__ & lft__) | (up__ & rgt__),  # 90, 135 deg
     ]
     max_mask__ = np.zeros_like(blob.mask__, dtype=bool)
-    # local max from cross-comp within axis,
-    # switch to max within kernel for omnidirectional sparsity
+    # local max from cross-comp within axis, switch to kernel max to add vertical sparsity?
     for axis_mask__, (ydir, xdir) in zip(axes_mask__, ((0,1),(1,1),(1,0),(1,-1))):  # y,x direction per axis
         # axis AND mask:
         mask__ = axis_mask__ & blob.mask__
@@ -69,9 +68,10 @@ def max_selection(blob):
     return max_mask__
 
 def trace_edge(blob, mask__, verbose=False):
-    edge = CEdge(blob=blob)             # form edge
-    blob.dlayers = [[edge]]             # add to dlayer
-    max_ = {*zip(*mask__.nonzero())}    # convert mask__ into a set of (y,x)
+
+    edge = CEdge(blob=blob)
+    blob.dlayers = [[edge]]
+    max_ = {*zip(*mask__.nonzero())}  # convert mask__ into a set of (y,x)
 
     if verbose:
         step = 100 / len(max_)  # progress % percent per pixel
@@ -81,7 +81,7 @@ def trace_edge(blob, mask__, verbose=False):
         y,x = max_.pop()
         maxQue = deque([(y,x,None)])
         while maxQue:  # trace max_
-            # initialize dert to form P
+            # initialize pivot dert
             y,x,_P = maxQue.popleft()
             i = blob.i__[blob.ibox.slice()][y, x]
             dy, dx, g = blob.der__t.get_pixel(y, x)
@@ -92,7 +92,6 @@ def trace_edge(blob, mask__, verbose=False):
             if _P is not None:  # form link
                 _P.link_H[0] += [(P, None)]    # None : place holder for link params
                 P.link_H[0] += [(_P, None)]
-
             # search in max_ path
             adjacents = max_ & {*product(range(y-1,y+2), range(x-1,x+2))}   # search neighbors
             maxQue.extend(((_y, _x, P) for _y, _x in adjacents))
