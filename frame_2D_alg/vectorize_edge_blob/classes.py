@@ -17,14 +17,13 @@ class CEdge(ClusterStructure):  # edge blob
     M: float = 0.0  # summed PP.M, for both types of recursion?
     Ma: float = 0.0  # summed PP.Ma
     # composite params:
-    P_ : list = z([])   # list of slices
     der__t_roots: object = None  # map to dir__t
     node_ : list = z([])  # default P_, node_tt: list = z([[[],[]],[[],[]]]) in select PP_ or G_ forks
     root_ : object= None  # list root_ if fork overlap?
     derH : list = z([])  # formed in PPs, inherited in graphs
     aggH : list = z([[]])  # [[subH, valt, rdnt]]: cross-fork composition layers
-    valt : list = z(0,0)  # for PPs, then Ht of link vals per fder
-    rdnt : list = z(1,1)
+    valt : tuple = (0,0)  # for PPs, then Ht of link vals per fder
+    rdnt : tuple = (1,1)
     fback_ : list = z([])  # [feedback aggH,valt,rdnt per node]
     # params from blob, can be accessed via edge.blob, for example, edge.blob.I:I: float = 0.0
     # Dy: float = 0.0

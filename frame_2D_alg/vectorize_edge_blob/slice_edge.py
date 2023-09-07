@@ -76,7 +76,7 @@ def trace_edge(blob, mask__, verbose=False):
     if verbose:
         step = 100 / len(max_)  # progress % percent per pixel
         progress = 0.0; print(f"\rTracing max... {round(progress)} %", end="");  sys.stdout.flush()
-    edge.P_ = []
+    edge.node_ = []
     while max_:  # queue of (y,x,P)s
         y,x = max_.pop()
         maxQue = deque([(y,x,None)])
@@ -88,7 +88,7 @@ def trace_edge(blob, mask__, verbose=False):
             ma = ave_dangle  # max value because P direction is the same as dert gradient direction
             assert g > 0, "g must be positive"
             P = form_P(blob, CP(yx=(y,x), axis=(dy/g, dx/g), cells={(y,x)}, dert_=[(y,x,i,dy,dx,g,ma)]))
-            edge.P_ += [P]
+            edge.node_ += [P]
             if _P is not None:  # form link
                 _P.link_H[0] += [(P, None)]    # None : place holder for link params
                 P.link_H[0] += [(_P, None)]
