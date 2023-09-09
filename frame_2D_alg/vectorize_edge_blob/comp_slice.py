@@ -1,6 +1,6 @@
 import numpy as np
 from copy import copy, deepcopy
-from itertools import zip_longest
+from itertools import zip_longest, starmap
 from .slice_edge import comp_angle
 from .classes import CEdge, CderP, CPP
 from .filters import ave, aves, vaves, med_decay, aveB, P_aves, PP_aves, ave_nsubt
@@ -29,19 +29,13 @@ len prior root_ sorted by G is rdn of each root, to evaluate it for inclusion in
 
 def comp_slice(edge):  # edge is high-gradient blob, sliced in Ps in the direction of G
 
-    P_ = []
-    for P in edge.node_:  # init P_, contiguous?
-        link_ = copy(P.link_H[-1])  # init rng+
-        P.link_H[-1] = []  # fill with derPs in comp_P
-        P_ += [[P,link_]]
-    for P, link_ in P_:
-        for _P in link_:
-            comp_P(_P,P, fder=0)  # replaces P.link_ Ps with derPs
-    node_t = []
-    for fd in 0,1:
-        node_t += [form_PP_(edge, edge.node_, PP_=None, base_rdn=2, fder=0, fd=fd)]  # may be nested by sub+ in form_PP_
-    edge.node_t = node_t  # root fork is rng+ only
+    for P in edge.node_t:   # init P_, contiguous?
+        derP_ = [comp_P(_P,P, fder=0) for _P in P.link_H[-1]] # fill with derPs in comp_P
+        P.link_H[-1] = [derP for derP in derP_ is derP is not None]  # replaces P.link_ Ps with derPs
 
+    edge.node_t = [ # root fork is rng+ only
+        form_PP_(edge, edge.node_t, PP_=None, base_rdn=2, fder=0, fd=fd)    # may be nested by sub+ in form_PP_
+        for fd in (0, 1)]
 
 def comp_P(_P,P, fder=1, derP=None):  #  derP if der+, S if rng+
 
@@ -60,7 +54,7 @@ def comp_P(_P,P, fder=1, derP=None):  #  derP if der+, S if rng+
         derP = CderP(derH=[[[mtuple,dtuple], [mval,dval],[mrdn,drdn]]], valt=[mval,dval,maxv], rdnt=[mrdn,drdn], P=P,_P=_P, S=derP)
 
     if mval > aveP*mrdn or dval > aveP*drdn:
-        P.link_H[-1] += [derP]
+        return derP
 
 # tentative:
 def form_PP_(root, P_, PP_, base_rdn, fder, fd):  # form PPs of derP.valt[fd] + connected Ps val
