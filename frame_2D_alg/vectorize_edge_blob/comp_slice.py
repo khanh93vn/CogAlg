@@ -1,8 +1,8 @@
 import numpy as np
 from copy import copy, deepcopy
-from itertools import zip_longest, starmap
+from itertools import zip_longest
 from .slice_edge import comp_angle
-from .classes import CEdge, CderP, CPP
+from .classes import CderP, CPP
 from .filters import ave, aves, vaves, med_decay, aveB, P_aves, PP_aves, ave_nsubt
 from dataclasses import replace
 
