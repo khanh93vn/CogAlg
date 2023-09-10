@@ -134,8 +134,7 @@ def visualize_blobs(frame, layer='r'):
         y0, x0, *_ = blob.ibox
         state.P_links = []
         for P in edge.node_t:
-            for _P in P.link_H[0]:
-            (_y, _x), (y, x) = _P.yx, P.yx
+            for _P in P.link_H[0]: (_y, _x), (y, x) = _P.yx, P.yx
             state.P_links += ax.plot([_x+x0,x+x0], [_y+y0,y+y0], 'ko-', linewidth=2, markersize=4)
 
     def update_img():
