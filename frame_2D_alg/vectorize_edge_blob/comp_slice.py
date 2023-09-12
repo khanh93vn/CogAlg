@@ -1,5 +1,6 @@
 import numpy as np
 from copy import copy, deepcopy
+from collections import deque
 from itertools import zip_longest
 from .slice_edge import comp_angle
 from .classes import CderP, CPP
@@ -29,8 +30,8 @@ len prior root_ sorted by G is rdn of each root, to evaluate it for inclusion in
 
 def comp_P_(edge):  # renamed for consistency, cross-comp P_ in edge: high-gradient blob, sliced in Ps in the direction of G
 
-    P_ = edge.node_t  # init as P_
-    edge.node_t = [[[],[]],[]]
+    P_ = edge.node_t    # init as P_
+    edge.node_t = ( [[],[]], [] )   # ( rng+, der+ ), root fork is rng+ only. so der+ container is empty
     # ~ sub+:
     for P in P_:  # scan and compare contiguously uplinked Ps, rn = relative weight of comparand:
 
@@ -102,39 +103,38 @@ def form_PP_(root, P_, base_rdn, fder, fd):  # form PPs of derP.valt[fd] + conne
     qPP_ = []  # initial pre_PPs are lists
     for P in P_: P.root_tt[fder][fd] = []  # reset root from prior layer
     for P in P_:
-        if not P.root_tt[fder][fd]:  # else already packed in qPP
-            qPP = [[P]]  # init PP is 2D queue of (P,val)s of all layers, assigned in the end?
-            P.root_tt[fder][fd] = qPP; val = 0
-            uplink_ = P.link_H[-1]
-            uuplink_ = []  # next layer of uplinks
-            while uplink_:  # later uuplink_
-                for derP in uplink_:
-                    if derP.valt[fder] > P_aves[fder]* derP.rdnt[fder]:
-                        _P = derP._P
-                        if _P not in P_:  # _P is outside qPP, add it
-                            _PP = _P.root_tt[fder][fd]
-                            if _PP:  # _P was clustered as P in prior loops
-                                for __P in _PP[0]:  # merge _PP into qPP
-                                    qPP[0] += [__P]; __P.root_tt[fder][fd] = qPP
-                                qPP_.remove(_PP)
-                        else:  # _P is in qPP
-                            _qPP = _P.root_tt[fder][fd]
-                            if _qPP:
-                                if _qPP is not qPP:  # _P may be added to qPP via other down-linked P
-                                    val += _qPP[1]  # merge _qPP in qPP:
-                                    for qP in _qPP[0]:
-                                        qP.root_tt[fder][fd] = qPP
-                                        qPP[0] += [qP]  # qP_+=[qP]
-                                    qPP_.remove(_qPP)
-                            else:
-                                qPP[0] += [_P]  # pack bottom up
-                                _P.root_tt[fder][fd] = qPP
-                                val += derP.valt[fd]
-                                uuplink_ += derP._P.link_H[-1]
-                uplink_ = uuplink_
-                uuplink_ = []
-            qPP += [val, ave+1]  # ini reval=ave+1, keep qPP same object for ref in P.root_tt
-            qPP_ += [qPP]
+        if P.root_tt[fder][fd]:  continue  # already packed in qPP
+
+        qPP = [[P]]  # init PP is 2D queue of (P,val)s of all layers, assigned in the end?
+        P.root_tt[fder][fd] = qPP; val = 0
+        uplink_ = deque(P.link_H[-1])   # queue for breadth first search
+        while uplink_:  # while queue not empty
+            derP = uplink_.popleft()
+            if derP.valt[fder] <= P_aves[fder]* derP.rdnt[fder]: continue   # terminate
+
+            _P = derP._P
+            if _P not in P_:  # _P is outside qPP, add it
+                _PP = _P.root_tt[fder][fd]
+                if _PP:  # _P was clustered as P in prior loops
+                    for __P in _PP[0]:  # merge _PP into qPP
+                        qPP[0] += [__P]; __P.root_tt[fder][fd] = qPP
+                    qPP_.remove(_PP)
+            else:  # _P is in qPP
+                _qPP = _P.root_tt[fder][fd]
+                if _qPP:
+                    if _qPP is not qPP:  # _P may be added to qPP via other down-linked P
+                        val += _qPP[1]  # merge _qPP in qPP:
+                        for qP in _qPP[0]:
+                            qP.root_tt[fder][fd] = qPP
+                            qPP[0] += [qP]  # qP_+=[qP]
+                        qPP_.remove(_qPP)
+                else:
+                    qPP[0] += [_P]  # pack bottom up
+                    _P.root_tt[fder][fd] = qPP
+                    val += derP.valt[fd]
+                    uplink_ += derP._P.link_H[-1]
+        qPP += [val, ave+1]  # ini reval=ave+1, keep qPP same object for ref in P.root_tt
+        qPP_ += [qPP]
 
     rePP_ = reval_PP_(qPP_, fder, fd)  # prune qPPs by mediated links vals, PP = [qPP,valt,reval]
     PP_ = [sum2PP(root, qPP, base_rdn, fder, fd) for qPP in rePP_]
