@@ -102,7 +102,7 @@ def form_PP_(root, P_, base_rdn, fder, fd):  # form PPs of derP.valt[fd] + conne
 
     qPP_ = []  # initial pre_PPs are in list format
     for P in P_:
-        if P.root_tt[fder][fd]:  continue  # else already packed in some qPP
+        if P.root_tt[fder][fd]:  continue  # skip if already packed in some qPP
         qPP = [[P]]  # init PP is 2D queue of (P,val)s of all layers, assigned in the end
         P.root_tt[fder][fd] = qPP; val = 0
         uplink_ = P.link_H[-1]
@@ -111,7 +111,7 @@ def form_PP_(root, P_, base_rdn, fder, fd):  # form PPs of derP.valt[fd] + conne
             for derP in uplink_:
                 if derP.valt[fder] <= P_aves[fder]*derP.rdnt[fder]: continue  # link _P should not be in qPP
                 _P = derP._P
-                if _P not in P_:  # _P is outside qPP, add it
+                if _P not in qPP[0]:  # _P is outside qPP, add it
                     _PP = _P.root_tt[fder][fd]
                     if _PP:  # _P was clustered as P in prior loops
                         for __P in _PP[0]:  # merge _PP into qPP
