@@ -1,11 +1,9 @@
 import numpy as np
 from copy import copy, deepcopy
 from itertools import zip_longest
-from collections import deque
 from .slice_edge import comp_angle
 from .classes import CderP, CPP
-from .filters import ave, med_decay, aveB, aves, P_aves, PP_aves, ave_nsubt
-from dataclasses import replace
+from .filters import ave, med_decay, aveB, aves, P_aves, PP_aves
 
 '''
 Vectorize is a terminal fork of intra_blob.
@@ -103,31 +101,25 @@ def form_PP_(root, P_, base_rdn, fd):  # form PPs of derP.valt[fd] + connected P
 
     for P in P_:
         if P.root_t[fd]:  continue  # skip if already packed in some qPP
-        qPP = [[P]]  # init PP is 2D queue of Ps
-        P.root_t[fd] = qPP
-        val = 0  # sum of in-graph link vals, added to qPP in the end
+        qPP = [{P}]  # init PP is 2D queue of Ps
         uplink_ = P.link_H[-1] # 1st layer of uplinks
         uuplink_ = []  # next layer of uplinks
         # or uplink_ = deque(P.link_H[-1]) # queue in breadth first search
 
         while uplink_:  # test for next-line uuplink_, set at loop's end
             for derP in uplink_:
-                if derP.valt[fd] <= P_aves[fd]*derP.rdnt[fd]: continue  # link _P should not be in qPP
-                # else qPP += [derP], links are visited once
-                val += derP.valt[fd]
-                _P = derP._P
-                _qPP = _P.root_t[fd]
-                if _qPP:  # _P was clustered in prior loops, can't be qPP: links are visited once
-                    for __P in _qPP[0]:  # merge _PP into qPP
-                        qPP[0] += [__P]; __P.root_t[fd] = qPP
-                    val += _qPP[1]  # _qPP Val
-                    qPP_.remove(_qPP)
-                else:  # no root yet
-                    qPP[0] += [_P]; _P.root_t[fd] = qPP
-                # pack bottom up
-                uuplink_ += derP._P.link_H[-1]
-            uplink_ = uuplink_
-            uuplink_ = []
+                if derP.valt[fd] <= P_aves[fd]*derP.rdnt[fd]: continue
+                # if derP is strong enough: pack bottom up
+                qPP |= {derP._P}    # avoid duplicating _P
+                uuplink_ += derP._P.link_H[-1]  # add to next layer BFS
+            uplink_, uuplink_ = uuplink_, []    # pass 1 layer to the next
+        # termination sequence:
+        val = 0  # sum of in-graph link vals, added to qPP in the end
+        for _P in qPP[0]:   # including P
+            _P.root_t[fd] = qPP     # add qPP reference to each elemental node
+            for derP in _P: # derP is unique
+                if derP.valt[fd] > P_aves[fd] * derP.rdnt[fd]:  # only add strong enough links
+                    val += derP.valt[fd]
         qPP += [val, ave+1]  # ini reval=ave+1, keep qPP same object for ref in P.root_t
         qPP_ += [qPP]
 
