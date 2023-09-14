@@ -1,6 +1,7 @@
 import numpy as np
 from copy import copy, deepcopy
 from itertools import zip_longest
+from collections import defaultdict
 from .slice_edge import comp_angle
 from .classes import CderP, CPP
 from .filters import ave, med_decay, aveB, aves, P_aves, PP_aves
@@ -97,22 +98,28 @@ def comp_der(P_):  # keep same Ps and links, increment link derH, then P derH in
 # tentative
 def form_PP_(root, P_, base_rdn, fd):  # form PPs of derP.valt[fd] + connected Ps val
 
+    downlink_ = defaultdict(list)
+    for P in P_:
+        for derP in P.link_H[-1]:
+            downlink_[derP._P] += [derP]
+
     qPP_ = []  # initial pre_PPs are in list format
 
     for P in P_:
         if P.root_t[fd]:  continue  # skip if already packed in some qPP
         qPP = [{P}]  # init PP is 2D queue of Ps
-        uplink_ = P.link_H[-1] # 1st layer of uplinks
-        uuplink_ = []  # next layer of uplinks
-        # or uplink_ = deque(P.link_H[-1]) # queue in breadth first search
-
-        while uplink_:  # test for next-line uuplink_, set at loop's end
-            for derP in uplink_:
-                if derP.valt[fd] <= P_aves[fd]*derP.rdnt[fd]: continue
-                # if derP is strong enough: pack bottom up
-                qPP |= {derP._P}    # avoid duplicating _P
-                uuplink_ += derP._P.link_H[-1]  # add to next layer BFS
-            uplink_, uuplink_ = uuplink_, []    # pass 1 layer to the next
+        link_ = {*P.link_H[-1]}     # queue in breadth first search
+        link_ |= {*downlink_[P]}    # ... including down-links
+        while link_:  # until no link left to visit
+            derP = link_.pop()
+            if derP.valt[fd] <= P_aves[fd]*derP.rdnt[fd]: continue
+            # if derP is strong enough: pack bottom up
+            _P = derP._P
+            qPP[0].add(_P)    # use set avoid duplicating _P
+            # update link_:
+            link_ = link_.union(_P.link_H[-1])  # add up-links to next layer BFS
+            link_ = link_.union(downlink_[_P])  # add down-links to next layer BFS
+            link_ -= qPP[0]                     # excludes visited links
         # termination sequence:
         val = 0  # sum of in-graph link vals, added to qPP in the end
         for _P in qPP[0]:   # including P
