@@ -1,7 +1,7 @@
 import numpy as np
 from copy import copy, deepcopy
 from itertools import zip_longest
-from collections import deque
+from collections import defaultdict, deque
 from .slice_edge import comp_angle
 from .classes import CderP, CPP
 from .filters import ave, med_decay, aveB, aves, P_aves, PP_aves, ave_nsubt
@@ -99,37 +99,35 @@ def comp_der(P_):  # keep same Ps and links, increment link derH, then P derH in
 
 def form_PP_(root, P_, base_rdn, fd):  # form PPs of derP.valt[fd] + connected Ps val
 
+    # get link map
+    link_map = defaultdict(list)
+    for P in P_:
+        for derP in P.link_H[-1]:
+            if derP.valt[fd] > P_aves[fd] * derP.rdnt[fd]:
+                link_map[P] += [derP._P]
+                link_map[derP._P] += [P]
+
     qPP_ = []  # initial pre_PPs are in list format
 
     for P in P_:
         if P.root_t[fd]:  continue  # skip if already packed in some qPP
         qPP = [[P]]  # append with _Ps, then Val in the end
-        P.root_t[fd] = qPP
-        val = 0  # sum of in-graph link vals, added to qPP in the end
-        uplink_ = P.link_H[-1] # 1st layer of uplinks
-        uuplink_ = []  # next layer of uplinks
-        # or uplink_ = deque(P.link_H[-1]) # queue in breadth first search
 
-        while uplink_:  # test for next-line uuplink_, set at loop's end
-            for derP in uplink_:
-                if derP.valt[fd] <= P_aves[fd]*derP.rdnt[fd]: continue  # link _P should not be in qPP
-                # else add link, always unique
+        node_ = deque(link_map[P]) # queue in breadth first search
+        while node_:
+            _P = node_.popleft()            # take 1 node
+            assert not _P.root_t[fd]        # should not be assigned
+            if _P in qPP[0]: continue
+            qPP[0] += [_P]
+            node_ += link_map[_P]
+        # terminate, sum up val and assign root:
+        val = 0  # sum of in-graph link vals, added to qPP in the end
+        for _P in qPP[0]:   # P included
+            _P.root_t[fd] = qPP
+            if derP.valt[fd] > P_aves[fd] * derP.rdnt[fd]:
                 val += derP.valt[fd]
-                _P = derP._P
-                _qPP = _P.root_t[fd]
-                if _qPP:  # _P was clustered in different qPP in prior loops
-                    if _qPP is qPP: continue
-                    for __P in _qPP[0]:  # merge _qPP in qPP
-                        qPP[0] += [__P]; __P.root_t[fd] = qPP
-                    val += _qPP[1]  # _qPP Val
-                    qPP_.remove(_qPP)
-                else:  # add _P
-                    qPP[0] += [_P]; _P.root_t[fd] = qPP
-                # pack bottom up
-                uuplink_ += derP._P.link_H[-1]
-            uplink_ = uuplink_
-            uuplink_ = []
-        qPP += [val, ave+1]  # ini reval=ave+1, keep qPP same object for ref in P.
+        # pack everything into qPP:
+        qPP += [val, ave + 1]  # ini reval=ave+1, keep qPP same object for ref in P.
         qPP_ += [qPP]
 
     rePP_ = reval_PP_(qPP_, fd)  # prune qPPs by mediated links vals, PP = [qPP,valt,reval]
