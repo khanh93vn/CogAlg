@@ -99,7 +99,7 @@ def comp_der(P_):  # keep same Ps and links, increment link derH, then P derH in
 
 def form_PP_t(root, P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps val
 
-    PP_t = []
+    PP_t = [[], []]
     for fd in 0,1:
         link_map = defaultdict(list); ave = P_aves[fd]
         for P in P_:
@@ -108,7 +108,6 @@ def form_PP_t(root, P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps v
                     # link_map: keys are Ps, vals are lists of links, up and down
                     link_map[P] += [derP._P]
                     link_map[derP._P] += [P]
-        qPP_ = []
         for P in P_:
             if P.root_t[fd]: continue  # skip if already packed in some qPP
             qPP = [[P]]  # pre_PP: [P_, val, reval]
@@ -119,18 +118,12 @@ def form_PP_t(root, P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps v
                 if _P in qPP[0]: continue
                 qPP[0] += [_P]
                 linked_P_layer += link_map[_P]
-            # qPP is complete
-            val = 0  # to sum in-graph link vals
-            for _P in qPP[0]:  # including P
-                _P.root_t[fd] = qPP
-                if derP.valt[fd] > P_aves[fd] * derP.rdnt[fd]:
-                    val += derP.valt[fd]
-            # init reval=ave+1, qPP is same object in P root:
-            qPP += [val, ave+1]
-            qPP_ += [qPP]
+            rePP = reval_PP(qPP[0], fd) # qPP is complete, do reval immediately
+            if rePP is not None:    # if PP strong enough
+                PP_t[fd] += sum2PP(root, rePP, base_rdn, fd)
 
-        rePP_ = reval_PP_(qPP_, fd)  # prune qPPs by mediated links vals, PP = [qPP,valt,reval]
-        PP_t += [[sum2PP(root, qPP, base_rdn, fd) for qPP in rePP_]]
+        # rePP_ = reval_PP_(qPP_, fd)  # prune qPPs by mediated links vals, PP = [qPP,valt,reval]
+        # PP_t += [[sum2PP(root, qPP, base_rdn, fd) for qPP in rePP_]]
 
     for fd in 0,1:  # after form_PP_t, to fill root_t per sub+ layer
         sub_recursion(root, PP_t[fd], fd)  # eval P_ rng+ per PPm or der+ per PP
@@ -138,6 +131,25 @@ def form_PP_t(root, P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps v
             feedback(root, fd)  # feedback after sub+ is terminated in all root fork nodes, not individual through multiple layers
 
     root.node_t = PP_t  # PPs maybe nested in sub+, add_alt_PPs_?
+
+def reval_PP(P_, fd):   # recursive eval / prune Ps for rePP
+    # evaluate val
+    val = sum((derP.valt[fd] for P in P_ for derP in P.link_H[-1]
+               if derP.valt[fd] > P_aves[fd] * derP.rdnt[fd]))
+
+    # Ave = ave * 1+(valt[fd] < valt[1-fd])  # * PP.rdn for more selective clustering?
+    if val <= ave: return   # check val first, return None if val doesn't pass ave
+    reval = ave + 1     # init reval=ave+1
+
+    while reval > ave:
+        P_, val, reval = reval_P_(P_, fd)  # recursive node and link re-evaluation by med val
+        if val <= ave: return  # always check val after reval
+
+    rePP = [P_, val, reval]     # pack rePP
+    for P in P_:
+        P.root_t = rePP         # assign root_t
+
+    return [P_, val, reval]
 
 
 def reval_PP_(PP_, fd):  # recursive eval / prune Ps for rePP
@@ -170,7 +182,7 @@ def reval_P_(P_, fd):  # prune qPP by link_val + mediated link__val
     for P in P_:
         P_val = 0
         for link in P.link_H[-1]:    # link val + med links val: single mediation layer in comp_slice:
-            link_val = link.valt[fd] + sum([link.valt[fd] for link in link._P.link_H[-1]]) * med_decay
+            link_val = link.valt[fd] + sum([_link.valt[fd] for _link in link._P.link_H[-1]]) * med_decay
             if link_val >= aves[fd]:
                 P_val += link_val
         if P_val * P.rdnt[fd] > aves[fd]:
