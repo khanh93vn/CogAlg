@@ -5,7 +5,6 @@ from collections import deque, defaultdict
 from .slice_edge import comp_angle
 from .classes import CderP, CPP
 from .filters import aves, P_aves, PP_aves
-from dataclasses import replace
 
 '''
 Vectorize is a terminal fork of intra_blob.
@@ -135,15 +134,13 @@ def form_PP_t(root, P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps v
 
 def sum2PP(root, P_, base_rdn, fd):  # sum links in Ps and Ps in PP
 
-    PP = CPP(fd=fd, root=root, node_t=P_)
+    PP = CPP(fd=fd, root=root, node_t=P_)   # initial PP.box = (-inf, -inf, inf, inf)
     # accum:
     for i, P in enumerate(P_):
-        P.root_t[fd] = PP
-        sum_ptuple(PP.ptuple, P.ptuple)
-        L = P.ptuple[-1]
-        Dy = P.axis[0]*L/2; Dx = P.axis[1]*L/2; y,x =P.yx
-        if i: Y0=min(Y0,(y-Dy)); Yn=max(Yn,(y+Dy)); X0=min(X0,(x-Dx)); Xn=max(Xn,(x+Dx))
-        else: Y0=y-Dy; Yn=y+Dy; X0=x-Dx; Xn=x+Dx  # init
+        P.root_t[fd] = PP   # assign root
+        sum_ptuple(PP.ptuple, P.ptuple)     # accumulate ptuple
+        (y0, x0), (yn, xn) = P.dert_[0][:2], P.dert_[-1][:2]    # accumulate box
+        PP.box = PP.box.accumulate(y0,x0).accumulate(yn,xn)
 
         for derP in P.link_H[-1]:
             if derP.valt[fd] > P_aves[fd]* derP.rdnt[fd]:
@@ -154,7 +151,6 @@ def sum2PP(root, P_, base_rdn, fd):  # sum links in Ps and Ps in PP
         # excluding bilateral sums:
         sum_derH([PP.derH,PP.valt,PP.rdnt], [P.derH,P.valt,P.rdnt], base_rdn)
 
-    PP.box =(Y0,Yn,X0,Xn)
     return PP
 
 '''
@@ -213,7 +209,7 @@ def sum_ptuple(Ptuple, ptuple, fneg=0):
 
     for i, (Par, par) in enumerate(zip_longest(Ptuple, ptuple, fillvalue=None)):
         if par != None:
-            if Par != None:
+            if Par != None:    # there are cases where len(Ptuple) > len(ptuple) and len(Ptuple) < len(ptuple) ?
                 if isinstance(Par, list) or isinstance(Par, tuple):  # angle or aangle
                     for i,(P,p) in enumerate(zip(Par,par)):
                         Par[i] = P-p if fneg else P+p

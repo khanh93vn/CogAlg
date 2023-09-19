@@ -1,4 +1,6 @@
+from math import inf
 from class_cluster import ClusterStructure, init_param as z
+from frame_blobs import Tbox
 
 '''
     Conventions:
@@ -90,7 +92,7 @@ class CPP(CderP):
     node_t : list = z([])  # init P_, -> node_tt if sub+: [rng+ [sub_PPm_,sub_PPd_], der+ [sub_PPm_,sub_PPd_]]
     fback_t : list = z([[],[]])  # maps to node_tt: [derH,valt,rdnt] per node fork
     rng : int = 1  # sum of rng+: odd forks in last layer?
-    box : list = z([0,0,0,0])  # y0,yn,x0,xn
+    box : Tbox = Tbox(-inf, -inf, inf, inf)  # y0,x0,yn,xn
     # temporary:
     coPP_ : list = z([])  # rdn reps in other PPPs, to eval and remove?
     Rdn : int = 0  # for accumulation or separate recursion count?
