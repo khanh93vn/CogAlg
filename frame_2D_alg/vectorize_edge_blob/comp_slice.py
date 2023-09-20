@@ -206,17 +206,9 @@ def sum_derH(T, t, base_rdn):  # derH is a list of layers or sub-layers, each = 
         DerH[:] = deepcopy(derH)
 
 def sum_ptuple(Ptuple, ptuple, fneg=0):
-
-    for i, (Par, par) in enumerate(zip_longest(Ptuple, ptuple, fillvalue=None)):
-        if par != None:
-            if Par != None:    # there are cases where len(Ptuple) > len(ptuple) and len(Ptuple) < len(ptuple) ?
-                if isinstance(Par, list) or isinstance(Par, tuple):  # angle or aangle
-                    for i,(P,p) in enumerate(zip(Par,par)):
-                        Par[i] = P-p if fneg else P+p
-                else:
-                    Ptuple[i] += (-par if fneg else par)  # now includes n in ptuple[-1]?
-            elif not fneg:
-                Ptuple += [copy(par)]
+    I, G, M, Ma, (Dy, Dx), L = Ptuple
+    _I, _G, _M, _Ma, (_Dy, _Dx), _L = ptuple
+    Ptuple[:] = (I+_I), (G+_G), (M+_M), (Ma+_Ma), [(Dy+_Dy), (Dx+_Dx)], (L+_L)
 
 def comp_derH(_derH, derH, rn):  # derH is a list of der layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
 
