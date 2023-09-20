@@ -57,9 +57,9 @@ def comp_P(_P,P, rn, fd=1, derP=None):  #  derP if der+, reused as S if rng+
         return derP
 
 # rng+ and der+ are called from sub_recursion
-def comp_rng(iP_, rng):  # form new Ps and links, switch to rng+n to skip clustering?
 
-    P_, derP_ = [],[]
+def comp_rng(iP_, rng):  # form new Ps and links, switch to rng+n to skip clustering?
+    P_, derP_ = [], []
 
     for P in iP_:
         for derP in P.link_H[-1]:  # scan last-layer links
@@ -79,8 +79,8 @@ def comp_rng(iP_, rng):  # form new Ps and links, switch to rng+n to skip cluste
     return P_
 
 def comp_der(P_):  # keep same Ps and links, increment link derH, then P derH in sum2PP
-
     derP_ = []
+
     for P in P_:
         link_ = P.link_H[-1]
         for derP in link_:  # scan root-PP links, exclude top layer if formed by concurrent rng+
@@ -99,30 +99,30 @@ def form_PP_t(root, P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps v
 
     PP_t = [[],[]]
     for fd in 0,1:
-        link_map = defaultdict(list); ave = P_aves[fd]
+        link_map = defaultdict(list)
         for P in P_:
             for derP in P.link_H[-1]:
-                if derP.valt[fd] > ave * derP.rdnt[fd]:
+                if derP.valt[fd] > P_aves[fd] * derP.rdnt[fd]:
                     link_map[P] += [derP._P]  # keys: Ps, vals: linked _P_s, up and down
                     link_map[derP._P] += [P]
         for P in P_:
             if P.root_t[fd]: continue  # skip if already packed in some PP
             cP_ = [P]  # clustered Ps and their val,rdn s
             P_layer = deque(link_map[P])  # recycle with breadth-first search, up and down:
-            Val, Rdn = 0,0
+            Val,Rdn = 0,0
             while P_layer:
                 _P = P_layer.popleft()
                 if _P in cP_: continue
                 for derP in _P.link_H[-1]:
                     if derP._P in cP_: continue  # circular link? or derP._P in cP_?
                     _val, _rdn = derP.valt[fd], derP.rdnt[fd]
-                    if _val > ave/2 * _rdn:  # consider +ve links only: sparse representation? lower filter for link vs. P
+                    if _val > P_aves[fd]/2 * _rdn:  # consider +ve links only: sparse representation? lower filter for link vs. P
                         Val += _val; Rdn += _rdn
                 cP_ += [_P]
                 P_layer += link_map[_P]  # append linked __Ps to extended perimeter of P
             # eval cP_:
             if Val > PP_aves[fd] * Rdn:
-                PP_t[fd] += sum2PP(root, cP_, base_rdn, fd)
+                PP_t[fd] += [sum2PP(root, cP_, base_rdn, fd)]
 
     for fd, PP_ in enumerate(PP_t):   # after form_PP_t -> P.root_t
         sub_recursion(root, PP_, fd)  # eval rng+/ PPm or der+/ PPd
@@ -138,9 +138,9 @@ def sum2PP(root, P_, base_rdn, fd):  # sum links in Ps and Ps in PP
     # accum:
     for i, P in enumerate(P_):
         P.root_t[fd] = PP   # assign root
-        sum_ptuple(PP.ptuple, P.ptuple)     # accumulate ptuple
-        (y0, x0), (yn, xn) = P.dert_[0][:2], P.dert_[-1][:2]    # accumulate box
-        PP.box = PP.box.accumulate(y0,x0).accumulate(yn,xn)
+        sum_ptuple(PP.ptuple, P.ptuple)  # accumulate ptuple
+        (y0,x0),(yn,xn) = P.dert_[0][:2], P.dert_[-1][:2]
+        PP.box = PP.box.accumulate(y0,x0).accumulate(yn,xn)  # accumulate box
 
         for derP in P.link_H[-1]:
             if derP.valt[fd] > P_aves[fd]* derP.rdnt[fd]:
@@ -179,7 +179,7 @@ def feedback(root, fd):  # from form_PP_, append new der layers to root PP, sing
 
     if isinstance(root, CPP):  # root is not CEdge, which has no roots
         rroot = root.root  # single PP.root, can't be P
-        fd = root.fd  # current node_ fork
+        fd = root.fd  # current node_ fd
         fback_ = rroot.fback_t[fd]
         fback_ += [Fback]
         if fback_ and (len(fback_) == len(rroot.node_t)):  # still flat, all nodes terminated and fed back
