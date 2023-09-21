@@ -116,7 +116,7 @@ def form_PP_t(root, P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps v
                 for derP in _P.link_H[-1]:
                     if derP._P in cP_: continue  # circular link? or derP._P in cP_?
                     _val, _rdn = derP.valt[fd], derP.rdnt[fd]
-                    if _val > P_aves[fd]/2 * _rdn:  # consider +ve links only: sparse representation? lower filter for link vs. P
+                    if _val > P_aves[fd]/2 * _rdn:  # no interference by -ve links? lower filter for link vs. P
                         Val += _val; Rdn += _rdn
                 cP_ += [_P]
                 P_layer += link_map[_P]  # append linked __Ps to extended perimeter of P
@@ -206,9 +206,12 @@ def sum_derH(T, t, base_rdn):  # derH is a list of layers or sub-layers, each = 
         DerH[:] = deepcopy(derH)
 
 def sum_ptuple(Ptuple, ptuple, fneg=0):
+
     I, G, M, Ma, (Dy, Dx), L = Ptuple
     _I, _G, _M, _Ma, (_Dy, _Dx), _L = ptuple
-    Ptuple[:] = (I+_I), (G+_G), (M+_M), (Ma+_Ma), [(Dy+_Dy), (Dx+_Dx)], (L+_L)
+    if fneg: Ptuple[:] = ((I-_I), (G-_G), (M-_M), (Ma-_Ma), [(Dy-_Dy),(Dx-_Dx)], (L-_L))
+    else:    Ptuple[:] = ((I+_I), (G+_G), (M+_M), (Ma+_Ma), [(Dy+_Dy),(Dx+_Dx)], (L+_L))
+
 
 def comp_derH(_derH, derH, rn):  # derH is a list of der layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
 
