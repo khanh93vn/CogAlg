@@ -3,7 +3,7 @@ from copy import copy, deepcopy
 from itertools import zip_longest
 from collections import deque, defaultdict
 from .slice_edge import comp_angle
-from .classes import CderP, CPP
+from .classes import CP, CderP, CPP
 from .filters import aves, P_aves, PP_aves
 
 '''
@@ -191,19 +191,21 @@ def sum_derH(T, t, base_rdn):  # derH is a list of layers or sub-layers, each = 
     DerH, Valt, Rdnt = T
     derH, valt, rdnt = t
     for i in 0, 1:
-        Valt[i] += valt[i]; Rdnt[i] += rdnt[i] + base_rdn
-    if DerH:
-        for Layer, layer in zip_longest(DerH,derH, fillvalue=[]):
-            if layer:
-                if Layer:
-                    for i in 0,1:
-                        sum_ptuple(Layer[0][i], layer[0][i])  # ptuplet
-                        Layer[1][i] += layer[1][i]  # valt
-                        Layer[2][i] += layer[2][i] + base_rdn  # rdnt
-                else:
-                    DerH += [deepcopy(layer)]
-    else:
-        DerH[:] = deepcopy(derH)
+        Valt[i] += valt[i]
+        Rdnt[i] += rdnt[i] + base_rdn
+
+    # sum each layer's [ptuplet, valt, rdnt]:
+    DerH[:] = [
+        [
+            [sum_ptuple(Mtuple, mtuple), sum_ptuple(Dtuple, dtuple)],   # ptuplet
+            [       Mval + mval        ,        Dval + dval        ],   # valt
+            [  Mrdn + mrdn + base_rdn  ,   Drdn + drdn + base_rdn  ],   # rdnt
+        ]
+        for [(Mtuple, Dtuple), (Mval, Dval), (Mrdn, Drdn)], [(mtuple, dtuple), (mval, dval), (mrdn, drdn)]
+        in zip_longest(DerH, derH, fillvalue=[((0,0,0,0,(0,0),0), (0,0,0,0,(0,0),0)), (0, 0), (0, 0)])
+    ]   #                                      \___________________________________/  \____/  \____/
+    #                                                           ↑                       ↑       ↑
+    #                                                         ptuplet                  valt    rdnt
 
 def sum_ptuple(Ptuple, ptuple, fneg=0):
 
