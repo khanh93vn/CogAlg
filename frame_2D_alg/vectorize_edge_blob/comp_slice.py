@@ -161,10 +161,10 @@ def sub_recursion(root, PP_, fd):  # called in form_PP_, evaluate PP for rng+ an
 
     for PP in PP_:
         P_ = PP.node_t  # flat before sub+
-        if PP.valt[fd] * np.sqrt(len(P_)-1) if P_ else 0 > P_aves[fd] * PP.rdnt[fd]:  # comp_der|rng in PP->parLayer
+        if (PP.valt[fd] * np.sqrt(len(P_)-1) if P_ else 0) > P_aves[fd] * PP.rdnt[fd]:  # comp_der|rng in PP->parLayer
 
             comp_der(P_) if fd else comp_rng(P_, PP.rng+1)  # same else new links
-            PP.rdnt[fd] += PP.valt[fd] - PP_aves[fd] * PP.rdnt[fd] > PP.valt[1-fd] - PP_aves[1-fd] * PP.rdnt[1-fd]
+            PP.rdnt[fd] += (PP.valt[fd] - PP_aves[fd] * PP.rdnt[fd]) > (PP.valt[1-fd] - PP_aves[1-fd] * PP.rdnt[1-fd])
             for P in P_: P.root_t = [[],[]]  # fill with sub_PPm_,sub_PPd_ between nodes and PP:
             form_PP_t(PP, P_, base_rdn=PP.rdnt[fd])
             root.fback_t[fd] += [[PP.derH, PP.valt, PP.rdnt]]  # merge in root.fback_t fork, else need fback_tree
