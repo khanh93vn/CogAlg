@@ -239,7 +239,7 @@ def comp_derH(_derH, derH, rn):  # derH is a list of der layers or sub-layers, e
     dderH = []  # or = not-missing comparand if xor?
     Mval, Dval, Mrdn, Drdn, Maxv = 0,0,1,1,0
 
-    for _lay, lay in zip_longest(_derH, derH, fillvalue=[]):  # compare common lower der layers | sublayers in derHs
+    for _lay, lay in zip(_derH, derH):  # compare common lower der layers | sublayers in derHs
         if _lay and lay:  # also if lower-layers match: Mval > ave * Mrdn?
 
             mtuple, dtuple, Mtuple = comp_dtuple(_lay[0][1], lay[0][1], rn)  # compare dtuples only, mtuples are for evaluation
@@ -252,7 +252,7 @@ def comp_derH(_derH, derH, rn):  # derH is a list of der layers or sub-layers, e
 
 def comp_dtuple(_ptuple, ptuple, rn):
 
-    mtuple, dtuple, Mtuple = [],[], []
+    mtuple, dtuple, Mtuple = [], [], []
     for _par, par, ave in zip(_ptuple, ptuple, aves):  # compare ds only?
         npar= par*rn
         mtuple += [min(_par, npar) - ave]
@@ -262,20 +262,24 @@ def comp_dtuple(_ptuple, ptuple, rn):
     return [mtuple, dtuple, Mtuple]
 
 def comp_ptuple(_ptuple, ptuple, rn):  # 0der
+    I, G, M, Ma, (Dy, Dx), L = _ptuple
+    _I, _G, _M, _Ma, (_Dy, _Dx), _L = ptuple
 
-    mtuple, dtuple, Mtuple = [],[], []
-    # _n, n = _ptuple, ptuple: add to rn?
-    for i, (_par, par, ave) in enumerate(zip(_ptuple, ptuple, aves)):
-        if isinstance(_par, list) or isinstance(_par, tuple):
-             m,d = comp_angle(_par, par)
-             maxv = 2
-        else:  # I | M | G L
-            npar= par*rn  # accum-normalized par
-            d = _par - npar
-            if i: m = min(_par,npar)-ave
-            else: m = ave-abs(d)  # inverse match for I, no mag/value correlation
-            maxv = max(_par, par)
-        mtuple+=[m]
-        dtuple+=[d]
-        Mtuple+=[maxv]
+    # compare scalars:
+    dI  =  _I -  I*rn ;  mI = ave - dI
+    dG  =  _G -  G*rn ;  mG = min( _G,  G*rn) - ave
+    dM  =  _M -  M*rn ;  mM = min( _M,  M*rn) - ave
+    dMa = _Ma - Ma*rn ; mMa = min(_Ma, Ma*rn) - ave
+    dL  =  _L -  L*rn ;  mL = min( _L,  L*rn) - ave
+
+    # compare gradients as angle vectors:
+    mAngle, dAngle = comp_angle((_Dy, _Dx), (Dy, Dx))
+
+    # pack into dertuples:
+    mtuple = [mI, mG, mM, mMa, mAngle, mL]
+    dtuple = [dI, dG, dM, dMa, dAngle, dL]
+
+    # compute max values of comparands:
+    Mtuple = [max(_I, I), max(_G, G), max(_M, M), max(_Ma, Ma),      2      , max(_L, L)]
+
     return [mtuple, dtuple, Mtuple]
