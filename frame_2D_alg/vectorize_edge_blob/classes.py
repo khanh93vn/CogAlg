@@ -101,7 +101,7 @@ class CPP(CderP):
 class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplayers
 
     fd: int = 0  # graph is defined by m|d value
-    ptuple : list = z([])  # default from P
+    ptuple : list = z([0,0,0,0,[0,0],0])  # default from P
     derH : list = z([[], [0,0], [1,1]])  # [[tuplet, valt, rdnt]]: default from PP, for both rng+ and der+, sum min len?
     aggH : list = z([])  # [[sub_Ht, valt, rdnt]], subH: [[der_Ht, valt, rdnt]]; cross-fork composition layers
     link_H : list = z([[]])  # added per rng+ comp_G_
@@ -121,6 +121,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     alt_graph_ : list = z([])  # adjacent gap+overlap graphs, vs. contour in frame_graphs
     alt_Graph : object = None  # conditional, summed and concatenated params of alt_graph_
     # temporary:
+    it = list = z([0,0])  # indices in root.node_t, maybe nested?
     compared_ : list = z([])
     Rdn : int = 0  # for accumulation or separate recursion count?
     # id_H : list = z([[]])  # indices in the list of all possible layers | forks, not used with fback merging
@@ -132,6 +133,7 @@ class CderG(ClusterStructure):  # params of single-fork node_ cluster per pplaye
     subH : list = z([])  # [[derH_t, valt, rdnt]]: top aggLev derived in comp_G
     valt : list = z([0,0,0])  # m,d,max
     rdnt : list = z([1,1])
+    dir : bool  # direction of comparison = G is link.G0, not G0,G1, or not needed, sum2graph can get it from G?
     G0 : object = None  # comparand
     G1 : object = None  # comparand
     S : float = 0.0  # sparsity: average distance to link centers
