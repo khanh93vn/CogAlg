@@ -33,9 +33,9 @@ There are concepts that include same matching vars: size, density, color, stabil
 Weak value vars are combined into higher var, so derivation fork can be selected on different levels of param composition.
 '''
 
-def vectorize_root(blob):  # vectorization pipeline is 3 composition levels of cross-comp,clustering:
+def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition levels of cross-comp,clustering:
 
-    edge = slice_edge(blob, verbose=False)  # lateral kernel cross-comp -> P clustering
+    edge = slice_edge(blob, verbose)  # lateral kernel cross-comp -> P clustering
     comp_P_(edge)  # vertical, lateral-overlap P cross-comp -> PP clustering
     # PP cross-comp -> discontinuous graph clustering:
     for fd in 0,1:

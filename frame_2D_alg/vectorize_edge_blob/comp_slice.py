@@ -146,7 +146,7 @@ def sum2PP(root, P_, base_rdn, fd):  # sum links in Ps and Ps in PP
             if derP.valt[fd] > P_aves[fd] * derP.rdnt[fd]:
                 derH, valt, rdnt = derP.derH, derP.valt, derP.rdnt
                 sum_derH([P.derH,P.valt,P.rdnt], [derH,valt,rdnt], base_rdn, fneg=0)  # uplink
-                _P = derH._P  # bilateral accum downlink, reverse d signs:
+                _P = derP._P  # bilateral accum downlink, reverse d signs:
                 sum_derH([_P.derH,_P.valt,_P.rdnt], [derH,valt,rdnt], base_rdn, fneg=1)
         # unilateral sum:
         sum_derH([PP.derH,PP.valt,PP.rdnt], [P.derH,P.valt,P.rdnt], base_rdn)
@@ -200,7 +200,7 @@ def sum_derH(T, t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers,
           [Mrdn + mrdn + base_rdn, Drdn + drdn + base_rdn],  # rdnt
         ]
         for [(Mtuple,Dtuple),(Mval,Dval),(Mrdn,Drdn)], [(mtuple,dtuple),(mval,dval),(mrdn,drdn)]
-        in zip_longest(DerH, derH, fillvalue=[((0,0,0,0,0,0),(0,0,0,0,0,0)), (0,0),(0,0)])  # ptuplet, valt, rdnt
+        in zip_longest(DerH, derH, fillvalue=[([0,0,0,0,0,0],[0,0,0,0,0,0]), (0,0),(0,0)])  # ptuplet, valt, rdnt
     ]
 
 def sum_ptuple(Ptuple, ptuple, fneg=0):
