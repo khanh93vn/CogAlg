@@ -102,14 +102,14 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
 
     fd: int = 0  # graph is defined by m|d value
     ptuple : list = z([0,0,0,0,[0,0],0])  # default from P
-    derH : list = z([[], [0,0], [1,1]])  # [[tuplet, valt, rdnt]]: default from PP, for both rng+ and der+, sum min len?
+    derH : list = z([[], [0,0], [1,1]])  # default from PP: [[tuplet,valt,rdnt]] from rng+| der+, sum min len?
     aggH : list = z([])  # [[sub_Ht, valt, rdnt]], subH: [[der_Ht, valt, rdnt]]; cross-fork composition layers
     link_H : list = z([[]])  # added per rng+ comp_G_
     val_Ht : list = z(([0],[0]))  # H of link vals per fder
     rdn_Ht : list = z(([1],[1]))
-    # node_T, root_T
-    root_t : list = z([[],[]])  # upward reciprocal for node_tt, nested if uH: up-forking tree of root Levs
-    node_t : list = z([])  # init G_ -> Gmr_,Gdr_, Gmd_,Gdd_ by agg+/sub+, nested if wH: down-forking tree of node Levs
+    # node_T, root_T:
+    node_t : list = z([])  # init G_-> Gm_,Gd_, nested in down-forking tree: node_ fork/ sub+
+    root_t : list = z([[],[]])  # up-reciprocal, nested in up-forking tree: root_ fork / agg+
     fback_t: list = z([[],[]])  # maps to node_tt: feedback [[aggH,valt,rdnt]] per node fork
     L : int = 0 # len base node_; from internal links:
     S : float = 0.0  # sparsity: average distance to link centers
@@ -131,7 +131,8 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
 class CderG(ClusterStructure):  # params of single-fork node_ cluster per pplayers
 
     subH : list = z([])  # [[derH_t, valt, rdnt]]: top aggLev derived in comp_G
-    valt : list = z([0,0,0])  # m,d,max
+    maxt : list = z([0,0])  # maxm, maxd
+    valt : list = z([0,0])  # m,d
     rdnt : list = z([1,1])
     _G : object = None  # comparand
     G: object = None  # comparand
