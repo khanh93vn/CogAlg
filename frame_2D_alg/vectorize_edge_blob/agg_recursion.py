@@ -4,7 +4,7 @@ from itertools import zip_longest
 from .classes import Cgraph, CderG, CPP
 from .filters import ave_L, ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd
 from .slice_edge import slice_edge, comp_angle
-from .comp_slice import comp_P_, comp_ptuple, sum_ptuple, sum_derH, comp_derH
+from .comp_slice import comp_P_, comp_ptuple, sum_ptuple, sum_derH, comp_derH, compute_match
 '''
 Blob edges may be represented by higher-composition patterns, etc., if top param-layer match,
 in combination with spliced lower-composition patterns, etc, if only lower param-layers match.
@@ -400,9 +400,9 @@ def comp_ext(_ext, ext, Valt, Rdnt, Maxt):  # comp ds:
         mA, dA = comp_angle(_A,A); adA=dA; max_mA = max_dA = .5  # = ave_dangle
     else:
         dA= _A-A; adA = abs(dA);  max_dA = abs(_A)+abs(A); max_mA = max(A,_A)
-        mA = min(abs(_A),abs(A)); if _A<0!=L<0: mA=-mA; mA -= ave_dangle
-    mL = min(abs(_L),abs(L));     if _L<0!=L<0: mL=-mL; mL -= ave_L
-    mS = min(abs(_S),abs(S));     if _S<0!=S<0: mS=-mS; mS -= ave_L
+        mA = compute_match(_A, A) - ave_dangle
+    mL = compute_match(_L, L) - ave_L
+    mS = compute_match(_S, S) - ave_L
 
     d = abs(dL) + abs(dS) + adA
     m = mL + mS + mA

@@ -251,7 +251,7 @@ def comp_dtuple(_ptuple, ptuple, rn, fagg=0):
 
     for _par, par, ave in zip(_ptuple, ptuple, aves):  # compare ds only
         npar = par*rn
-        match = min(abs(_par),abs(npar)); if _par<0 != npar<0: match = -match  # match = neg min if opposite-sign comparands
+        match = compute_match(_par, npar)
         mtuple += [match - ave]
         dtuple += [_par - npar]
         if fagg:
@@ -320,3 +320,7 @@ def sum_derH_gen(T, t, base_rdn, fneg=0):  # derH is a list of layers or sub-lay
                     DerH += [deepcopy(layer)]
     else:
         DerH[:] = deepcopy(derH)
+
+def compute_match(_par, par):
+    match = min(abs(_par),abs(par))
+    return -match if (_par<0) != (par<0) else match    # match = neg min if opposite-sign comparands
