@@ -246,7 +246,7 @@ def visualize(frame, layer='r'):
     print("hit 'd' to toggle show gradient")
     print("hit 'z' to toggle show slices")
     print("hit 'x' to toggle show links")
-    print("hit 'f' to toggle PP_fd")
+    print("hit 'c' to toggle PP_fd")
     # print("blob:")
     # print(f"┌{'─'*10}┬{'─'*6}┬{'─'*10}┬{'─'*10}┬{'─'*10}┬{'─'*10}"
     #       f"┬{'─'*10}┬{'─'*10}┬{'─'*16}┬{'─'*10}┐")
