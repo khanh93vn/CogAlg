@@ -27,7 +27,7 @@ POSE2COLOR = {
     2:BLUE,
 }
 
-MASKING_VAL = 128  # Pixel at this value can be over-written
+BACKGROUND_COLOR = 128  # Pixel at this value can be over-written
 
 
 def visualize(frame, layer='r'):
@@ -43,6 +43,23 @@ def visualize(frame, layer='r'):
         The layer to visualize. Must be 'r' or 'd'. Defaults to 'r'.
     """
     print("Preparing for visualization ...", end="")
+
+    # TODO: re-write visualization code. requirements:
+    # - Separate display functions for blobs, edges, PPs, Ps
+    # - Simple transition : frame ─→ blobs ─→ (r)blobs ─→ rblobs ...
+    #                                  │          └─────→  edge  ...
+    #                                  └────→   edge   ─→   PP
+    # - Hover high-lights:
+    #   + Blobs : by masks
+    #   + edge  : by blob's mask
+    #   + PP    : by combined P's cells
+    # - Toggles:
+    #   + Blobs   : show gradients
+    #   + edge/PP : show slices/links
+
+    print("Unimplemented")
+
+    return
 
     _, _, height, width = frame.box
 
@@ -163,7 +180,7 @@ def visualize(frame, layer='r'):
 
         state.blob_cls = blob_[0].__class__
         state.img_slice = blob_[0].root_ibox.slice()
-        state.background[:] = MASKING_VAL
+        state.background[:] = BACKGROUND_COLOR
         state.idmap[:] = -1
         # Prepare blob ID map and background
         local_idmap = state.idmap[state.img_slice]
@@ -271,7 +288,7 @@ def blank_image(shape, fill_val=None):
         height = yn - y0
         width = xn - x0
     if fill_val is None:
-        fill_val = MASKING_VAL
+        fill_val = BACKGROUND_COLOR
     return np.full((height, width, 3), fill_val, 'uint8')
 
 def get_P_(edge, fd):
