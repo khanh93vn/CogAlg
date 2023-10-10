@@ -10,14 +10,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from types import SimpleNamespace
-from collections import namedtuple
 from .visualizers import (
-    FrameVisualizer,
+    FrameVisualizer, layerT,
     WHITE, BLACK, RED, GREEN, BLUE,
     POSE2COLOR, BACKGROUND_COLOR,
 )
-
-layerT = namedtuple("layerT", "root,type")
 
 ROOT_TYPES = ["frame", "rblob", "edge", "PP"]
 
@@ -57,7 +54,7 @@ def visualize(frame):
     state = SimpleNamespace(
         visualizer=None,
         # history of roots
-        layers_stack=[layerT(frame, 'frame')],
+        layers_stack=None,
         # variables
         img=img,
         img_slice = None,
@@ -78,7 +75,8 @@ def visualize(frame):
         show_slices=False,
         show_links=False,
     )
-    state.visualizer = FrameVisualizer(state)   # start with frame of blobs
+    state.layers_stack = [layerT(frame, 'frame', FrameVisualizer(state))]    # start with frame of blobs
+    state.visualizer = state.layers_stack[0].visualizer
     state.visualizer.reset()    # first-time reset
 
     # declare callback sub-routines
@@ -146,15 +144,16 @@ def visualize(frame):
     def on_click(event):
         """Transition between layers."""
         if event.key == "control":
-            state.visualizer.go_deeper(fd=False)
+            ret = state.visualizer.go_deeper(fd=False)
         elif event.key == "shift":
-            state.visualizer.go_deeper(fd=True)
+            ret = state.visualizer.go_deeper(fd=True)
         else:
             # go back 1 layer
-            # if (len(state.layers_stack) > 1):
-            #     state.layers_stack.pop()
-            #     reset_state()
-            pass
+            ret = state.visualizer.go_back()
+        if ret is None:
+            return
+        state.visualizer = ret
+        state.visualizer.reset()
 
     def on_key_press(event):
         if event.key == 'd':
@@ -186,6 +185,7 @@ def blank_image(shape, fill_val=None):
     if fill_val is None:
         fill_val = BACKGROUND_COLOR
     return np.full((height, width, 3), fill_val, 'uint8')
+
 
 def get_P_(edge, fd):
     P_ = []

@@ -1,4 +1,5 @@
 import os
+from collections import namedtuple
 
 WHITE = 255, 255, 255
 BLACK = 0, 0, 0
@@ -12,6 +13,8 @@ POSE2COLOR = {
 }
 
 BACKGROUND_COLOR = 128  # Pixel at this value can be over-written
+
+layerT = namedtuple("layerT", "root,type,visualizer")
 
 class Visualizer:
     def __init__(self, state):
@@ -50,12 +53,18 @@ class Visualizer:
     def go_deeper(self, fd):
         raise NotImplementedError
 
+    def go_back(self):
+        self.state.layers_stack.pop()
+        return self.state.layers_stack[-1].visualizer
+
     def get_highlighted_element(self):
         return self.state.element_cls.get_instance(self.state.element_id)
+
+
 class FrameVisualizer(Visualizer):
     def reset(self):
         super().reset()
-        blob_ = self.state.layers_stack[-1][0].rlayers[0]
+        blob_ = self.state.layers_stack[-1].root.rlayers[0]
         self.state.element_cls = blob_[0].__class__
         self.state.img_slice = blob_[0].root_ibox.slice()
         self.state.background[:] = BACKGROUND_COLOR
@@ -140,5 +149,17 @@ class FrameVisualizer(Visualizer):
         print(f"└{'─' * 10}┴{'─' * 6}┴{'─' * 10}┴{'─' * 10}┴{'─' * 10}┴{'─' * 10}"
               f"┴{'─' * 10}┴{'─' * 10}┴{'─' * 16}┘")
 
-    # def go_deeper(self):
-    #     pass
+    def go_deeper(self, fd):
+        if self.state.element_id < 0:
+            return
+
+        if fd:
+            # edge visualizer
+            return
+        else:
+            # frame visualizer (r+blob)
+            root_blob = self.get_highlighted_element()
+            if not root_blob.rlayers or not root_blob.rlayers[0]:
+                return
+            self.state.layers_stack.append(layerT(root_blob, "rblob", self))   # reuse this visualizer
+            return self
