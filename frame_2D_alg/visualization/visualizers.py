@@ -27,7 +27,7 @@ class Visualizer:
         if self.state.P_links is not None:
             for line in self.state.P_links:
                 line.remove()
-            state.P_links = None
+            self.state.P_links = None
         if self.state.blob_slices is not None:
             for line, L_text in self.state.blob_slices:
                 line.remove()
@@ -39,15 +39,13 @@ class Visualizer:
         self.state.fig.canvas.draw_idle()
 
     def update_element_id(self):
-        raise NotImplementedError
+        self.update_img()
+        self.update_info()
 
     def update_info(self):
         # clear screen
-        # os.system('cls' if os.name == 'nt' else 'clear')
-        os.system("clear")
+        os.system('cls' if os.name == 'nt' else 'clear')
         print("hit 'q' to exit")
-        # print("hit 'z' to toggle show slices")
-        # print("hit 'x' to toggle show links")
 
 
     def go_deeper(self, fd):
@@ -61,7 +59,7 @@ class Visualizer:
         return self.state.element_cls.get_instance(self.state.element_id)
 
 
-class FrameVisualizer(Visualizer):
+class BlobVisualizer(Visualizer):
     def reset(self):
         super().reset()
         blob_ = self.state.layers_stack[-1].root.rlayers[0]
@@ -86,8 +84,7 @@ class FrameVisualizer(Visualizer):
             self.state.quiver = None
 
         blob = self.get_highlighted_element()
-        if blob is None or not self.state.show_gradient:
-            return
+        if blob is None or not self.state.show_gradient: return
 
         # Reset gradient
         self.state.gradient[:] = 1e-3
@@ -100,9 +97,9 @@ class FrameVisualizer(Visualizer):
         self.state.gradient_mask[box_slice] = blob.mask__
 
         # Apply quiver
-        self.state.quiver = ax.quiver(
+        self.state.quiver = self.state.ax.quiver(
             *self.state.gradient_mask.nonzero()[::-1],
-            *self.state.gradient[:, state.gradient_mask])
+            *self.state.gradient[:, self.state.gradient_mask])
 
     def update_img(self):
         self.update_gradient()
@@ -122,13 +119,14 @@ class FrameVisualizer(Visualizer):
         for adj_blob, pose in zip(*blob.adj_blobs):
             self.state.img[self.state.img_slice][adj_blob.box.slice()][adj_blob.mask__] = POSE2COLOR[pose]
         # Finally, update the image
-        self.update_img()
-        self.update_info()
+        super().update_element_id()
 
     def update_info(self):
         super().update_info()
 
         print("hit 'd' to toggle show gradient")
+        print("ctrl + click to show deeper rblobs")
+        print("shift + click to show edge PPs")
 
         blob = self.get_highlighted_element()
         if blob is None:
@@ -150,16 +148,123 @@ class FrameVisualizer(Visualizer):
               f"┴{'─' * 10}┴{'─' * 10}┴{'─' * 16}┘")
 
     def go_deeper(self, fd):
-        if self.state.element_id < 0:
-            return
+        root_blob = self.get_highlighted_element()
+        if root_blob is None: return
 
         if fd:
             # edge visualizer
-            return
+            if not root_blob.dlayers or not root_blob.dlayers[0]: return
+            edge = root_blob.dlayers[0][0]
+            if not edge.node_t: return
+            PP_ = [
+                # TODO : add dummy PP from edge
+                # TODO : add box and mask__ from blob box (1st layer dummy PP covers the whole edge)
+            ]
+            visualizer = SliceVisualizer(self.state, PP_)
+            self.state.layers_stack.append(layerT(edge, "edge", visualizer))
         else:
             # frame visualizer (r+blob)
-            root_blob = self.get_highlighted_element()
-            if not root_blob.rlayers or not root_blob.rlayers[0]:
-                return
-            self.state.layers_stack.append(layerT(root_blob, "rblob", self))   # reuse this visualizer
-            return self
+            if not root_blob.rlayers or not root_blob.rlayers[0]: return
+            visualizer = self
+            self.state.layers_stack.append(layerT(root_blob, "rblob", visualizer))   # reuse this visualizer
+
+        return visualizer
+
+
+class SliceVisualizer(Visualizer):
+    def __init__(self, state, PP_):
+        super().__init__(state)
+        self.PP_ = PP_
+
+    def reset(self):
+        super().reset()
+
+        # TODO : reset image and create PP id map
+
+    # def update_blob_slices():
+    #     if state.blob_slices is not None:
+    #         for line, L_text in state.blob_slices:
+    #             line.remove()
+    #             L_text.remove()
+    #         state.blob_slices = None
+    #
+    #     blob = state.blob_cls.get_instance(state.blob_id)
+    #     if blob is None or not blob.dlayers or not blob.dlayers[0] or not state.show_slices:
+    #         return
+    #     edge = blob.dlayers[0][0]
+    #     if not edge.node_t: return
+    #     print(f"PP_fd = {state.PP_fd}", end="")
+    #     y0, x0, *_ = blob.ibox
+    #
+    #     state.blob_slices = []
+    #     for P in get_P_(edge, state.PP_fd):        # show last layer
+    #         y, x = P.yx
+    #         y_, x_, *_ = np.array([*zip(*P.dert_)])
+    #         L = len(x_)
+    #         if L > 1:
+    #             blob_slices_plot = ax.plot(x_+x0, y_+y0, 'bo-', linewidth=1, markersize=2)[0]
+    #         else:
+    #             s, c = P.axis
+    #             x_ = np.array([x-c, x, x+c])
+    #             y_ = np.array([y-s, y, y+s])
+    #             blob_slices_plot = ax.plot(x_ + x0, y_ + y0, 'b-', linewidth=1, markersize=2)[0]
+    #         state.blob_slices += [(
+    #             blob_slices_plot,
+    #             ax.text(x+x0, y+y0, str(L), color = 'b', fontsize = 12),
+    #         )]
+    #
+    # def update_P_links():
+    #     if state.P_links is not None:
+    #         for line in state.P_links:
+    #             line.remove()
+    #         state.P_links = None
+    #
+    #     blob = state.blob_cls.get_instance(state.blob_id)
+    #     if blob is None or not blob.dlayers or not blob.dlayers[0] or not state.show_links:
+    #         return
+    #     edge = blob.dlayers[0][0]
+    #     if not edge.node_t: return
+    #     y0, x0, *_ = blob.ibox
+    #     state.P_links = []
+    #     for P in get_P_(edge, state.PP_fd):
+    #         for derP in P.link_H[0]:
+    #             (_y, _x), (y, x) = (derP._P.yx, derP.P.yx)
+    #             state.P_links += ax.plot([_x+x0,x+x0], [_y+y0,y+y0], 'ko-', linewidth=2, markersize=4)
+
+    def update_img(self):
+        # TODO : update slices and links from all PP deeper layers
+        super().update_img()
+
+    def update_element_id(self):
+        # TODO : high-light PPs
+        super().update_element_id()
+
+    def update_info(self):
+        print("hit 'z' to toggle show slices")
+        print("hit 'x' to toggle show links")
+        print("ctrl + click to show deeper rPP")
+        print("shift + click to show deeper dPP")
+
+    def go_deeper(self, fd):
+        PP = self.get_highlighted_element()
+        if PP is None: return
+        if not PP.node_t: return
+        if not isinstance(PP.node_t, list): return  # stop if no deeper layer
+        subPP_ = PP.node_t[fd]
+        if not subPP_: return
+        visualizer = SliceVisualizer(self.state, subPP_)
+        self.state.layers_stack.append(layerT(PP, "PP", visualizer))
+        return visualizer
+
+def get_P_(PP):
+    P_ = []
+    subPP_ = [PP]
+    while subPP_:
+        subPP = subPP_.pop()
+        if not subPP.node_t: continue
+        if isinstance(subPP.node_t[0], list):
+            subPP_ += subPP.node_t[0] + subPP.node_t[1]
+        else:  # is P_
+            P_ += subPP.node_t
+
+    return P_
