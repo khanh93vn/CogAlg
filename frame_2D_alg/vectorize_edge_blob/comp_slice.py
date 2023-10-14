@@ -133,13 +133,13 @@ def sum2PP(root, P_, base_rdn, fd):  # sum links in Ps and Ps in PP
 
     PP = CPP(fd=fd, root=root, node_t=P_)   # initial PP.box = (inf, inf, -inf, -inf)
     # accum:
-    celly, cellx = [], []
+    celly_, cellx_ = [], []
     for P in P_:
         P.root_t[fd] = PP
         sum_ptuple(PP.ptuple, P.ptuple)   # accum ptuple
         for y, x in P.cells:
             PP.box = PP.box.accumulate(y, x)
-            celly += [y]; cellx += [x]
+            celly_ += [y]; cellx_ += [x]
 
         for derP in P.link_H[-1]:
             if derP.valt[fd] > P_aves[fd] * derP.rdnt[fd]:
@@ -151,8 +151,8 @@ def sum2PP(root, P_, base_rdn, fd):  # sum links in Ps and Ps in PP
         sum_derH([PP.derH,PP.valt,PP.rdnt], [P.derH,P.valt,P.rdnt], base_rdn)
     y0, x0, yn, xn = PP.box
     PP.mask__ = np.zeros((yn-y0, xn-x0), bool)
-    celly = np.array(celly); cellx = np.array(cellx)
-    PP.mask__[(celly - y0, cellx - x0)] = True
+    celly_ = np.array(celly_); cellx_ = np.array(cellx_)
+    PP.mask__[(celly_-y0, cellx_-x0)] = True
     return PP
 
 '''
