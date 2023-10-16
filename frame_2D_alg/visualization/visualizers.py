@@ -237,7 +237,8 @@ class SliceVisualizer(Visualizer):
         self.state.P_links = []
         for P in self.P__[PP.id]:
             for derP in P.link_H[-1]:
-                (_y, _x), (y, x) = (derP._P.yx, derP.P.yx)
+                _P = derP if isinstance(derP, type(P)) else derP._P
+                (_y, _x), (y, x) = _P.yx, P.yx
                 self.state.P_links += self.state.ax.plot([_x+x0,x+x0], [_y+y0,y+y0], 'ko-', linewidth=2, markersize=4)
 
     def update_img(self):
