@@ -72,7 +72,7 @@ def comp_rng(iP_, rng):  # form new Ps and links, switch to rng+n to skip cluste
                         if distance > rng:  # distance=S, mostly lateral, /= L for eval?
                             comp_P(link_,__P,P, rn=len(__P.dert_)/len(P.dert_), fd=0, derP=distance)
 
-        P.link_H += [link_]  # add new link layer, in rng+ only
+        P.link_H += [link_]  # add new link layer, in rng+ only (may got replaced shortly by comp_der on this same P)
         P_ += [P]
 
     return P_
@@ -90,7 +90,8 @@ def comp_der(P_):  # keep same Ps and links, increment link derH, then P derH in
                 rn = (len(_P.dert_) / len(P.dert_)) * (len(_P.link_H[-1]) / len(P.link_H[-1]))
                 comp_P(link_,_P,P, rn, fd=1, derP=derP)
 
-        P.link_H[-1] = link_  # replace with extended-derH derPs
+        P.link_H[-1] = link_  # replace with extended-derH derPs : P.link_H[-1] may be the result from same-layer-same-P rng fork, which got discarded (replaced) here by link_
+
     return P_
 
 
