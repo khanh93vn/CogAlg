@@ -131,7 +131,7 @@ def form_PP_t(root, P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps v
 
 def sum2PP(root, P_, base_rdn, fd):  # sum links in Ps and Ps in PP
 
-    PP = CPP(fd=fd, root=root, node_t=P_)   # initial PP.box = (inf, inf, -inf, -inf)
+    PP = CPP(fd=fd, root=root, node_t=P_, rng=root.rng+(1-fd))   # initial PP.box = (inf, inf, -inf, -inf)
     # accum:
     celly_, cellx_ = [], []
     for P in P_:
