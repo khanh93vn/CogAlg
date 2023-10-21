@@ -37,8 +37,8 @@ Weak value vars are combined into higher var, so derivation fork can be selected
 
 def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition levels of cross-comp,clustering:
 
-    edge = slice_edge(blob, verbose)  # lateral kernel cross-comp -> P clustering
-    comp_P_(edge)  # vertical, lateral-overlap P cross-comp -> PP clustering
+    edge, P_t_ = slice_edge(blob, verbose)  # lateral kernel cross-comp -> P clustering
+    comp_P_(edge, P_t_)  # vertical, lateral-overlap P cross-comp -> PP clustering
     # PP cross-comp -> discontinuous graph clustering:
     for fd in 0,1:
         node_ = edge.node_t[fd]  # always PP_t
