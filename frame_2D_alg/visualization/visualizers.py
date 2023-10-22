@@ -321,7 +321,7 @@ def get_P_(PP):
         subPP = subPP_.pop()
         if not subPP.node_: continue
         if isinstance(subPP.node_[0], list):
-            subPP_ += subPP.node_[0] + subPP.node_[1]
+            subPP_ += subPP.node_[0]
         else:  # is P_
             P_ += subPP.node_
 
