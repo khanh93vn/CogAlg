@@ -26,14 +26,13 @@ Connectivity in P_ is traced through root_s of derts adjacent to P.dert_, possib
 len prior root_ sorted by G is rdn of each root, to evaluate it for inclusion in PP, or starting new P by ave*rdn.
 '''
 
-def comp_P_(edge, Pt_):  # cross-comp P_ in edge: high-gradient blob, sliced in Ps in the direction of G
+def comp_P_(edge, adj_pair_):  # cross-comp P_ in edge: high-gradient blob, sliced in Ps in the direction of G
 
     P_ = edge.node_  # init as P_
     edge.node_ = [[],[]]  # fill with sub_PPm_, sub_PPd_ in form_PP_t, ~ sub+ but rng+ only:
 
-    edge.Pt_ = []    # ensure that edge.link_ is empty
-    for _P, P in Pt_:  # scan, comp contiguously uplinked Ps, rn: relative weight of comparand
-        comp_P(edge.Pt_, _P, P, rn=len(_P.dert_)/len(P.dert_), fd=0)
+    for _P, P in adj_pair_:  # scan, comp contiguously uplinked Ps, rn: relative weight of comparand
+        comp_P(edge.derP_, _P, P, rn=len(_P.dert_)/len(P.dert_), fd=0)
 
     form_PP_t(edge, P_, base_rdn=2)  # replace edge.node_t with PP_t, may be nested by sub+
 
@@ -100,7 +99,7 @@ def form_PP_t(root, P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps v
     for fd in 0,1:
         link_map = defaultdict(list)
         derP_ = []
-        for derP in root.link_:
+        for derP in root.derP_:
             if derP.valt[fd] > P_aves[fd] * derP.rdnt[fd]:
                 link_map[derP.P] += [derP._P]  # keys:Ps, vals: linked _P_s, up and down
                 link_map[derP._P] += [derP.P]
@@ -145,7 +144,7 @@ def sum2PP(root, P_, derP_, base_rdn, fd):  # sum links in Ps and Ps in PP
         sum_derH([P.derH,P.valt,P.rdnt], [derH,valt,rdnt], base_rdn, fneg=0)  # uplink
         _P = derP._P  # bilateral accum downlink, reverse d signs:
         sum_derH([_P.derH,_P.valt,_P.rdnt], [derH,valt,rdnt], base_rdn, fneg=1)
-        PP.link_ += [derP]
+        PP.derP_ += [derP]
     # accum P:
     celly_, cellx_ = [], []
     for P in P_:
@@ -174,7 +173,7 @@ def sub_recursion(root, PP, fd):  # called in form_PP_, evaluate PP for rng+ and
     rng = PP.rng+(1-fd)
     if PP.valt[fd] * (len(P_)-1)*rng <= PP_aves[fd] * PP.rdnt[fd]: return    # val*len*rng: sum ave matches, - fixed PP costs?
     # der+|rng+:
-    PP.link_ = comp_der(PP.link_) if fd else comp_rng(PP.link_, rng)  # same else new links
+    PP.derP_ = comp_der(PP.derP_) if fd else comp_rng(PP.derP_, rng)  # same else new links
     PP.rdnt[fd] += (PP.valt[fd] - PP_aves[fd] * PP.rdnt[fd]) > (PP.valt[1-fd] - PP_aves[1-fd] * PP.rdnt[1-fd])
     for P in P_: P.root_t = [None,None]  # fill with sub_PPm_,sub_PPd_ between nodes and PP:
     form_PP_t(PP, P_, base_rdn=PP.rdnt[fd])
