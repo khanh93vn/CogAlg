@@ -41,7 +41,7 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
     comp_P_(edge, adj_Pt_)  # vertical, lateral-overlap P cross-comp -> PP clustering
     # PP cross-comp -> discontinuous graph clustering:
     for fd in 0,1:
-        node_ = edge.node_t[fd]  # always PP_t
+        node_ = edge.node_[fd]  # always PP_t
         if edge.valt[fd] * (len(node_)-1)*(edge.rng+1) > G_aves[fd] * edge.rdnt[fd]:
             G_= []
             for PP in node_:  # convert CPPs to Cgraphs:
@@ -51,7 +51,7 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
                                L=PP.ptuple[-1], box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
             node_ = G_
             edge.valHt[0][0] = edge.valt[0]; edge.rdnHt[0][0] = edge.rdnt[0]  # copy
-            agg_recursion(None, edge, node_, fd=0)  # edge.node_t = graph_t, micro and macro recursive
+            agg_recursion(None, edge, node_, fd=0)  # edge.node_ = graph_t, micro and macro recursive
 
 
 def agg_recursion(rroot, root, G_, fd):  # compositional agg+|sub+ recursion in root graph, clustering G_
@@ -103,7 +103,7 @@ def sum_link_tree_(node_,fd):  # sum surrounding link values to define connected
     ave = G_aves[fd]
     Gt_ = []
     for i, G in enumerate(node_):
-        G.it[fd] = i  # used here and segment_node_
+        G.i = i  # used here and segment_node_
         Gt_ += [[G, G.valHt[fd][-1], G.rdnHt[fd][-1]]]  # init surround val,rdn
     # iterative eval rng expansion by summing decayed surround node Vals, while significant Val update:
     while True:
@@ -114,7 +114,7 @@ def sum_link_tree_(node_,fd):  # sum surrounding link values to define connected
                 if link.valt[fd] < ave * link.rdnt[fd]: continue  # skip negative links
                 G = link.G if link._G is _G else link._G
                 if G not in node_: continue
-                Gt = Gt_[G.it[fd]]
+                Gt = Gt_[G.i]
                 Gval = Gt[1]; Grdn = Gt[2]
                 try: decay = link.valt[fd]/link.maxt[fd]  # val rng incr per loop, per node?
                 except ZeroDivisionError: decay = 1
@@ -151,7 +151,7 @@ def segment_node_(root, Gt_, fd):  # fold in sum_link_tree_, as in agg_parP_
                 for link in _G.link_H[-1]:
                     G = link.G if link._G is _G else link._G
                     if G in cG_ or G not in [Gt[0] for Gt in Gt_]: continue   # circular link
-                    Gt = Gt_[G.it[fd]]; Val = Gt[1]; Rdn = Gt[2]
+                    Gt = Gt_[G.i]; Val = Gt[1]; Rdn = Gt[2]
                     if Val > ave * Rdn:
                         try: decay = G.valHt[fd][-1] / G.maxHt[fd][-1]  # current link layer surround decay
                         except ZeroDivisionError: decay = 1
@@ -334,7 +334,12 @@ def comp_derH(_derH, derH, rn):  # derH is a list of der layers or sub-layers, e
     for _lay, lay in zip_longest(_derH, derH, fillvalue=[]):  # compare common lower der layers | sublayers in derHs
         if _lay and lay:  # also if lower-layers match: Mval > ave * Mrdn?
             # compare dtuples only, mtuples are for evaluation:
-            mtuple, dtuple, Mtuple, Dtuple = comp_dtuple(_lay[0][1], lay[0][1], rn, fagg=1)
+            try:
+                mtuple, dtuple, Mtuple, Dtuple = comp_dtuple(_lay[1], lay[1], rn, fagg=1)
+            except TypeError:
+                print(_lay)
+                print(lay)
+                while 1: pass
             # sum params:
             mval = sum(mtuple); dval = sum(abs(d) for d in dtuple)
             mrdn = dval > mval; drdn = dval < mval
