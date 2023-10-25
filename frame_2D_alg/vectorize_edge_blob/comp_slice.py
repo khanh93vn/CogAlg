@@ -175,14 +175,14 @@ def feedback(root, fd):  # in form_PP_, append new der layers to root PP, single
         sum_derH(Fback, root.fback_t[fd].pop(0), base_rdn=0)
     sum_derH([root.derH, root.valt, root.rdnt], Fback, base_rdn=0)  # both fder forks sum into a same root
 
-    if isinstance(root, CPP):  # root is not CEdge, which has no roots
-        rroot = root.root  # single PP.root, can't be P
-        fd = root.fd  # current node_ fd
-        fback_ = rroot.fback_t[fd]
-        fback_ += [Fback]
-        if fback_ and (len(fback_) == len(rroot.node_)):  # still flat, all nodes terminated and fed back
-            feedback(rroot, fd)  # sum2PP adds derH per rng, feedback adds deeper sub+ layers
-
+    if not hasattr(root, 'root'): return  # has no roots
+    rroot = root.root  # single PP.root, can't be P
+    if not hasattr(rroot, 'fback_t'): return    # not CEdge or CPP
+    fd = root.fd  # current node_ fd
+    fback_ = rroot.fback_t[fd]
+    fback_ += [Fback]
+    if len(fback_) == len(rroot.node_):  # still flat, all nodes terminated and fed back
+        feedback(rroot, fd)  # sum2PP adds derH per rng, feedback adds deeper sub+ layers
 
 def sum_derH(T, t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
 
@@ -267,7 +267,6 @@ def comp_ptuple(_ptuple, ptuple, rn, fagg=0):  # 0der params
     ret = [mtuple, dtuple]
     if fagg: ret += [Mtuple, Dtuple]
     return ret
-
 
 def comp_ptuple_gen(_ptuple, ptuple, rn):  # 0der
 
