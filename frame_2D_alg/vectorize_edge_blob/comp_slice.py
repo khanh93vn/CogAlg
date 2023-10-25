@@ -60,7 +60,7 @@ def comp_rng(ilink_, rng):  # form new Ps and links, switch to rng+n to skip clu
         if _derP.P is not derP._P: continue  # same as derP._P is _derP._P or derP.P is _derP.P
         __P = _derP._P  # next layer of Ps
         distance = np.hypot(__P.yx[1]-P.yx[1],__P.yx[0]-P.yx[0])   # distance between midpoints
-        if distance > rng:  # distance=S, mostly lateral, /= L for eval?
+        if distance < rng:  # distance=S, mostly lateral, /= L for eval?
             comp_P(link_, __P, P, rn=len(__P.dert_)/len(P.dert_), fd=0, derP=distance)
 
     return link_
