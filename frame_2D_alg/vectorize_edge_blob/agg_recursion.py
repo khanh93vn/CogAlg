@@ -5,7 +5,7 @@ from collections import deque, defaultdict
 from .classes import Cgraph, CderG, CPP
 from .filters import ave_L, ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd
 from .slice_edge import slice_edge, comp_angle
-from .comp_slice import comp_P_, comp_ptuple, sum_ptuple, sum_dertuple, comp_dtuple, match_func
+from .comp_slice import comp_P_, comp_derH, sum_derH, comp_ptuple, sum_ptuple, sum_dertuple, comp_dtuple, match_func
 
 
 '''
@@ -98,36 +98,7 @@ def form_graph_t(root, G_):  # form mgraphs and dgraphs of same-root nodes
     return graph_t  # root.node_t'node_ -> node_t: incr nested with each agg+?
 
 
-def sum_link_tree_(node_,fd):  # sum surrounding link values to define connected nodes, with indirectly incr rng, to parallelize:
-                               # link lower nodes via incr n of higher nodes, added till fully connected, n layers = med rng?
-    ave = G_aves[fd]
-    Gt_ = []
-    for i, G in enumerate(node_):
-        G.i = i  # used here and segment_node_
-        Gt_ += [[G, G.valHt[fd][-1], G.rdnHt[fd][-1]]]  # init surround val,rdn
-    # iterative eval rng expansion by summing decayed surround node Vals, while significant Val update:
-    while True:
-        DVal = 0
-        for i, (_G,_Val,_Rdn) in enumerate(Gt_):
-            Val, Rdn = 0, 0  # updated surround
-            for link in _G.link_H[-1]:
-                if link.valt[fd] < ave * link.rdnt[fd]: continue  # skip negative links
-                G = link.G if link._G is _G else link._G
-                if G not in node_: continue
-                Gt = Gt_[G.i]
-                Gval = Gt[1]; Grdn = Gt[2]
-                try: decay = link.valt[fd]/link.maxt[fd]  # val rng incr per loop, per node?
-                except ZeroDivisionError: decay = 1
-                Val += Gval * decay; Rdn += Grdn * decay  # link decay coef: m|d / max, base self/same
-                # prune links by rng Val-ave*Rdn?
-            Gt_[i][1] = Val; Gt_[i][2] = Rdn  # unilateral update, computed separately for _G
-            DVal += abs(_Val-Val)  # _Val update / surround extension
-
-        if DVal < ave:  # also if low Val?
-            break
-    return Gt_
-
-def segment_node_(root, Gt_, fd):  # fold in sum_link_tree_, as in agg_parP_
+def segment_node_(root, Gt_, fd):  # fold sum_link_tree_, as in agg_parP_
 
     link_map = defaultdict(list)   # make default for root.node_t?
     ave = G_aves[fd]
@@ -151,7 +122,7 @@ def segment_node_(root, Gt_, fd):  # fold in sum_link_tree_, as in agg_parP_
                 for link in _G.link_H[-1]:
                     G = link.G if link._G is _G else link._G
                     if G in cG_ or G not in [Gt[0] for Gt in Gt_]: continue   # circular link
-                    Gt = Gt_[G.i]; Val = Gt[1]; Rdn = Gt[2]
+                    Gt = Gt_[G.it[fd]]; Val = Gt[1]; Rdn = Gt[2]
                     if Val > ave * Rdn:
                         try: decay = G.valHt[fd][-1] / G.maxHt[fd][-1]  # current link layer surround decay
                         except ZeroDivisionError: decay = 1
@@ -315,7 +286,7 @@ def comp_subH(_subH, subH, rn):
         if _lay and lay:  # also if lower-layers match: Mval > ave * Mrdn?
             if _lay[0] and isinstance(_lay[0][0],list):
                 # _lay[0] is derHv
-                dderH, valt, rdnt, maxt = comp_derH(_lay[0], lay[0], rn)
+                dderH, valt, rdnt, maxt = comp_derHv(_lay[0], lay[0], rn)
                 DerH += [[dderH, valt, rdnt, maxt]]  # flat derH
                 maxM += maxt[0]; maxD += maxt[1]
                 mval,dval = valt; Mval += mval; Dval += dval
@@ -326,7 +297,7 @@ def comp_subH(_subH, subH, rn):
     return DerH, [Mval,Dval],[Mrdn,Drdn],[maxM,maxD]  # new layer,= 1/2 combined derH
 
 
-def comp_derH(_derH, derH, rn):  # derH is a list of der layers or sub-layers, each is ptuple_tv
+def comp_derHv(_derH, derH, rn):  # derH is a list of der layers or sub-layers, each is ptuple_tv
 
     dderH = []  # or not-missing comparand: xor?
     Mval,Dval, Mrdn,Drdn, maxM,maxD = 0,0,1,1,0,0
@@ -334,12 +305,7 @@ def comp_derH(_derH, derH, rn):  # derH is a list of der layers or sub-layers, e
     for _lay, lay in zip_longest(_derH, derH, fillvalue=[]):  # compare common lower der layers | sublayers in derHs
         if _lay and lay:  # also if lower-layers match: Mval > ave * Mrdn?
             # compare dtuples only, mtuples are for evaluation:
-            try:
-                mtuple, dtuple, Mtuple, Dtuple = comp_dtuple(_lay[1], lay[1], rn, fagg=1)
-            except TypeError:
-                print(_lay)
-                print(lay)
-                while 1: pass
+            mtuple, dtuple, Mtuple, Dtuple = comp_dtuple(_lay[0][1], lay[0][1], rn, fagg=1)
             # sum params:
             mval = sum(mtuple); dval = sum(abs(d) for d in dtuple)
             mrdn = dval > mval; drdn = dval < mval
@@ -371,14 +337,14 @@ def sum_subH(SubH, subH, base_rdn, fneg=0):
             if layer:
                 if Layer:
                     if layer[0] and isinstance(Layer[0][0], list):  # _lay[0][0] is derH
-                        sum_derH(Layer, layer, base_rdn, fneg)
+                        sum_derHv(Layer, layer, base_rdn, fneg)
                     else: sum_ext(Layer, layer)
                 else:
                     SubH += [deepcopy(layer)]  # _lay[0][0] is mL
     else:
         SubH[:] = deepcopy(subH)
 
-def sum_derH(T, t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
+def sum_derHv(T, t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
 
     DerH, Valt,Rdnt,Maxt = T; derH, valt,rdnt,maxt = t
     for i in 0,1:
@@ -388,7 +354,7 @@ def sum_derH(T, t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers,
           [V+v for V,v in zip(Valt,valt)], [R+r+base_rdn for R,r in zip(Rdnt,rdnt)], [M+m for M,m in zip(Maxt,maxt)],
         ]
         for [Tuplet, Valt,Rdnt,Maxt], [tuplet, valt,rdnt,maxt]
-        in zip_longest(DerH, derH, fillvalue=[([0,0,0,0,0,0],[0,0,0,0,0,0]), (0,0),(0,0),(0,0)])  # ptuplet, valt,rdnt.maxt
+        in zip_longest(DerH, derH, fillvalue=[([0,0,0,0,0,0],[0,0,0,0,0,0]), (0,0),(0,0),(0,0)])  # ptuple_tv
     ]
 
 def comp_ext(_ext, ext, Valt, Rdnt, Maxt):  # comp ds:
