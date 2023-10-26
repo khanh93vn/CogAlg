@@ -56,7 +56,7 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
 
 def agg_recursion(rroot, root, G_, fd):  # compositional agg+|sub+ recursion in root graph, clustering G_
 
-    comp_G_(G_,fd)  # rng|der cross-comp all Gs, nD array? form link_H per G
+    comp_G_(G_,fd)  # rng|der cross-comp all Gs, nD array? form link_ per G
     root.valHt[fd] += [0]; root.rdnHt[fd] += [1]  # sum in form_graph_t feedback
 
     GG_t = form_graph_t(root, G_)  # eval sub+ and feedback per graph
@@ -103,7 +103,7 @@ def segment_node_(root, Gt_, fd):  # fold sum_link_tree_, as in agg_parP_
     link_map = defaultdict(list)   # make default for root.node_t?
     ave = G_aves[fd]
     for G,_,_ in Gt_:
-        for derG in G.link_H[-1]:
+        for derG in G.link_[-1]:
             if derG.valt[fd] > ave * derG.rdnt[fd]:  # or link val += node Val: prune +ve links to low Vals?
                 link_map[G] += [derG._G]  # keys:Gs, vals: linked _G_s
                 link_map[derG._G] += [G]
@@ -119,7 +119,7 @@ def segment_node_(root, Gt_, fd):  # fold sum_link_tree_, as in agg_parP_
             perimeter = link_map[iG]       # recycle perimeter in breadth-first search, outward from iG:
             while perimeter:
                 _G = perimeter.pop(0)
-                for link in _G.link_H[-1]:
+                for link in _G.link_[-1]:
                     G = link.G if link._G is _G else link._G
                     if G in cG_ or G not in [Gt[0] for Gt in Gt_]: continue   # circular link
                     Gt = Gt_[G.it[fd]]; Val = Gt[1]; Rdn = Gt[2]
@@ -149,7 +149,7 @@ def sum2graph(root, cG_, fd):  # sum node and link params into graph, aggH in ag
         sum_Hts(graph.valHt, graph.rdnHt, graph.maxHt, G.valHt, G.rdnHt, G.maxHt)
 
         subH=[]; mval,dval, mrdn,drdn, maxm,maxd = 0,0, 0,0, 0,0
-        for derG in G.link_H[-1]:
+        for derG in G.link_[-1]:
             if derG.valt[fd] > G_aves[fd] * derG.rdnt[fd]:  # sum positive links only:
                 (_mval,_dval),(_mrdn,_drdn),(_maxm,_maxd) = derG.valt, derG.rdnt, derG.maxt
                 if derG not in Link_:
@@ -190,10 +190,10 @@ def comp_G_(G_, fd=0, oG_=None, fin=1):  # cross-comp in G_ if fin, else comp be
 
     Mval,Dval, Mrdn,Drdn = 0,0,0,0
     if not fd:  # cross-comp all Gs in extended rng, add proto-links regardless of prior links
-        for G in G_: G.link_H += [[]]  # add empty link layer, may remove if stays empty
+        for G in G_: G.link_ += [[]]  # add empty link layer, may remove if stays empty
 
         if oG_:
-            for oG in oG_: oG.link_H += [[]]
+            for oG in oG_: oG.link_ += [[]]
         # form new links:
         for i, G in enumerate(G_):
             if fin: _G_ = G_[i+1:]  # xcomp G_
@@ -205,14 +205,14 @@ def comp_G_(G_, fd=0, oG_=None, fin=1):  # cross-comp in G_ if fin, else comp be
                 if distance < ave_distance:  # close enough to compare
                     # * ((sum(_G.valHt[fd]) + sum(G.valHt[fd])) / (2*sum(G_aves)))):  # comp rng *= rel value of comparands?
                     G.compared_ += [_G]; _G.compared_ += [G]
-                    G.link_H[-1] += [CderG( G=G, _G=_G, S=distance, A=[dy,dx])]  # proto-links, in G only
+                    G.link_[-1] += [CderG( G=G, _G=_G, S=distance, A=[dy,dx])]  # proto-links, in G only
     for G in G_:
         link_ = []
-        for link in G.link_H[-1]:  # if fd: follow links, comp old derH, else follow proto-links, form new derH
+        for link in G.link_[-1]:  # if fd: follow links, comp old derH, else follow proto-links, form new derH
             if fd and link.valt[1] < G_aves[1]*link.rdnt[1]: continue  # maybe weak after rdn incr?
             mval,dval, mrdn,drdn = comp_G(link_,link, fd)
             Mval+=mval;Dval+=dval; Mrdn+=mrdn;Drdn+=drdn
-        G.link_H[-1] = link_
+        G.link_[-1] = link_
         '''
         same comp for cis and alt components?
         for _cG, cG in ((_G, G), (_G.alt_Graph, G.alt_Graph)):
@@ -230,7 +230,7 @@ def comp_G(link_, link, fd):
     _G, G = link._G, link.G
     # keep separate P ptuple and PP derH, empty derH in single-P G, + empty aggH in single-PP G:
     # / P:
-    mtuple, dtuple, Mtuple, Dtuple = comp_ptuple(_G.ptuple, G.ptuple, rn=1, fagg=1)
+    mtuple, dtuple, Mtuple, Dtuple = comp_ptuple(_G.ptuple, G.ptuple, rn=1)
     maxm, maxd = sum(Mtuple), sum(Dtuple)
     mval, dval = sum(mtuple), sum(abs(d) for d in dtuple)  # mval is signed, m=-min in comp x sign
     mrdn = dval>mval; drdn = dval<=mval

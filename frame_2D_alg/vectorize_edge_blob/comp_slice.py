@@ -43,10 +43,10 @@ def comp_P(link_,_P, P, rn, fd=1, derP=None):  #  derP if der+, reused as S if r
         mval,dval = valt[:2]; mrdn,drdn = rdnt  # exclude maxv
 
     else:  # rng+: add derH
-        mtuple,dtuple = comp_ptuple(_P.ptuple, P.ptuple, rn)
+        mtuple,dtuple,Mtuple,Dtuple = comp_ptuple(_P.ptuple, P.ptuple, rn)
         mval = sum(mtuple); dval = sum(dtuple)
         mrdn = 1+(dval>mval); drdn = 1+(1-(dval>mval))  # or rdn = Dval/Mval?
-        derP = CderP(derH=[[mtuple,dtuple]], valt=[mval,dval], rdnt=[mrdn,drdn], P=P,_P=_P, S=derP)
+        derP = CderP(derH=[[mtuple,dtuple,Mtuple,Dtuple]], valt=[mval,dval], rdnt=[mrdn,drdn], P=P,_P=_P, S=derP)
 
     if mval > aveP*mrdn or dval > aveP*drdn:
         link_ += [derP]
@@ -181,17 +181,20 @@ def feedback(root, fd):  # in form_PP_, append new der layers to root PP, single
     if len(fback_) == len(rroot.node_):  # still flat, all nodes terminated and fed back
         feedback(rroot, fd)  # sum2PP adds derH per rng, feedback adds deeper sub+ layers
 
-def sum_derH(T, t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
+def sum_derH(t1, t2, base_rdn, fneg=0):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
 
-    DerH, Valt, Rdnt = T; derH, valt, rdnt = t
+    (derH1, valt1, rdnt1), (derH2, valt2, rdnt2) = t1, t2
     for i in 0,1:
-        Valt[i] += valt[i]
-        Rdnt[i] += rdnt[i] + base_rdn
-    DerH[:] = [
+        valt1[i] += valt2[i]
+        rdnt1[i] += rdnt2[i] + base_rdn
+    derH1[:] = [
         # sum der layers, dertuple is mtuple | dtuple, fneg*i: for dtuple only:
-        [ sum_dertuple(Mtuple, mtuple, fneg=0), sum_dertuple(Dtuple, dtuple, fneg=fneg) ]
-        for [mtuple,dtuple],[Mtuple,Dtuple]
-        in zip_longest(DerH, derH, fillvalue=[[[0,0,0,0,0,0],[0,0,0,0,0,0]],[[0,0,0,0,0,0],[0,0,0,0,0,0]]])  # mtuple,dtuple,Mtuple,Dtuple
+        [
+            sum_dertuple(mtuple1, mtuple2, fneg=0), sum_dertuple(dtuple1, dtuple2, fneg=fneg),
+            sum_dertuple(Mtuple1, Mtuple2, fneg=0), sum_dertuple(Dtuple1, Dtuple2, fneg=fneg),
+        ]
+        for [mtuple1,dtuple1,Mtuple1,Dtuple1], [mtuple2,dtuple2,Mtuple2,Dtuple2]
+        in zip_longest(derH1, derH2, fillvalue=[[0,0,0,0,0,0],[0,0,0,0,0,0],[0,0,0,0,0,0],[0,0,0,0,0,0]])  # mtuple,dtuple,Mtuple,Dtuple
     ]
 
 def sum_ptuple(Ptuple, ptuple, fneg=0):
@@ -220,7 +223,7 @@ def comp_derH(_derH, derH, rn):  # derH is a list of der layers or sub-layers, e
         mrdn = dval > mval; drdn = dval < mval
         Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn
 
-        dderH += [[mtuple,dtuple],[Mtuple,Dtuple]]
+        dderH += [[mtuple,dtuple,Mtuple,Dtuple]]
 
     return dderH, [Mval,Dval], [Mrdn,Drdn]  # new derLayer,= 1/2 combined derH
 
