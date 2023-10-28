@@ -111,13 +111,10 @@ def form_PP_t(root, P_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps v
             PP = sum2PP(root, cP_, derP_, base_rdn, fd)
             PP_t[fd] += [PP]  # no if Val > PP_aves[fd] * Rdn:
 
-            # after form_PP_t -> P.root_t
-            sub_recursion(root, PP, fd)  # eval rng+/ PPm or der+/ PPd
-
-    if root.fback_t:
-        for fd in 0,1:
-            if root.fback_t[fd]:
-                feedback(root, fd)  # after sub+ in all nodes, no single node feedback up multiple layers
+    for fd in 0,1:  # after form_PP_t -> P.root_t
+        sub_recursion(root, PP, fd)  # eval rng+/ PPm or der+/ PPd
+        if root.fback_t and root.fback_t[fd]:
+            feedback(root, fd)  # after sub+ in all nodes, no single node feedback up multiple layers
 
     root.node_ = PP_t  # PPs maybe nested in sub+, add_alt_PPs_?
 
@@ -217,14 +214,14 @@ def comp_derH(_derH, derH, rn):  # derH is a list of der layers or sub-layers, e
     dderH = []  # or not-missing comparand: xor?
     Mval, Dval, Mrdn, Drdn = 0,0,1,1
 
-    for _lay, lay in zip_longest(_derH, derH, fillvalue=[]):  # compare common lower der layers | sublayers in derHs
-        if _lay and lay:  # also if lower-layers match: Mval > ave * Mrdn?
-            # compare dtuples only:
-            mtuple, dtuple = comp_dtuple(_lay[1], lay[1], rn, fagg=0)
-            mval = sum(mtuple); dval = sum(abs(d) for d in dtuple)
-            mrdn = dval > mval; drdn = dval < mval
-            Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn
-            dderH += [[mtuple, dtuple]]
+    for _lay, lay in zip(_derH, derH):  # compare common lower der layers | sublayers in derHs
+        # if lower-layers match: Mval > ave * Mrdn?
+        # compare dtuples only:
+        mtuple, dtuple = comp_dtuple(_lay[1], lay[1], rn, fagg=0)
+        mval = sum(mtuple); dval = sum(abs(d) for d in dtuple)
+        mrdn = dval > mval; drdn = dval < mval
+        Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn
+        dderH += [[mtuple, dtuple]]
 
     return dderH, [Mval,Dval], [Mrdn,Drdn]  # new derLayer,= 1/2 combined derH
 

@@ -5,7 +5,7 @@ from collections import deque, defaultdict
 from .classes import Cgraph, CderG, CPP
 from .filters import ave_L, ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd
 from .slice_edge import slice_edge, comp_angle
-from .comp_slice import comp_P_, comp_derH, sum_derH, comp_ptuple, sum_ptuple, sum_dertuple, comp_dtuple, match_func
+from .comp_slice import comp_P_, comp_ptuple, sum_ptuple, sum_dertuple, comp_dtuple, match_func
 
 
 '''
@@ -41,23 +41,21 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
     comp_P_(edge, adj_Pt_)  # vertical, lateral-overlap P cross-comp -> PP clustering
     # PP cross-comp -> discontinuous graph clustering:
     for fd in 0,1:
-        node_ = edge.node_[fd]  # always PP_t
-        if edge.valt[fd] * (len(node_)-1)*(edge.rng+1) > G_aves[fd] * edge.rdnt[fd]:
-            G_= []
-            for PP in node_:  # convert CPPs to Cgraphs:
-                derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt  # init aggH is empty:
-                ptuple_tv_ = []
-                for mtuple,dtuple in derH:
-                    ptuple_tv_ += [  # [ptuplet, valt, maxt, rdnt]:
-                     [[mtuple,dtuple], [sum(mtuple),sum(dtuple)], reform_maxt(PP),
-                      [sum([0 if m>d else 1 for m,d in zip(mtuple,dtuple)]), sum([0 if d>m else 1 for m,d in zip(mtuple,dtuple)])]
-                     ]]
-                derH[:] = ptuple_tv_
-                G_ += [Cgraph( ptuple=PP.ptuple, derH=[derH,valt,rdnt,[0,0]], valHt=[[valt[0]],[valt[1]]], rdnHt=[[rdnt[0]],[rdnt[1]]],
-                               L=PP.ptuple[-1], box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
-            node_ = G_
-            edge.valHt[0][0] = edge.valt[0]; edge.rdnHt[0][0] = edge.rdnt[0]  # copy
-            agg_recursion(None, edge, node_, fd=0)  # edge.node_ = graph_t, micro and macro recursive
+        if edge.valt[fd] * (len(edge.node_[fd])-1) * (edge.rng+1) <= G_aves[fd] * edge.rdnt[fd]: continue
+        G_= []
+        for PP in edge.node_[fd]:  # convert CPPs to Cgraphs:
+            derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt  # init aggH is empty:
+            derH[:] = [  # [ptuplet, valt, maxt, rdnt]:
+                [[mtuple, dtuple], [sum(mtuple), sum(dtuple)], reform_maxt(PP),
+                 [sum([0 if m > d else 1 for m, d in zip(mtuple, dtuple)]), sum([0 if d > m else 1 for m, d in zip(mtuple, dtuple)])]]
+                for mtuple, dtuple in derH
+            ]
+            y0, x0, yn, xn = PP.box
+            G_ += [Cgraph( ptuple=PP.ptuple, derH=[derH,valt,rdnt,[0,0]], valHt=[[valt[0]],[valt[1]]], rdnHt=[[rdnt[0]],[rdnt[1]]],
+                           L=PP.ptuple[-1], box=((y0+yn)/2, (x0+xn)/2, y0, x0, yn, xn) )]
+
+        edge.valHt[0][0] = edge.valt[0]; edge.rdnHt[0][0] = edge.rdnt[0]  # copy
+        agg_recursion(None, edge, G_, fd=0)  # edge.node_ = graph_t, micro and macro recursive
 
 # draft, need to go through sub_PPs:
 def reform_maxt(PP):
@@ -67,8 +65,8 @@ def reform_maxt(PP):
         _P, P = link._P, link.P
         rn = len(_P.dert_) / len(P.dert_)
         for _par, par in zip(_P.ptuple, P.ptuple):
-            if isinstance(_par, tuple): _par = np.hypot(*_par)  # angle
-            if isinstance(par, tuple): par = np.hypot(*par)  # angle
+            if hasattr(_par, '__len__'): _par = np.hypot(*_par)  # angle, isn't this redundant (same as G)?
+            if hasattr(par, '__len__'): par = np.hypot(*par)  # angle
             npar = par * rn
             maxt[0] += max(abs(_par), abs(npar))
             maxt[1] += abs(_par) + abs(npar)
@@ -132,7 +130,7 @@ def node_connect(iG_, link_, fd):  # sum surround values to define node connecti
     ave = G_aves[fd]
     Gt_ = []
     for G in iG_:
-        # need to find Glink_: all links in link_ that contain G, so link_ should be dict, formed in comp_G_?
+        Glink_ = link_[G]   # need to copy Glink_: Glink_ = copy(link_[G])?
         ival,irdn, rim = sum(G.valHt[fd]), sum(G.rdnHt[fd]), Glink_
         Gt_ += [G, 0,0, ival,irdn, rim]  # perimeter: negative or new links, separate termination per node?
     _tVal, _tRdn = 0,0
@@ -258,7 +256,7 @@ aggH: [subH_t]: composition levels, ext per G,
 def comp_G_(root_link_, fd=0):  # cross-comp in G_, comp between G_ and other_G_ for comp_node_ is not implemented
 
     Mval,Dval, Mrdn,Drdn = 0,0,0,0
-    link_ = []
+    link_ = defaultdict(list)
     for link in root_link_:  # always form new link, maybe empty?
         # maybe weak after rdn incr?:
         if fd and link.valt[1] < G_aves[1]*link.rdnt[1]: continue
@@ -307,12 +305,14 @@ def comp_G(link_, link, fd):
         Mrdn += rdnt[0]+dval>mval; Drdn += rdnt[1]+dval<=mval
         link.subH = SubH+subH  # append higher subLayers: list of der_ext | derH s
         link.valt = [Mval,Dval]; link.rdnt = [Mrdn,Drdn]; link.maxt = [maxM,maxD]  # complete proto-link
-        link_ += [link]
+        link_[G] += [link]
+        link_[_G] += [link]
 
     elif Mval > ave_Gm or Dval > ave_Gd:  # or sum?
         link.subH = SubH
         link.valt = [Mval,Dval]; link.rdnt = [Mrdn,Drdn]; link.maxt = [maxM,maxD] # complete proto-link
-        link_ += [link]
+        link_[G] += [link]
+        link_[_G] += [link]
 
     return Mval,Dval, Mrdn,Drdn
 
@@ -336,18 +336,18 @@ def comp_subH(_subH, subH, rn):
     DerH = []
     maxM,maxD, Mval,Dval, Mrdn,Drdn = 0,0,0,0,1,1
 
-    for _lay, lay in zip_longest(_subH, subH, fillvalue=[]):  # compare common lower layer|sublayer derHs
-        if _lay and lay:  # also if lower-layers match: Mval > ave * Mrdn?
-            if _lay[0] and isinstance(_lay[0][0],list):
-                # _lay[0] is derHv
-                dderH, valt, rdnt, maxt = comp_derHv(_lay[0], lay[0], rn)
-                DerH += [[dderH, valt, rdnt, maxt]]  # flat derH
-                maxM += maxt[0]; maxD += maxt[1]
-                mval,dval = valt; Mval += mval; Dval += dval
-                Mrdn += rdnt[0] + dval > mval; Drdn += rdnt[1] + dval <= mval
-            else:  # _lay[0][0] is L, comp dext:
-                DerH += [comp_ext(_lay[1],lay[1],[Mval,Dval],[Mrdn,Drdn],[maxM,maxD])]
-                # pack extt as ptuple
+    for _lay, lay in zip(_subH, subH):  # compare common lower layer|sublayer derHs
+        # if lower-layers match: Mval > ave * Mrdn?
+        if _lay[0] and isinstance(_lay[0][0],list):
+            # _lay[0] is derHv
+            dderH, valt, rdnt, maxt = comp_derHv(_lay[0], lay[0], rn)
+            DerH += [[dderH, valt, rdnt, maxt]]  # flat derH
+            maxM += maxt[0]; maxD += maxt[1]
+            mval,dval = valt; Mval += mval; Dval += dval
+            Mrdn += rdnt[0] + dval > mval; Drdn += rdnt[1] + dval <= mval
+        else:  # _lay[0][0] is L, comp dext:
+            DerH += [comp_ext(_lay[1],lay[1],[Mval,Dval],[Mrdn,Drdn],[maxM,maxD])]
+            # pack extt as ptuple
     return DerH, [Mval,Dval],[Mrdn,Drdn],[maxM,maxD]  # new layer,= 1/2 combined derH
 
 
@@ -356,17 +356,17 @@ def comp_derHv(_derH, derH, rn):  # derH is a list of der layers or sub-layers, 
     dderH = []  # or not-missing comparand: xor?
     Mval,Dval, Mrdn,Drdn, maxM,maxD = 0,0,1,1,0,0
 
-    for _lay, lay in zip_longest(_derH, derH, fillvalue=[]):  # compare common lower der layers | sublayers in derHs
-        if _lay and lay:  # also if lower-layers match: Mval > ave * Mrdn?
-            # compare dtuples only, mtuples are for evaluation:
-            mtuple, dtuple, Mtuple, Dtuple = comp_dtuple(_lay[0][1], lay[0][1], rn, fagg=1)
-            # sum params:
-            mval = sum(mtuple); dval = sum(abs(d) for d in dtuple)
-            mrdn = dval > mval; drdn = dval < mval
-            maxm = sum(Mtuple); maxd = sum(Dtuple)
-            Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn; maxM+= maxm; maxD+= maxd
-            ptuple_tv = [[mtuple,dtuple],[mval,dval],[mrdn,drdn],[maxm,maxd]]  # or += [Mtuple,Dtuple] for future comp?
-            dderH += [ptuple_tv]  # derLay
+    for _lay, lay in zip(_derH, derH):  # compare common lower der layers | sublayers in derHs
+        # if lower-layers match: Mval > ave * Mrdn?
+        # compare dtuples only, mtuples are for evaluation:
+        mtuple, dtuple, Mtuple, Dtuple = comp_dtuple(_lay[0][1], lay[0][1], rn, fagg=1)
+        # sum params:
+        mval = sum(mtuple); dval = sum(abs(d) for d in dtuple)
+        mrdn = dval > mval; drdn = dval < mval
+        maxm = sum(Mtuple); maxd = sum(Dtuple)
+        Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn; maxM+= maxm; maxD+= maxd
+        ptuple_tv = [[mtuple,dtuple],[mval,dval],[mrdn,drdn],[maxm,maxd]]  # or += [Mtuple,Dtuple] for future comp?
+        dderH += [ptuple_tv]  # derLay
 
     return dderH, [Mval,Dval],[Mrdn,Drdn],[maxM,maxD]  # new derLayer,= 1/2 combined derH
 
@@ -447,8 +447,8 @@ def sum_ext(Extt, extt):
         for j in 0,1: Extt[2][j]+=extt[2][j]  # sum dy,dx in angle
 
 def sum_box(Box, box):
-    Y,X,Y0,Yn,X0,Xn = Box; y,x,y0,yn,x0,xn = box
-    Box[:] = [Y+y, X+x, min(X0,x0), max(Xn,xn), min(Y0,y0), max(Yn,yn)]
+    (Y,X,Y0,X0,Yn,Xn), (y,x,y0,x0,yn,xn) = Box, box     # unpack
+    Box[:] = [(Y+y)/2, (X+x)/2, min(X0,x0), min(Y0,y0), max(Xn,xn), max(Yn,yn)]
 
 
 def feedback(root, fd):  # called from form_graph_, append new der layers to root
@@ -469,3 +469,6 @@ def feedback(root, fd):  # called from form_graph_, append new der layers to roo
         if fback_ and (len(fback_) == len(rroot.node_t)):  # flat, all rroot nodes terminated and fed back
             # getting cyclic rroot here not sure why it can happen, need to check further
             feedback(rroot, fd)  # sum2graph adds aggH per rng, feedback adds deeper sub+ layers
+
+def max_abs(_par, par):
+    return max(abs(_par), abs(par))
