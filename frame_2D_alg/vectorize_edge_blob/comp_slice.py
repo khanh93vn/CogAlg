@@ -31,22 +31,22 @@ def comp_P_(edge, adj_Pt_):  # cross-comp P_ in edge: high-gradient blob, sliced
     for _P, P in adj_Pt_:  # scan, comp contiguously uplinked Ps, rn: relative weight of comparand
         comp_P(edge.link_, _P,P, rn=len(_P.dert_)/len(P.dert_), fd=0)
 
-    form_PP_t(edge, P_=edge.node_, base_rdn=2)  # replace edge.node_ with PP_t, may be nested by sub+
+    form_PP_t(edge, P_= edge.node_, base_rdn=2)
+    # replace edge.node_ with PP_t, may be nested by sub+
 
-
-def comp_P(link_,_P, P, rn, fd=1, derP=None):  #  derP if der+, reused as S if rng+
+def comp_P(link_, _P, P, rn, fd=1, derP=None):  #  derP if der+, reused as S if rng+
     aveP = P_aves[fd]
 
     if fd:  # der+: extend in-link derH, in sub+ only
         dderH, valt, rdnt = comp_derH(_P.derH, P.derH, rn)  # += fork rdn
         derP = CderP(derH = derP.derH+dderH, valt=valt, rdnt=rdnt, P=P,_P=_P, S=derP.S)  # dderH valt,rdnt for new link
-        mval,dval = valt[:2]; mrdn,drdn = rdnt  # exclude maxv
+        mval,dval = valt; mrdn,drdn = rdnt
 
     else:  # rng+: add derH
         mtuple,dtuple = comp_ptuple(_P.ptuple, P.ptuple, rn)
         mval = sum(mtuple); dval = sum(dtuple)
         mrdn = 1+(dval>mval); drdn = 1+(1-(dval>mval))  # or rdn = Dval/Mval?
-        derP = CderP(derH=[[mtuple,dtuple]], valt=[mval,dval], rdnt=[mrdn,drdn], P=P,_P=_P, S=derP)
+        derP = CderP( derH=[[mtuple,dtuple]], valt=[mval,dval], rdnt=[mrdn,drdn], P=P,_P=_P, S=derP)
 
     if mval > aveP*mrdn or dval > aveP*drdn:
         link_ += [derP]
@@ -216,8 +216,7 @@ def comp_derH(_derH, derH, rn):  # derH is a list of der layers or sub-layers, e
 
     for _lay, lay in zip(_derH, derH):  # compare common lower der layers | sublayers in derHs
         # if lower-layers match: Mval > ave * Mrdn?
-        # compare dtuples only:
-        mtuple, dtuple = comp_dtuple(_lay[1], lay[1], rn, fagg=0)
+        mtuple, dtuple = comp_dtuple(_lay[1], lay[1], rn, fagg=0)  # compare dtuples only
         mval = sum(mtuple); dval = sum(abs(d) for d in dtuple)
         mrdn = dval > mval; drdn = dval < mval
         Mval+=mval; Dval+=dval; Mrdn+=mrdn; Drdn+=drdn
