@@ -41,34 +41,32 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
     comp_P_(edge, adj_Pt_)  # vertical, lateral-overlap P cross-comp -> PP clustering
     # PP cross-comp -> discontinuous graph clustering:
     for fd in 0,1:
-        node_ = edge.node_[fd]  # always PP_t
-        if edge.valt[fd] * (len(node_)-1)*(edge.rng+1) > G_aves[fd] * edge.rdnt[fd]:
-            G_= []
-            for PP in node_:  # convert CPPs to Cgraphs:
-                derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt  # init aggH is empty:
-                # convert derH to ptuple_tv_: [[ptuplet, valt, maxt, rdnt]]:
-                derH[:] = [
-                    [[mtuple, dtuple], [sum(mtuple), sum(dtuple)], maxt,
-                     [sum([0 if m > d else 1 for m, d in zip(mtuple, dtuple)]), sum([0 if d > m else 1 for m, d in zip(mtuple, dtuple)])]
-                  ] for (mtuple, dtuple), maxt in zip(derH, reform_maxt_(PP.node_))
-                ]
-                G_ += [Cgraph( ptuple=PP.ptuple, derH=[derH,valt,rdnt,[0,0]], valHt=[[valt[0]],[valt[1]]], rdnHt=[[rdnt[0]],[rdnt[1]]],
-                               L=PP.ptuple[-1], box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
-            for PP in node_:
-                for link in PP.link_:  # convert link_ to derGs:
-                    G = G_[node_.index(link.P.root_t[fd])]  # some link'P's root not in node_, is it due to sub+ where
-                    _G = G_[node_.index(link._P.root_t[fd])]
-                    derG = CderG( G=G, _G=_G, S=link.S, A=link.A)
-                    edge.link_ += [derG]
-            node_ = G_
-            edge.valHt[0][0] = edge.valt[0]; edge.rdnHt[0][0] = edge.rdnt[0]  # copy
-            agg_recursion(None, edge, node_, fd=0)  # edge.node_ = graph_t, micro and macro recursive
+        if edge.valt[fd] * (len(node_)-1)*(edge.rng+1) <= G_aves[fd] * edge.rdnt[fd]:   continue
+        G_= []
+        for PP in edge.node_[fd]:  # convert CPPs to Cgraphs:
+            derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt  # init aggH is empty:
+            # convert derH to ptuple_tv_: [[ptuplet, valt, maxt, rdnt]]:
+            derH[:] = [
+                [[mtuple, dtuple], [sum(mtuple), sum(dtuple)], maxt,
+                 [sum([0 if m > d else 1 for m, d in zip(mtuple, dtuple)]), sum([0 if d > m else 1 for m, d in zip(mtuple, dtuple)])]
+              ] for (mtuple, dtuple), maxt in zip(derH, reform_maxt_(PP.node_))
+            ]
+            G_ += [Cgraph( ptuple=PP.ptuple, derH=[derH,valt,rdnt,[0,0]], valHt=[[valt[0]],[valt[1]]], rdnHt=[[rdnt[0]],[rdnt[1]]],
+                           L=PP.ptuple[-1], box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
+        for PP in edge.node_[fd]:
+            for link in PP.link_:  # convert link_ to derGs:
+                G = G_[edge.node_[fd].index(link.P.root_t[fd])]  # some link'P's root not in node_, is it due to sub+ where
+                _G = G_[edge.node_[fd].index(link._P.root_t[fd])]
+                derG = CderG( G=G, _G=_G, S=link.S, A=link.A)
+                edge.link_ += [derG]
+        edge.valHt[0][0] = edge.valt[0]; edge.rdnHt[0][0] = edge.rdnt[0]  # copy
+        agg_recursion(None, edge, G_, fd=0)  # edge.node_ = graph_t, micro and macro recursive
 
 # draft
 def reform_maxt_(node_):   # form maxt per derLayer in PP.derH, from PP.node_
     maxt_ = []
 
-    while node_[0] and isinstance(node_[0],list) or node_[1] and isinstance(node_[1],list):
+    while node_ and isinstance(node_[0],list):
         # PP.node_ is [subPPm_,subPPd_], unpack each
         sub_PP_t = []
         maxt = [0, 0]
@@ -79,17 +77,15 @@ def reform_maxt_(node_):   # form maxt per derLayer in PP.derH, from PP.node_
                     _P, P = link._P, link.P
                     rn = len(_P.dert_) / len(P.dert_)
                     for _par, par in zip(_P.ptuple, P.ptuple):
-                        if hasattr(_par, '__len__'): _par = np.hypot(*_par)  # angle, same as G?
+                        if hasattr(_par, '__len__'): _par = np.hypot(*_par)  # angle
                         if hasattr(par, '__len__'): par = np.hypot(*par)  # angle
                         npar = par * rn
                         maxt[0] += max(abs(_par), abs(npar))
                         maxt[1] += abs(_par) + abs(npar)
-                        if PP.node_ and isinstance(PP.node_[0], CPP):
-                            sub_PP_ += PP.node_
-                    maxt_ += [maxt]
-                if sub_PP_: PP_ = sub_PP_  # unpack next layer
-                else:      break
+                if PP.node_ and isinstance(PP.node_[0], CPP):
+                    sub_PP_ += PP.node_
             sub_PP_t += [sub_PP_]
+            maxt_ += [maxt]
         node_ = sub_PP_t
     # here add processing of node_= P_?
     return maxt_
