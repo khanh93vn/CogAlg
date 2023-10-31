@@ -52,7 +52,7 @@ class CP(ClusterStructure):  # horizontal blob slice P, with vertical derivative
     rdnt : list = z([1,1])
     dert_ : list = z([])  # array of pixel-level derts, ~ node_
     cells : set = z(set())  # pixel-level kernels adjacent to P axis, combined into corresponding derts projected on P axis.
-    root_t : list = z([None,None])  # PPrm,PPrd, PPdm,PPdd that contain this P, single-layer
+    roott : list = z([None,None])  # PPrm,PPrd that contain this P, single-layer
     axis : tuple = (0,1)  # prior slice angle, init sin=0,cos=1
     yx : tuple = None
     ''' 
@@ -70,6 +70,7 @@ class CderP(ClusterStructure):  # tuple of derivatives in P link: binary tree wi
     derH : list = z([])  # [[[mtuple,dtuple],[mval,dval],[mrdn,drdn]]], single ptuplet in rng+
     valt : list = z([0,0])
     rdnt : list = z([1,1])  # mrdn + uprdn if branch overlap?
+    roott : list = z([None, None])  # PPdm,PPdd that contain this derP
     _P : object = None  # higher comparand
     P : object = None  # lower comparand
     S : float = 0.0  # sparsity: distance between centers
@@ -105,10 +106,9 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
 
     fd: int = 0  # graph is defined by m|d value
     ptuple : list = z([0,0,0,0,[0,0],0])  # default from P
-    derH : list = z([[],[0,0],[1,1],[0,0]])  # default from PP: [[tuplet,valt,rdnt,maxt]] from rng+| der+, sum min len?
-    aggH : list = z([])  # [[subH,valt,rdnt,maxt]], subH: [[derH,valt,rdnt,maxt]]: 2-fork composition layers, -> pP_?
+    derH : list = z([[],[],[0,0],[1,1]])  # default from converted PP: [[tuplet,maxtuplet,valt,rdnt]]
+    aggH : list = z([])  # [[subH,valt,rdnt]], subH: [[derH,valt,rdnt,maxt]]: 2-fork composition layers, -> pP_?
     valHt : list = z([[0],[0]])  # Ht of link vals,rdns, decays / fder:
-    maxHt : list = z([[0],[0]])
     rdnHt : list = z([[1],[1]])
     root : object = None  # ini graph, replace with mroot,droot for nodes in sub+, nest in up-forking tree: root_ fork / agg+
     link_ : list = z([])  # added per sub+, as in comp_slice
@@ -134,9 +134,9 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
 class CderG(ClusterStructure):  # params of single-fork node_ cluster per pplayers
 
     subH : list = z([])  # [[derH_t, valt, rdnt]]: top aggLev derived in comp_G
-    maxt : list = z([0,0])  # max m, max d
     valt : list = z([0,0])  # m,d
     rdnt : list = z([1,1])
+    dect : list = z([0,0])  # mdecay, ddecay
     Vt : list = z([0,0])  # combined net vals, accum in node_connect
     _G : object = None  # comparand
     G: object = None  # comparand
