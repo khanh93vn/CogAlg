@@ -82,13 +82,12 @@ def reform_maxtuplet_(node_t_):  # form maxtuplet per derLayer in PP.derH from P
                             for j, (_tuplet, tuplet, maxtuplet) in enumerate( zip_longest(  # loop derLayers bottom-up:
                                     reversed(_P.derH),reversed(P.derH),reversed(maxtuplet_[1:]),
                                     fillvalue=[[0,0,0,0,0,0],[0,0,0,0,0,0]])):
-                                for i, (_par, par) in enumerate(zip(_tuplet, tuplet, maxtuplet)):
-                                    maxtuplet[j][0][i] += max(abs(_par),abs(par*rn))  # maxm
-                                    maxtuplet[j][1][i] += abs(_par) + abs(par*rn)  # maxd
+                                for sfd in 0,1:
+                                    for i, (_par, par) in enumerate(zip(_tuplet[sfd], tuplet[sfd])):
+                                        maxtuplet[0][i] += max(abs(_par),abs(par*rn))  # maxm
+                                        maxtuplet[1][i] += abs(_par) + abs(par*rn)  # maxd
                                 S_[j] += 1 if S_[j] else S_.append(1)
-
-                                if PP.node_[0] and isinstance(PP.node_[0],list):
-                                    sub_node_t_ += [PP.node_]
+                                sub_node_t_ += [PP.node_]
         if sub_node_t_:
             node_t_ = sub_node_t_  # deeper nesting layer
         else:
