@@ -41,7 +41,7 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
     comp_P_(edge, adj_Pt_)  # vertical, lateral-overlap P cross-comp -> PP clustering
     # PP cross-comp -> discontinuous graph clustering:
     for fd, node_ in enumerate(edge.node_):  # node_t
-        if edge.valt[fd] * (len(node_)-1)*(edge.rng+1) <= G_aves[fd] * edge.rdnt[fd]: continue
+        if edge.valt[fd] * (len(node_)-1) * (edge.rng+1) <= G_aves[fd] * edge.rdnt[fd]: continue
         G_= []
         for PP in node_:  # convert PP_t CPPs to Cgraphs:
             derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
@@ -49,11 +49,11 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
             derH[:] = [  # convert to ptuple_tv_: [[ptuplet, valt, rdnt, dect]]:
                 [[mtuple,dtuple],
                  [sum(mtuple),sum(dtuple)],
-                 [sum([0 if m>d else 1 for m,d in zip(mtuple,dtuple)]), sum([0 if d>m else 1 for m,d in zip(mtuple,dtuple)])],
+                 [sum([int(m<=d) for m,d in zip(mtuple,dtuple)]), sum([int(d<=m) for m,d in zip(mtuple,dtuple)])],
                   dect ] for (mtuple,dtuple), dect in zip(derH, dectH)]
             decHt = [[],[]]
             for mdec, ddec in dectH:
-                decHt[0]+=[mdec]; decHt[0]+=[mdec]
+                decHt[0]+=[mdec]; decHt[1]+=[ddec]
             G_ += [Cgraph( ptuple=PP.ptuple, derH=[derH,valt,rdnt,[0,0]], valHt=[[valt[0]],[valt[1]]], rdnHt=[[rdnt[0]],[rdnt[1]]],
                            decHt=decHt, L=PP.ptuple[-1], box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box))]
         node_ = G_
@@ -69,38 +69,34 @@ def reform_dect_(node_t_):
     while True:  # unpack lower node_ layer
         sub_node_t_ = []  # subPP_t or P_ per higher PP
         for node_t in node_t_:
-            if node_t[0] and isinstance(node_t[0],list) and (isinstance(node_t[0][0],CPP) or (node_t[1] and isinstance(node_t[1][0],CPP))):
-                for fd, PP_ in enumerate(node_t):  # node_t is [sub_PPm_,sub_PPd_]
-                    for PP in PP_:
-                        for link in PP.link_:  # get lower-der comp pairs and find their max
-                            _P, P = link._P, link.P
-                            S_[0] += 6  # 6 pars
-                            for _par, par in zip(_P.ptuple, P.ptuple):
-                                if hasattr(par,"__len__"):
-                                    Dect_[0][0]+=2; Dect_[0][1]+=2  # angle
-                                else:  # scalar
-                                    if _par and par:  # link decay coef: m|d / max, base self/same
-                                        Dect_[0][0] += par/ (abs(_par)+abs(par)); Dect_[0][1] += par/ max(_par,par)
+            for fd, PP_ in enumerate(node_t):  # node_t is [sub_PPm_,sub_PPd_]
+                for PP in PP_:
+                    for link in PP.link_:  # get lower-der comp pairs and find their max
+                        _P, P = link._P, link.P
+                        S_[0] += 6  # 6 pars
+                        for _par, par in zip(_P.ptuple, P.ptuple):
+                            if hasattr(par,"__len__"):
+                                Dect_[0][0]+=2; Dect_[0][1]+=2  # angle
+                            else:  # scalar
+                                if _par and par:  # link decay coef: m|d / max, base self/same
+                                    Dect_[0][0] += par/ (abs(_par)+abs(par)); Dect_[0][1] += par/ max(_par,par)
+                                else:
+                                    Dect_[0][0] += 1; Dect_[0][1] += 1  # prevent /0
+                        for i, (_tuplet,tuplet, Dect) in enumerate(zip_longest(_P.derH,P.derH, Dect_[1:], fillvalue=[0,0])):
+                            # loop derLayers bottom-up:
+                            for fd, (_ptuple,ptuple) in enumerate(zip(_tuplet,tuplet)):
+                                if len(S_) > i: S_[i] += 6
+                                else: S_.append(6)  # 6 pars
+                                for _par, par in zip(_ptuple,ptuple):
+                                    if _par and par:
+                                        if fd: Dect_[i][fd] += par/ max(_par, par)
+                                        else:  Dect_[i][fd] += par/ (abs(_par) + abs(par))
                                     else:
-                                        Dect_[0][0] += 1; Dect_[0][1] += 1  # prevent /0
-                            for i, (_tuplet,_tuplet, Dect) in enumerate(zip_longest(_P.derH,P.derH, Dect_[1:], fillvalue=[0,0])):
-                                # loop derLayers bottom-up:
-                                for fd, (_ptuple,ptuple) in enumerate(zip(_tuplet,_tuplet)):
-                                    if len(S_) > i: S_[i] += 6
-                                    else: S_.append(6)  # 6 pars
-                                    for _par, par in zip(_ptuple,ptuple):
-                                        if _par and par:
-                                            if fd: Dect_[i][fd] += par/ max(_par, par)
-                                            else:  Dect_[i][fd] += par/ (abs(_par) + abs(par))
-                                        else:
-                                            Dect_[i][fd] += 1  # prevent /0
-                        if PP.node_[0] and isinstance(PP.node_[0],list) and (isinstance(PP.node_[0][0],CPP)
-                            or (PP.node_[1] and isinstance(PP.node_[1][0],CPP))):
-                            sub_node_t_ += [PP.node_]
-        if sub_node_t_:
-            node_t_ = sub_node_t_  # deeper nesting layer
-        else:
-            break
+                                        Dect_[i][fd] += 1  # prevent /0
+                    if PP.node_ and isinstance(PP.node_[0],list):
+                        sub_node_t_ += [PP.node_]
+        if not sub_node_t_: break
+        node_t_ = sub_node_t_  # deeper nesting layer
     return [[Dect[0]/S, Dect[1]/S] for Dect, S in zip(Dect_, S_)]  # normalize by n sum
 
 
