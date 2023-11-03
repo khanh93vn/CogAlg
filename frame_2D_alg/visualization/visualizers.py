@@ -199,6 +199,7 @@ class BlobVisualizer(Visualizer):
                     mask__=blob.mask__,
                     root=blob,
                     node_=edge.node_,
+                    P_=edge.P_,
                     link_=edge.link_,
                     fback_t=edge.fback_t,
                     rng=edge.rng,
@@ -314,14 +315,15 @@ class SliceVisualizer(Visualizer):
 
 
 def get_P_(PP):
-    P_ = []
-    subPP_ = [PP]
-    while subPP_:
-        subPP = subPP_.pop()
-        if not subPP.node_: continue
-        if isinstance(subPP.node_[0], list):
-            subPP_ += subPP.node_[0]
-        else:  # is P_
-            P_ += subPP.node_
-
-    return P_
+    return PP.P_
+    # P_ = []
+    # subPP_ = [PP]
+    # while subPP_:
+    #     subPP = subPP_.pop()
+    #     if not subPP.node_: continue
+    #     if isinstance(subPP.node_[0], list):
+    #         subPP_ += subPP.node_[0]
+    #     else:  # is P_
+    #         P_ += subPP.node_
+    #
+    # return P_

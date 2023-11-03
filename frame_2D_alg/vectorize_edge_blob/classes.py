@@ -16,7 +16,8 @@ from frame_blobs import boxT
 class CEdge(ClusterStructure):  # edge blob
 
     der__t_roots: object = None  # map to dir__t
-    node_ : list = z([])  # default P_, node_t in select PP_ or G_ fder forks
+    node_ : list = z(([],[]))    # default PP_t in select PP_ or G_ fder forks
+    P_ : list = z([])
     link_ : list = z([])
     fback_t : list = z([[],[]])  # for consistency, only fder=0 is used
     # for comp_slice:
@@ -92,7 +93,8 @@ class CPP(CderP):
     rdnt : list = z([1,1])
     mask__ : object = None
     root : object = None  # edge / PP, PP / sub_PP: not shared between root forks
-    node_ : list = z([])  # init P_, -> node_tt if sub+: [rng+ [sub_PPm_,sub_PPd_], der+ [sub_PPm_,sub_PPd_]]
+    node_ : list = z(([],[]))  # node_tt if sub+: [rng+ [sub_PPm_,sub_PPd_], der+ [sub_PPm_,sub_PPd_]]
+    P_ : list = z([])
     link_ : list = z([])
     fback_t : list = z([[],[]])  # maps to node_tt: [derH,valt,rdnt] per node fork
     rng : int = 1  # sum of rng+: odd forks in last layer?
