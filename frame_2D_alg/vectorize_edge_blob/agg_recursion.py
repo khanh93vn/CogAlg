@@ -1,11 +1,11 @@
 import numpy as np
 from copy import deepcopy, copy
 from itertools import zip_longest
-from collections import deque, defaultdict
-from .classes import Cgraph, CderG, CPP
+from collections import defaultdict
+from .classes import Cgraph, CderG
 from .filters import ave_L, ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd
 from .slice_edge import slice_edge, comp_angle
-from .comp_slice import comp_P_, comp_derH, sum_derH, comp_ptuple, sum_ptuple, sum_dertuple, comp_dtuple, match_func
+from .comp_slice import comp_P_, comp_derH, sum_derH, comp_ptuple, sum_dertuple, comp_dtuple, match_func
 
 
 '''
@@ -40,13 +40,13 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
     edge, adj_Pt_ = slice_edge(blob, verbose)  # lateral kernel cross-comp -> P clustering
     comp_P_(edge, adj_Pt_)  # vertical, lateral-overlap P cross-comp -> PP clustering
     # PP cross-comp -> discontinuous graph clustering:
-    for fd, node_ in enumerate(edge.node_t):
-        if edge.valt[fd] * (len(node_)-1) * (edge.rng+1) <= G_aves[fd] * edge.rdnt[fd]: continue
+    for fd, node_t in enumerate(edge.node_t):
+        if edge.valt[fd] * (len(node_t)-1) * (edge.rng+1) <= G_aves[fd] * edge.rdnt[fd]: continue
         G_ = []
-        for PP in node_:  # convert select CPPs to Cgraphs:
-            if PP.valt[fd] * (len(node_)-1) * (PP.rng+1) <= G_aves[fd] * PP.rdnt[fd]: continue
+        for PP in node_t:  # convert select CPPs to Cgraphs:
+            if PP.valt[fd] * (len(node_t)-1) * (PP.rng+1) <= G_aves[fd] * PP.rdnt[fd]: continue
             derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
-            dectH = reform_dect_(PP.node_[0] + PP.node_[1])
+            dectH = reform_dect_(PP.node_t[0] + PP.node_t[1])
             derH[:] = [  # convert to ptuple_tv_: [[ptuplet, valt, rdnt, dect]]:
                 [[mtuple,dtuple],
                  [sum(mtuple),sum(dtuple)],
@@ -61,7 +61,7 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
         if G_:
             node_ = G_
             edge.valHt[0][0] = edge.valt[0]; edge.rdnHt[0][0] = edge.rdnt[0]  # copy
-            agg_recursion(None, edge, node_, fd=0)  # edge.node_ = graph_t, micro and macro recursive
+            agg_recursion(None, edge, node_, fd=0)  # edge.node_t = graph_t, micro and macro recursive
 
 
 def reform_dect_(node_):
@@ -95,7 +95,7 @@ def reform_dect_(node_):
                         else:
                             Dect_ += [[mdec,ddec]]; S_ += [6]  # extend both
 
-            sub_node_ += PP.node_[0] + PP.node_[1]
+            sub_node_ += PP.node_t[0] + PP.node_t[1]
         if not sub_node_: break
         node_ = sub_node_  # deeper nesting layer
     return [[Dect[0]/S, Dect[1]/S] for Dect, S in zip(Dect_, S_)]  # normalize by n sum
@@ -141,9 +141,9 @@ def form_graph_t(root, Valt,Rdnt, G_, link_):  # form mgraphs and dgraphs of sam
         root.valHt[fd]+=[0]; root.rdnHt[fd]+=[1]  # remove if stays 0?
 
         for graph in graph_:  # external to agg+ vs internal in comp_slice sub+
-            node_ = graph.node_t  # init flat
-            if sum(graph.valHt[fd]) * (len(node_)-1)*root.rng > G_aves[fd] * sum(graph.rdnHt[fd]):  # eval fd comp_G_ in sub+
-                agg_recursion(root, graph, node_, fd)  # replace node_ with node_t, recursive
+            node_t = graph.node_t  # init flat
+            if sum(graph.valHt[fd]) * (len(node_t)-1)*root.rng > G_aves[fd] * sum(graph.rdnHt[fd]):  # eval fd comp_G_ in sub+
+                agg_recursion(root, graph, node_t, fd)  # replace node_t with node_t, recursive
             else:  # feedback after graph sub+:
                 root.fback_t[fd] += [[graph.aggH, graph.valHt, graph.rdnHt, graph.decHt]]
                 root.valHt[fd][-1] += graph.valHt[fd][-1]  # last layer, or all new layers via feedback?
@@ -155,7 +155,7 @@ def form_graph_t(root, Valt,Rdnt, G_, link_):  # form mgraphs and dgraphs of sam
         if root.fback_t and root.fback_t[fd]:  # recursive feedback after all G_ sub+
             feedback(root, fd)  # update root.root.. aggH, valHt,rdnHt
 
-    return graph_t  # root.node_t'node_ -> node_t: incr nested with each agg+?
+    return graph_t  # root.node_t'node_t -> node_t: incr nested with each agg+?
 
 '''
 Graphs add nodes if med_val = (val+_val) * decay > ave: connectivity is aggregate, individual link may be a fluke. 
@@ -249,7 +249,7 @@ def sum2graph(cG_, fd):  # sum node and link params into graph, aggH in agg+ or 
         G,link_ = Gt[0],Gt[1]  # Gt: [G,rim,val,rdn, ival,irdn]
         # sum nodes in graph:
         sum_box(graph.box, G.box)
-        sum_ptuple(graph.ptuple, G.ptuple)
+        graph.ptuple += G.ptuple
         sum_derHv(graph.derH, G.derH, base_rdn=1)
         sum_aggHv(graph.aggH, G.aggH, base_rdn=1)
         sum_Hts(graph.valHt,graph.rdnHt,graph.decHt, G.valHt,G.rdnHt,G.decHt)
@@ -273,7 +273,7 @@ def sum2graph(cG_, fd):  # sum node and link params into graph, aggH in agg+ or 
         if subH: G.aggH += [subH]
         G.i = i
         G.valHt[0]+=[mval];G.valHt[1]+=[dval]; G.rdnHt[0]+=[mrdn];G.rdnHt[1]+=[drdn]; G.decHt[0]+=[mdec];G.decHt[1]+=[ddec]
-        graph.node_ += [G]  # converted to node_t by feedback
+        graph.node_t += [G]  # converted to node_t by feedback
     # + link layer:
     graph.link_ = Link_  # use in sub_recursion, as with PPs, no link_?
     graph.valHt[0]+=[Mval];graph.valHt[1]+=[Dval]; graph.rdnHt[0]+=[Mrdn];graph.rdnHt[1]+=[Drdn]; graph.decHt[0]+=[Mdec];graph.decHt[1]+=[Ddec]
@@ -496,7 +496,7 @@ def feedback(root, fd):  # called from form_graph_, append new der layers to roo
 
     if isinstance(root, Cgraph) and root.root:  # root is not CEdge, which has no roots
         rroot = root.root
-        fd = root.fd  # current node_ fd
+        fd = root.fd  # current node_t fd
         fback_ = rroot.fback_t[fd]
         fback_ += [[AggH, ValHt, RdnHt, DecHt]]
         if fback_ and (len(fback_) == len(rroot.node_t)):  # flat, all rroot nodes terminated and fed back
