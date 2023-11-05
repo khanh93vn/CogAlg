@@ -5,7 +5,6 @@ from collections import deque, defaultdict
 from .slice_edge import comp_angle
 from .classes import CderP, CPP
 from .filters import ave, aves, P_aves, PP_aves
-
 '''
 Vectorize is a terminal fork of intra_blob.
 
@@ -70,7 +69,7 @@ def comp_der(ilink_):  # keep same Ps and links, increment link derH, then P der
     n_uplinks = defaultdict(int)
     for derP in ilink_: n_uplinks[derP.P] += 1
 
-    link_ = []     # extended-derH derPs
+    link_ = []  # extended-derH derPs
     for derP in ilink_:  # scan root PP links, no concurrent rng+
         P = derP.P; _P = derP._P
         if not P.derH or not _P.derH: continue
@@ -175,10 +174,10 @@ def feedback(root, fd):  # in form_PP_, append new der layers to root PP, single
 
     if isinstance(root, CPP):  # root is not CEdge, which has no roots
         rroot = root.root  # single PP.root, can't be P
-        fd = root.fd  # current node_ fd
-        fback_ = rroot.fback_t[fd]
+        fd = root.fd  # node_ fd
+        node_, fback_ = rroot.node_t[fd], rroot.fback_t[fd]
         fback_ += [Fback]
-        if fback_ and (len(fback_) == len(rroot.node_)):  # still flat, all nodes terminated and fed back
+        if fback_ and (len(fback_)==len(node_)):  # all nodes terminated and fed back
             feedback(rroot, fd)  # sum2PP adds derH per rng, feedback adds deeper sub+ layers
 
 
@@ -263,3 +262,41 @@ def comp_ptuple(_ptuple, ptuple, rn, fagg=0):  # 0der params
 def match_func(_par, par):
     match = min(abs(_par),abs(par))
     return -match if (_par<0) != (par<0) else match    # match = neg min if opposite-sign comparands
+
+# old:
+def comp_ptuple_gen(_ptuple, ptuple, rn):  # 0der
+
+    mtuple, dtuple, Mtuple = [],[],[]
+    # _n, n = _ptuple, ptuple: add to rn?
+    for i, (_par, par, ave) in enumerate(zip(_ptuple, ptuple, aves)):
+        if isinstance(_par, list) or isinstance(_par, tuple):
+             m,d = comp_angle(_par, par)
+             maxv = 2
+        else:  # I | M | G L
+            npar= par*rn  # accum-normalized par
+            d = _par - npar
+            if i: m = min(_par,npar)-ave
+            else: m = ave-abs(d)  # inverse match for I, no mag/value correlation
+            maxv = max(_par, par)
+        mtuple+=[m]
+        dtuple+=[d]
+        Mtuple+=[maxv]
+    return [mtuple, dtuple, Mtuple]
+
+def sum_derH_gen(T, t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
+
+    DerH, Valt, Rdnt = T; derH, valt, rdnt = t
+    for i in 0, 1:
+        Valt[i] += valt[i]; Rdnt[i] += rdnt[i] + base_rdn
+    if DerH:
+        for Layer, layer in zip_longest(DerH,derH, fillvalue=[]):
+            if layer:
+                if Layer:
+                    for i in 0,1:
+                        sum_dertuple(Layer[0][i], layer[0][i], fneg and i)  # ptuplet, only dtuple is directional: needs fneg
+                        Layer[1][i] += layer[1][i]  # valt
+                        Layer[2][i] += layer[2][i] + base_rdn  # rdnt
+                else:
+                    DerH += [deepcopy(layer)]
+    else:
+        DerH[:] = deepcopy(derH)
