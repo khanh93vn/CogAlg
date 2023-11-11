@@ -3,7 +3,7 @@ from copy import deepcopy
 from itertools import zip_longest, combinations
 from collections import deque, defaultdict
 from .slice_edge import comp_angle
-from .classes import CderP, CPP
+from .classes import CderP, CPP, ptupleT
 from .filters import ave, aves, P_aves, PP_aves
 '''
 Vectorize is a terminal fork of intra_blob.
@@ -80,7 +80,6 @@ def comp_der(ilink_):  # keep same Ps and links, increment link derH, then P der
 
     return link_
 
-
 def form_PP_t(root, root_link_, base_rdn):  # form PPs of derP.valt[fd] + connected Ps val
 
     PP_t = [[],[]]
@@ -117,7 +116,6 @@ def form_PP_t(root, root_link_, base_rdn):  # form PPs of derP.valt[fd] + connec
             feedback(root, fd)  # after sub+ in all nodes, no single node feedback up multiple layers
 
     root.node_t = PP_t  # nested in sub+, add_alt_PPs_?
-
 
 def sum2PP(root, P_, derP_, base_rdn, fd):  # sum links in Ps and Ps in PP
 
@@ -164,7 +162,6 @@ def sub_recursion(root, PP, fd):  # called in form_PP_, evaluate PP for rng+ and
     form_PP_t(PP, link_, base_rdn=PP.rdnt[fd])
     root.fback_t[fd] += [[PP.derH, PP.valt, PP.rdnt]]  # merge in root.fback_t fork, else need fback_tree
 
-
 def feedback(root, fd):  # in form_PP_, append new der layers to root PP, single vs. root_ per fork in agg+
 
     Fback = root.fback_t[fd].pop(0)  # init with 1st [derH,valt,rdnt]
@@ -180,7 +177,6 @@ def feedback(root, fd):  # in form_PP_, append new der layers to root PP, single
         if fback_ and (len(fback_)==len(node_t)):  # all nodes terminated and fed back
             feedback(rroot, fd)  # sum2PP adds derH per rng, feedback adds deeper sub+ layers
 
-
 def sum_derH(T, t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
 
     DerH, Valt, Rdnt = T; derH, valt, rdnt = t
@@ -189,17 +185,10 @@ def sum_derH(T, t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers,
         Rdnt[i] += rdnt[i] + base_rdn
     DerH[:] = [
         # sum der layers, dertuple is mtuple | dtuple, fneg*i: for dtuple only:
-        [ sum_dertuple(Mtuple, mtuple, fneg=0), sum_dertuple(Dtuple, dtuple, fneg=fneg) ]
+        [ (Mtuple+mtuple), (Dtuple-dtuple) if fneg else (Dtuple+dtuple) ]
         for [Mtuple, Dtuple], [mtuple, dtuple]
-        in zip_longest(DerH, derH, fillvalue=[[0,0,0,0,0,0],[0,0,0,0,0,0]])  # mtuple,dtuple
+        in zip_longest(DerH, derH, fillvalue=[ptupleT(0,0,0,0,0,0),ptupleT(0,0,0,0,0,0)])  # mtuple,dtuple
     ]
-
-def sum_dertuple(Ptuple, ptuple, fneg=0):
-    _I, _G, _M, _Ma, _A, _L = Ptuple
-    I, G, M, Ma, A, L = ptuple
-    if fneg: Ptuple[:] = [_I-I, _G-G, _M-M, _Ma-Ma, _A-A, _L-L]
-    else:    Ptuple[:] = [_I+I, _G+G, _M+M, _Ma+Ma, _A+A, _L+L]
-    return   Ptuple
 
 def comp_derH(_derH, derH, rn):  # derH is a list of der layers or sub-layers, each = ptuple_tv
 
@@ -218,18 +207,34 @@ def comp_derH(_derH, derH, rn):  # derH is a list of der layers or sub-layers, e
 
 def comp_dtuple(_ptuple, ptuple, rn, fagg=0):
 
-    mtuple, dtuple = [],[]
-    if fagg: Mtuple, Dtuple = [],[]
+    _I, _G, _M, _Ma, _Da, _L = _ptuple
+    I, G, M, Ma, Da, L = ptuple
 
-    for _par, par, ave in zip(_ptuple, ptuple, aves):  # compare ds only
-        npar = par * rn
-        mtuple += [match_func(_par, npar) - ave]
-        dtuple += [_par - npar]
-        if fagg:
-            Mtuple += [max(abs(_par),abs(npar))]
-            Dtuple += [abs(_par)+abs(npar)]
+    mI = match_func(_I, rn*I) - ave
+    mG = match_func(_G, rn*G) - ave
+    mL = match_func(_L, rn*L) - ave
+    mM = match_func(_M, rn*M) - ave
+    mMa = match_func(_Ma, rn*Ma) - ave
+    mDa = match_func(_Da, rn*Da) - ave
+
+    mtuple = ptupleT(mI, mG, mM, mMa, mDa, mL)
+    try:
+        dtuple = _ptuple - rn*ptuple
+    except TypeError as e:
+        print(type(_ptuple), type(ptuple), type(rn))
+        raise e
     ret = [mtuple, dtuple]
-    if fagg: ret += [Mtuple, Dtuple]
+    if fagg:
+        MI, DI = max(_I,rn*I), _I+rn*I
+        MG, DG = max(_G,rn*G), _G+rn*G
+        ML, DL = max(_L,rn*L), _L+rn*L
+        MM, DM = max(abs(_M),abs(rn*M)), abs(_M)+abs(rn*M)
+        MMa, DMa = max(abs(_Ma),abs(rn*Ma)), abs(_Ma)+abs(rn*Ma)
+        MDa, DDa = max(abs(_Da),abs(rn*Da)), abs(_Da)+abs(rn*Da)
+        Mtuple = ptupleT(MI, MG, MM, MMa, MDa, ML)
+        Dtuple = ptupleT(DI, DG, DM, DMa, DDa, DL)
+        ret += [Mtuple, Dtuple]
+
     return ret
 
 def comp_ptuple(_ptuple, ptuple, rn, fagg=0):  # 0der params
@@ -242,14 +247,14 @@ def comp_ptuple(_ptuple, ptuple, rn, fagg=0):  # 0der params
     dL = _L - L*rn;  mL = min(_L, L*rn) - ave
     dM = _M - M*rn;  mM = match_func(_M, M*rn) - ave  # M, Ma may be negative
     dMa= _Ma- Ma*rn; mMa = match_func(_Ma, Ma*rn) - ave
-    mAngle, dAngle = comp_angle((_Dy,_Dx), (Dy,Dx))
+    mDa, dDa = comp_angle((_Dy,_Dx), (Dy,Dx))
 
-    mtuple = [mI, mG, mM, mMa, mAngle, mL]
-    dtuple = [dI, dG, dM, dMa, dAngle, dL]
+    mtuple = ptupleT(mI, mG, mM, mMa, mDa, mL)
+    dtuple = ptupleT(dI, dG, dM, dMa, dDa, dL)
     ret = [mtuple, dtuple]
     if fagg:
-        Mtuple = [max(_I,I), max(_G,G), max(abs(_M),abs(M)), max(abs(_Ma),abs(Ma)), 2, max(_L,L)]
-        Dtuple = [abs(_I)+abs(I), abs(_G)+abs(G), abs(_M)+abs(M), abs(_Ma)+abs(Ma), 2, abs(_L)+abs(L)]
+        Mtuple = ptupleT(max(_I,I), max(_G,G), max(abs(_M),abs(M)), max(abs(_Ma),abs(Ma)), 2, max(_L,L))
+        Dtuple = ptupleT(abs(_I)+abs(I), abs(_G)+abs(G), abs(_M)+abs(M), abs(_Ma)+abs(Ma), 2, abs(_L)+abs(L))
         ret += [Mtuple, Dtuple]
     return ret
 

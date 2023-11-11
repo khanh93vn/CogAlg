@@ -16,8 +16,10 @@ from collections import namedtuple
 ptupleT = namedtuple("ptupleT", "I G M Ma angle L")
 ptupleT.__pos__ = lambda t: t
 ptupleT.__neg__ = lambda t: ptupleT(-t.I, -t.G, -t.M, -t.Ma, -t.angle, -t.L)
-ptupleT.__add__ = lambda _t, t: ptupleT(_t.I-t.I, _t.G-t.G, _t.M-t.M, _t.Ma-t.Ma, _t.angle-t.angle, _t.L-t.L)
-ptupleT.__sub__ = lambda _t, t: _t+(-t)
+ptupleT.__add__ = lambda _t,t: ptupleT(_t.I-t.I, _t.G-t.G, _t.M-t.M, _t.Ma-t.Ma, _t.angle-t.angle, _t.L-t.L)
+ptupleT.__sub__ = lambda _t,t: _t+(-t)
+ptupleT.__mul__ = lambda t,x: ptupleT(x*t.I, x*t.G, x*t.M, x*t.Ma, x*t.angle, x*t.L)
+ptupleT.__rmul__ = lambda t,x: ptupleT(x*t.I, x*t.G, x*t.M, x*t.Ma, x*t.angle, x*t.L)
 
 angleT = namedtuple('angleT', 'dy dx')
 angleT.__abs__ = lambda a: hypot(a.dy, a.dx)
@@ -25,6 +27,7 @@ angleT.__pos__ = lambda a: a
 angleT.__neg__ = lambda a: angleT(-a.dy,-a.dx)
 angleT.__add__ = lambda _a,a: angleT(_a.dy+a.dy, _a.dx+a.dx)
 angleT.__sub__ = lambda _a,a: _a+(-a)
+angleT.__mul__ = lambda a,x: angleT(x*a.dy, x*a.dx)
 
 class CEdge(ClusterStructure):  # edge blob
 

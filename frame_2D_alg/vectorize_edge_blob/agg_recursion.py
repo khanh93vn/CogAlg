@@ -5,7 +5,7 @@ from collections import defaultdict
 from .classes import Cgraph, CderG
 from .filters import ave_L, ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd
 from .slice_edge import slice_edge, comp_angle
-from .comp_slice import comp_P_, comp_derH, sum_derH, comp_ptuple, sum_dertuple, comp_dtuple, match_func
+from .comp_slice import comp_P_, comp_derH, sum_derH, comp_ptuple, comp_dtuple, match_func
 
 '''
 Blob edges may be represented by higher-composition patterns, etc., if top param-layer match,
@@ -440,7 +440,7 @@ def sum_derHv(T,t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers,
     for i in 0,1:
         Valt[i] += valt[i]; Rdnt[i] += rdnt[i]+base_rdn; Dect[i] += dect[i]
     DerH[:] = [
-        [ [sum_dertuple(Dertuple,dertuple, fneg*i) for i,(Dertuple,dertuple) in enumerate(zip(Tuplet,tuplet))],
+        [ [(Dertuple+dertuple) if fneg*i else (Dertuple-dertuple) for i,(Dertuple,dertuple) in enumerate(zip(Tuplet,tuplet))],
           [V+v for V,v in zip(Valt,valt)], [R+r+base_rdn for R,r in zip(Rdnt,rdnt)], [D+d for D,d in zip(Dect,dect)]
         ]
         for [Tuplet,Valt,Rdnt,Dect], [tuplet,valt,rdnt,dect]  # ptuple_tv
