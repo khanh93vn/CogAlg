@@ -218,11 +218,7 @@ def comp_dtuple(_ptuple, ptuple, rn, fagg=0):
     mDa = match_func(_Da, rn*Da) - ave
 
     mtuple = ptupleT(mI, mG, mM, mMa, mDa, mL)
-    try:
-        dtuple = _ptuple - rn*ptuple
-    except TypeError as e:
-        print(type(_ptuple), type(ptuple), type(rn))
-        raise e
+    dtuple = _ptuple - rn*ptuple
     ret = [mtuple, dtuple]
     if fagg:
         MI, DI = max(_I,rn*I), _I+rn*I

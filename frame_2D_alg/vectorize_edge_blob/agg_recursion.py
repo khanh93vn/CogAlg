@@ -69,33 +69,22 @@ def reform_dect_(node_, link_):
     while True:  # unpack lower node_ layer
         for link in link_:  # get compared Ps and find param maxes
             _P, P = link._P, link.P
-            S_[0] += 6  # 6 pars
-            _mmaxt,_dmaxt = [],[]
-            for _par, par in zip(_P.ptuple, P.ptuple):
-                if hasattr(par,"__len__"):
-                    _mmaxt += [2]; _dmaxt += [2]  # angle
-                else:  # scalar
-                    _mmaxt += [max(abs(_par),abs(par))]; _dmaxt += [(abs(_par)+abs(par))]
-            mmaxt_,dmaxt_ = [_mmaxt],[_dmaxt]  # append with maxes from all lower dertuples, empty if no comp
-            L = 0
-            rn  = len(_P.dert_)/ len(P.dert_)
+            S_[-1] += 6  # 6 pars
+            _mmaxt,_dmaxt = get_maxtt(_P.ptuple, P.ptuple)  # append with maxes from all lower dertuples, empty if no comp
+            mmaxt_, dmaxt_ = [_mmaxt],[_dmaxt]
+            L = 0; rn  = len(_P.dert_) / len(P.dert_)
             while len(_P.derH) > L and len(P.derH) > L:  # len derLay = len low Lays: 1,1,2,4. tuplets, map to _vmaxt_
                 hL = max(2*L,1)  # ini 0
                 _Lay,Lay, mDec_,dDec_ = _P.derH[L:hL],P.derH[L:hL],Dec_t[0][L:hL],Dec_t[1][L:hL]
                 for _tuplet,tuplet,_mmaxt,_dmaxt, mDec,dDec in zip_longest(_Lay,Lay,mmaxt_,dmaxt_,mDec_,dDec_, fillvalue=None):
                     L += 1  # combined len of all lower layers = len next layer
-                    if _tuplet and tuplet:
-                        mmaxt,dmaxt = [],[]; dect = [0,0]
-                        for fd,(_ptuple, ptuple, vmax_) in enumerate(zip(_tuplet,tuplet,(_mmaxt,_dmaxt))):
-                            for _par, par, vmax in zip(_ptuple,ptuple, vmax_):
-                                dect[fd] += par*rn/vmax if vmax else 1  # link decay = val/max, 0 if no prior comp
-                                if fd: dmaxt += [abs(_par)+abs(par*rn) if _par and par else 0]  # was not compared
-                                else:  mmaxt += [max(abs(_par),abs(par*rn)) if _par and par else 0]
-                        if mDec:
-                            Dec_t[0][L]+=dect[0]; Dec_t[1][L]+=dect[1]; S_[L] += 6  # accum 6 pars
-                        else:
-                            Dec_t[0] +=[dect[0]]; Dec_t[1] +=[dect[1]]; S_ += [6]  # extend both
-                        mmaxt_+=[mmaxt]; dmaxt_+=[dmaxt]  # from all lower layers
+                    if not _tuplet or not tuplet: continue
+                    (mmaxt,dmaxt), (mdec, ddec) = compute_dect(_tuplet,tuplet,_mmaxt,_dmaxt, rn)
+                    if mDec:
+                        Dec_t[0][L]+=mdec; Dec_t[1][L]+=ddec; S_[L] += 6  # accum 6 pars
+                    else:
+                        Dec_t[0] +=[mdec]; Dec_t[1] +=[ddec]; S_ += [6]  # extend both
+                    mmaxt_+=[mmaxt]; dmaxt_+=[dmaxt]  # from all lower layers
         sub_node_, sub_link_ = [],[]
         for sub_PP in node_:
             sub_link_ += list(set(sub_link_ + sub_PP.link_))
@@ -496,6 +485,52 @@ def sum_box(Box, box):
     (_,_,Y0,X0,Yn,Xn), (_,_,y0,x0,yn,xn) = Box, box  # unpack
     Box[2:] = [min(X0,x0), min(Y0,y0), max(Xn,xn), max(Yn,yn)]
 
+def get_maxtt(_ptuple, ptuple):  # 0der params
+
+    _I, _G, _M, _Ma, _, _L = _ptuple
+    I, G, M, Ma, _, L = ptuple
+
+    mmaxI, dmaxI = max(_I, I), _I + I
+    mmaxG, dmaxG = max(_G, G), _G + G
+    mmaxM, dmaxM = max(abs(_M), abs(M)), abs(_M) + abs(M)
+    mmaxMa, dmaxMa = max(abs(_Ma), abs(Ma)), abs(_Ma) + abs(Ma)
+    mmaxDa, dmaxDa = 2, 2
+    mmaxL, dmaxL = max(_L, L), _L + L
+
+    mmaxt = mmaxI, mmaxG, mmaxM, mmaxMa, mmaxDa, mmaxL
+    dmaxt = dmaxI, dmaxG, dmaxM, dmaxMa, dmaxDa, dmaxL
+    return mmaxt,dmaxt
+
+def compute_dect(_tuplet, tuplet, _mmaxt, _dmaxt, rn):
+    # unpack:
+    (_mI, _mG, _mM, _mMa, _mDa, _mL), (_dI, _dG, _dM, _dMa, _dDa, _dL) = _tuplet
+    (mI, mG, mM, mMa, mDa, mL), (dI, dG, dM, dMa, dDa, dL) = tuplet
+    _mmaxI, _mmaxG, _mmaxM, _mmaxMa, _mmaxDa, _mmaxL = _mmaxt
+    _dmaxI, _dmaxG, _dmaxM, _dmaxMa, _dmaxDa, _dmaxL = _dmaxt
+    # compute link decay dec = val/max, 0 if no prior comp
+    mdect = [
+        (mI*rn/_mmaxI) if _mmaxI else 1,
+        (mG*rn/_mmaxG)if _mmaxG else 1,
+        (mM*rn/_mmaxM) if _mmaxM else 1,
+        (mMa*rn/_mmaxMa) if _mmaxMa else 1,
+        (mDa*rn/_mmaxDa) if _mmaxDa else 1,
+        (mL*rn/_mmaxL) if _mmaxL else 1 ]
+    ddect = [
+        (dI*rn/_dmaxI) if _dmaxI else 1,
+        (dG*rn/_dmaxG) if _dmaxG else 1,
+        (dM*rn/_dmaxM) if _dmaxM else 1,
+        (dMa*rn/_dmaxMa) if _dmaxMa else 1,
+        (dDa*rn/_dmaxDa) if _dmaxDa else 1,
+        (dL*rn/_dmaxL) if _dmaxL else 1 ]
+    # get maxtt
+    mmaxt = [
+        max(abs(_mI), abs(mI*rn)), max(abs(_mG), abs(mG*rn)), max(abs(_mM), abs(mM*rn)), max(abs(_mMa), abs(mMa*rn)), max(abs(_mDa), abs(mDa*rn)), max(abs(_mL), abs(mL*rn)),
+        max(abs(_dI), abs(dI*rn)), max(abs(_dG), abs(dG*rn)), max(abs(_dM), abs(dM*rn)), max(abs(_dMa), abs(dMa*rn)), max(abs(_dDa), abs(dDa*rn)), max(abs(_dL), abs(dL*rn)) ]
+    dmaxt = [
+        abs(_mI)+abs(mI), abs(_mG)+abs(mG), abs(_mM)+abs(mM), abs(_mMa)+abs(mMa), abs(_mDa)+abs(mDa), abs(_mL)+abs(mL),
+        abs(_dI)+abs(dI), abs(_dG)+abs(dG), abs(_dM)+abs(dM), abs(_dMa)+abs(dMa), abs(_dDa)+abs(dDa), abs(_dL)+abs(dL) ]
+
+    return (mmaxt, dmaxt), (sum(mdect), sum(ddect))
 
 def feedback(root, fd):  # called from form_graph_, append new der layers to root
 
