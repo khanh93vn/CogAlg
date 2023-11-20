@@ -137,7 +137,6 @@ def node_connect(iG_,link_):  # node connectivity = sum surround link vals, incr
             G, rimt, valt,rdnt,dect,_uprimt = Gt
             uprimt = [[],[]]  # for >ave updates
             dVt = [0,0]  # dRt?
-            new_valt = [0,0]
             for i in 0,1:
                 ave = aves[i]
                 for link in _uprimt[i][G]:  # eval former >ave updates, +ve only?
@@ -150,7 +149,7 @@ def node_connect(iG_,link_):  # node connectivity = sum surround link vals, incr
                     dect[i] += link.dect[i]
                     rdnt[i] += _rdnt[i] * decay  # for segment_node_, else if fd==i: rimR += linkR and link.Rt?
                     linkV = _valt[i] * decay
-                    dv = linkV - link.Vt[i][j]; new_valt[i] += dv  # _node connect val * rel link val
+                    dv = linkV - link.Vt[i][j]; valt[i] += dv  # _node connect val * rel link val
                     link.Vt[i][j] = linkV # link update
                     if abs(dv) > ave:
                         dVt[i] += dv; uprimt[i] += [link]
