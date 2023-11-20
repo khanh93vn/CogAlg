@@ -156,7 +156,7 @@ class CderG(ClusterStructure):  # params of single-fork node_ cluster per pplaye
     valt : list = z([0,0])  # m,d
     rdnt : list = z([1,1])
     dect : list = z([0,0])  # mdecay, ddecay
-    Vt : list = z([0,0])  # combined net vals, accum in node_connect
+    Vt : list = z([[0,0],[0,0]])  # combined net vals, accum in node_connect
     _G : object = None  # comparand
     G: object = None  # comparand
     S : float = 0.0  # sparsity: average distance to link centers
