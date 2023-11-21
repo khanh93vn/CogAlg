@@ -23,7 +23,9 @@ class CCBase:
         self.xcmp()
         self.cgraph = self.graphT([], [])    # clustered object
         self.cluster()
-        if self.do_sub: self.sub()
+        if self.do_sub:
+            for node in self.cgraph.node_:
+                self.sub(node)
 
     def xcmp(self):
         raise NotImplementedError
@@ -31,15 +33,9 @@ class CCBase:
     def cluster(self):
         raise NotImplementedError
 
-    def sub(self):
+    def sub(self, node):
         raise NotImplementedError
 
-class RecBase:
-    def __init__(self, cc):
-        self.cc = cc
-
-    def evaluate(self):
-        raise NotImplementedError
 
 # Demonstration example of FrameBlobs and IntraBlob:
 class FrameBlobs(CCBase):
@@ -102,12 +98,8 @@ class FrameBlobs(CCBase):
             blob_ += [blob]
             idx += 1
 
-    def sub(self):
-        self.intra = IntraBlob(self)
-        self.intra.evaluate()
-
-class IntraBlob(RecBase):
-    pass
+    def sub(self, node):
+        pass    # do intra
 
 if __name__ == "__main__":
     image = imread("images/raccoon_eye.jpeg")
