@@ -99,13 +99,8 @@ def form_PP_t(root, root_link_, base_rdn):  # form PPs of derP.valt[fd] + connec
             while perimeter:
                 _P = perimeter.popleft()
                 if _P in cP_: continue
-                for derP in derP_:
-                    if derP.P is not _P: continue
-                    if derP._P in cP_: continue  # circular link? or derP._P in cP_?
-                    if derP.valt[fd] > P_aves[fd]/2 * derP.rdnt[fd]:  # no interference by -ve links? lower filter for link vs. P
-                        cP_ += [_P]
-                        perimeter += link_map[_P]  # append linked __Ps to extended perimeter of P
-                        break   # break to avoid duplicate P
+                cP_ += [_P]
+                perimeter += link_map[_P]  # append linked __Ps to extended perimeter of P
             PP = sum2PP(root, cP_, derP_, base_rdn, fd)
             PP_t[fd] += [PP]  # no if Val > PP_aves[fd] * Rdn:
 
@@ -135,6 +130,7 @@ def sum2PP(root, P_, derP_, base_rdn, fd):  # sum links in Ps and Ps in PP
     # accum P:
     celly_,cellx_ = [],[]
     for P in P_:
+        P.roott[fd] = PP
         PP.ptuple += P.ptuple  # accum ptuple
         for y, x in P.cells:
             PP.box = PP.box.accumulate(y, x)
