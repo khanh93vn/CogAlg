@@ -1,4 +1,4 @@
-# generic cycle: xcomp -> cluster -> sub+ eval ) agg+ eval
+# generic cycle: xcomp -> prune (links) -> form (clusters) -> sub+ eval ) agg+ eval
 import numpy as np
 from frame_blobs import ave
 from utils import kernel_slice_3x3 as ks
@@ -19,16 +19,21 @@ class CCBase:
         self.cgraph = None
 
     def evaluate(self):
-        # generic cycle: xcomp -> cluster -> sub+ eval ) agg+ eval
+        # generic cycle: xcomp -> prune (links) -> form (clusters) -> sub+ eval ) agg+ eval
+        self.cgraph = self.graphT([], [])  # clustered object
+
         self.xcmp()
-        self.cgraph = self.graphT([], [])    # clustered object
-        self.cluster()
+        self.prune()
+        self.form()
         if self.do_sub: self.sub()
 
     def xcmp(self):
         raise NotImplementedError
 
-    def cluster(self):
+    def prune(self):
+        raise NotImplementedError
+
+    def form(self):
         raise NotImplementedError
 
     def sub(self):
@@ -54,9 +59,11 @@ class FrameBlobs(CCBase):
                 (self.i__[ks.mr] - self.i__[ks.ml]) * 0.50 +
                 (self.i__[ks.br] - self.i__[ks.tl]) * 0.25)
         self.g__ = np.hypot(self.dy__, self.dx__)  # compute gradient magnitude per cell
-        self.s__ = ave - self.g__ > 0
 
-    def cluster(self):
+    def prune(self):
+        self.s__ = ave - self.g__ > 0   # sever (implicit) links of different-signed neighbors
+
+    def form(self):
         blob_, adjt_ = self.cgraph
         Y, X = self.s__.shape
         idx = 0
