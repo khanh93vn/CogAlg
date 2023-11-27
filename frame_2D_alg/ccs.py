@@ -48,17 +48,20 @@ class FrameBlobs(CCBase):
     cnodeT.G = property(lambda self: np.hypot(*self.dert[1:3]))   # G from Dy, Dx
 
     def xcmp(self):
-        self.i__ = self.igraph
-        # compute directional derivatives:
-        self.dy__ = (
-                (self.i__[ks.bl] - self.i__[ks.tr]) * 0.25 +
-                (self.i__[ks.bc] - self.i__[ks.tc]) * 0.50 +
-                (self.i__[ks.br] - self.i__[ks.tl]) * 0.25)
-        self.dx__ = (
-                (self.i__[ks.tr] - self.i__[ks.bl]) * 0.25 +
-                (self.i__[ks.mr] - self.i__[ks.ml]) * 0.50 +
-                (self.i__[ks.br] - self.i__[ks.tl]) * 0.25)
-        self.g__ = np.hypot(self.dy__, self.dx__)  # compute gradient magnitude per cell
+        self.i__ = self.igraph.node_
+        self.dy__ = np.zeros_like(self.i__, float)
+        self.dx__ = np.zeros_like(self.i__, float)
+        self.g__ = np.zeros_like(self.i__, float)
+
+        for _idx, idx, (disty, distx) in self.igraph.link_:
+            d__ = self.i__[idx] - self.i__[_idx]
+            # compute directional derivatives:
+            dist2 = disty**2 + distx**2
+            dy__ = d__ * disty / dist2
+            dx__ = d__ * distx / dist2
+            self.dy__[_idx] += dy__; self.dy__[idx] += dy__
+            self.dx__[_idx] += dx__; self.dx__[idx] += dx__
+        self.g__ = np.hypot(self.dy__, self.dx__)
 
     def prune(self):
         self.s__ = ave - self.g__ > 0   # sever (implicit) links of different-signed neighbors
@@ -98,7 +101,7 @@ class FrameBlobs(CCBase):
                 root=-1,
                 fopen=fopen,
                 dert=np.array([
-                    self.i__[ks.mc][msk].sum(),     # I
+                    self.i__[msk].sum(),            # I
                     self.dy__[msk].sum(),           # Dy
                     self.dx__[msk].sum()]))         # Dx
             blob_ += [blob]
@@ -112,7 +115,19 @@ class FrameBlobs(CCBase):
 
 if __name__ == "__main__":
     image = imread("images/raccoon_eye.jpeg")
-    frame_blobs = FrameBlobs(image)
+    # form link
+    alc, fst, lst = slice(None), slice(None, -1), slice(1, None)
+    igraph = CCBase.graphT(
+        image,
+        [
+            ((fst, alc), (lst, alc), (1, 0)),
+            ((alc, fst), (alc, lst), (0, 1)),
+            ((fst, fst), (lst, lst), (1, 1)),
+            ((fst, lst), (lst, fst), (1, -1)),
+        ],
+    )
+
+    frame_blobs = FrameBlobs(igraph)
     frame_blobs.evaluate()
     import matplotlib.pyplot as plt
     img = np.full((frame_blobs.s__.shape), 128, 'uint8')
