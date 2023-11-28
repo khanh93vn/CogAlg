@@ -46,7 +46,7 @@ def vectorize_root(blob, verbose):  # vectorization pipeline is 3 composition le
             if PP.valt[fd] * (len(node_)-1) * (PP.rng+1) <= G_aves[fd] * PP.rdnt[fd]: continue
             derH,valt,rdnt = PP.derH,PP.valt,PP.rdnt
             G_ += [Cgraph( ptuple=PP.ptuple, derH=derH, valHt=[[valt[0]],[valt[1]]], rdnHt=[[rdnt[0]],[rdnt[1]]], L=PP.ptuple[-1],
-                           box=[(PP.box[0]+PP.box[1])/2, (PP.box[2]+PP.box[3])/2] + list(PP.box), link_=PP.link_, nodet_H=[PP.node_t] )]
+                           box=PP.box, link_=PP.link_, nodet_H=[PP.node_t] )]
             i += 1  # G index in node_
         if G_:
             node_[:] = G_  # replace  PPs with Gs
@@ -66,7 +66,7 @@ def agg_recursion(rroot, root, G_, fd):  # + fpar for agg_parP_? compositional a
     else:   # rng+
         for i, _node in enumerate(G_):  # form new link_ from original node_
             for node in G_[i+1:]:
-                dy = _node.box[0] - node.box[0]; dx = _node.box[1] - node.box[1]
+                dy = _node.box.cy - node.box.cy; dx = _node.box.cx - node.box.cx
                 distance = np.hypot(dy, dx)  # distance between node centers, init ave_rng = 3:
                 if distance < 3 * ((_node.valHt[fd][-1] + node.valHt[fd][-1]) / ave * (_node.rdnHt[fd][-1] + node.rdnHt[fd][-1])):
                     Mval,Dval,Mrdn,Drdn,Mdec,Ddec = \
@@ -290,7 +290,7 @@ def sum2graph(root, grapht, fd):  # sum node and link params into graph, aggH in
     for i, Gt in enumerate(Gt_):
         G = Gt[0]
         Gt[-2][fd] = root
-        sum_box(graph.box, G.box)
+        graph.box += G.box
         nodet_ += [Gt]  # node,rimt,valt,rdnt,dect
         if (Mval,Dval)[fd] > ave * (Mrdn,Drdn)[fd]:  # redundant to nodes, only link_ params are necessary
             graph.ptuple += G.ptuple
@@ -299,8 +299,6 @@ def sum2graph(root, grapht, fd):  # sum node and link params into graph, aggH in
             sum_Hts(graph.valHt,graph.rdnHt,graph.decHt, G.valHt,G.rdnHt,G.decHt)
     # add derLay:
     graph.aggH += [subH]
-    Y,X,Y0,X0,Yn,Xn = graph.box
-    graph.box[:2] = [(Y0+Yn)/2, (X0+Xn)/2]
     graph.valHt[0]+=[Mval]; graph.valHt[1]+=[Dval]
     graph.rdnHt[0]+=[Mrdn]; graph.rdnHt[1]+=[Drdn]
     graph.decHt[0]+=[Mdec]; graph.decHt[1]+=[Ddec]
@@ -461,10 +459,6 @@ def sum_ext(Extt, extt):
     else:  # single ext
         for i in 0,1: Extt[i]+=extt[i]  # sum L,S
         for j in 0,1: Extt[2][j]+=extt[2][j]  # sum dy,dx in angle
-
-def sum_box(Box, box):
-    (_,_,Y0,X0,Yn,Xn), (_,_,y0,x0,yn,xn) = Box, box  # unpack
-    Box[2:] = [min(X0,x0), min(Y0,y0), max(Xn,xn), max(Yn,yn)]
 
 
 def feedback(root, fd):  # called from form_graph_, append new der layers to root
