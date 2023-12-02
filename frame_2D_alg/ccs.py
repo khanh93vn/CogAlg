@@ -1,11 +1,18 @@
 # generic cycle: xcomp -> prune (links) -> form (clusters) -> sub+ eval ) agg+ eval
 import numpy as np
 from frame_blobs import ave
-from utils import kernel_slice_3x3 as ks
 from collections import deque, namedtuple
 from itertools import product
 
 from utils import imread
+
+# TODO:
+# - data management
+#   - Structure
+#   - Life-cycle
+#   - Cross-reference/duplication
+# - define get_adj_
+
 
 class CCBase:
     graphT = namedtuple("graphT", "node_ link_")
@@ -28,12 +35,27 @@ class CCBase:
         if self.do_sub: self.sub()
 
     def xcmp(self):
+        # for link in link_:
+        #     cmp(link._node, link.node)
+        # (optional) combine()
         raise NotImplementedError
 
     def prune(self):
+        # remove weak links
         raise NotImplementedError
 
     def form(self):
+        # r_ = [False for node in node_]
+        # G_ = []
+        # for node in node_:
+        #     if r_[node]: continue
+        #     G = []
+        #     rim_ = [node]
+        #     while rim_:
+        #         _node = rim_.pop()
+        #         G += [_node]; r_[_node] = True
+        #         rim_ += adj_(_node) \ r_
+        #     G_ += [G]
         raise NotImplementedError
 
     def sub(self):
@@ -53,7 +75,9 @@ class FrameBlobs(CCBase):
         self.dx__ = np.zeros_like(self.i__, float)
         self.g__ = np.zeros_like(self.i__, float)
 
+        # loop thru links
         for _idx, idx, (disty, distx) in self.igraph.link_:
+            # compare each pair
             d__ = self.i__[idx] - self.i__[_idx]
             # compute directional derivatives:
             dist2 = disty**2 + distx**2
@@ -61,9 +85,12 @@ class FrameBlobs(CCBase):
             dx__ = d__ * distx / dist2
             self.dy__[_idx] += dy__; self.dy__[idx] += dy__
             self.dx__[_idx] += dx__; self.dx__[idx] += dx__
+
+        # combine (optional?)
         self.g__ = np.hypot(self.dy__, self.dx__)
 
     def prune(self):
+        # filter low-value links
         self.s__ = ave - self.g__ > 0   # sever (implicit) links of different-signed neighbors
 
     def form(self):
