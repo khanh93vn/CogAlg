@@ -199,7 +199,7 @@ def sum2graph(root, grapht, fd, nrng):  # sum node and link params into graph, a
     for G in G_:
         for i, link in enumerate(G.rim_tH[-1][fd]):
             if i: sum_derHv(G.esubH[-1],link.subH[-1], base_rdn=link.Rt[fd])
-            else: G.esubH += link.subH[-1]  # [derH, valt,rdnt,dect,extt, 1]
+            else: G.esubH += [link.subH[-1]]  # [derH, valt,rdnt,dect,extt, 1]
             for j in 0,1:
                 G.evalt[j]+=link.Vt[j]; G.erdnt[j]+=link.Rt[j]; G.edect[j]+=link.Dt[j]
         graph.box += G.box
@@ -313,7 +313,7 @@ def comp_derHv(_derH, derH, rn):  # derH is a list of der layers or sub-layers, 
 
     for _lay, lay in zip(_derH,derH):
         # comp dtuples, eval mtuples:
-        mtuple,dtuple, Mtuple,Dtuple = comp_dtuple(_lay[0][1], lay[0][1], rn, fagg=1)
+        mtuple,dtuple, Mtuple,Dtuple = comp_dtuple(_lay[1], lay[1], rn, fagg=1)
         mval = sum(mtuple); dval = sum(abs(d) for d in dtuple)
         mrdn = dval > mval; drdn = dval < mval
         dect = [0,0]
