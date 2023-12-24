@@ -129,7 +129,7 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     rdnt : list = z([1,1])
     dect : list = z([0,0])
     link_ : list = z([])  # internal, single-fork
-    node_H : list = z([])  # add|nest per sub)agg+ -> node_tH: n_forks per layer = 2^ n_lower_layers
+    node_ : list = z([])  # base node_ replaced by node_t in both agg+ and sub+, deeper node-mediated unpacking in agg+
     # graph-external, +level per root sub+:
     rim_tH : list = z([[[],[]]])  # directly connected nodes, per fork ) layer
     Rim_tH : list = z([[[],[]]])  # the most mediated evaluated nodes
@@ -144,12 +144,13 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     rng : int = 1
     box : boxT = boxT(inf,inf,-inf,-inf)  # y0,x0,yn,,xn
     # tentative:
-    nval : int = 0  # of open links: base alt rep
     alt_graph_ : list = z([])  # adjacent gap+overlap graphs, vs. contour in frame_graphs
     avalt : list = z([0,0])  # sum from alt graphs to complement G aves?
     ardnt : list = z([1,1])
     adect : list = z([0,0])
-
+    # PP:
+    P_: list = z([])
+    mask__ : object = None
     # temporary:
     Vt : list = z([])  # last layer vals for node_connect and clustering
     Rt : list = z([])
@@ -159,12 +160,9 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     fback_t : list = z([[],[],[]])  # feedback [[aggH,valt,rdnt,dect]] per node fork, maps to node_H
     compared_ : list = z([])
     Rdn : int = 0  # for accumulation or separate recursion count?
-
-    # edge
-    P_: list = z([])
-    blob : object = None
-    # PP
-    mask__ : object = None
+    # not used:
+    depth : int = 0  # n sub_G levels over base node_, max across forks
+    nval : int = 0  # of open links: base alt rep
     # id_H : list = z([[]])  # indices in the list of all possible layers | forks, not used with fback merging
     # top aggLay: derH from links, lower aggH from nodes, only top Lay in derG:
     # top Lay from links, lower Lays from nodes, hence nested tuple?
