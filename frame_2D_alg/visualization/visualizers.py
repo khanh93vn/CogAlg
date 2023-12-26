@@ -188,30 +188,30 @@ class BlobVisualizer(Visualizer):
         if blob is None: return
 
         if fd:
-            from vectorize_edge_blob.classes import CPP
             # edge visualizer
             if not blob.dlayers or not blob.dlayers[0]: return
             edge = blob.dlayers[0][0]
-            if not edge.node_t: return
-            PP_ = [
-                CPP(
-                    fd=1,
-                    ptuple=[blob.I, blob.G, edge.M, edge.Ma, [blob.Dy, blob.Dx], blob.A],
-                    derH=edge.derH,
-                    valt=edge.valt,
-                    rdnt=edge.rdnt,
-                    mask__=blob.mask__,
-                    root=blob,
-                    node_t=edge.node_t,
-                    P_=edge.P_,
-                    link_=edge.link_,
-                    fback_t=edge.fback_t,
-                    rng=edge.rng,
-                    box=blob.box,
-                )
-            ]
+            if not edge.node_: return
+            # from vectorize_edge_blob.classes import CPP
+            # PP_ = [
+            #     CPP(
+            #         fd=1,
+            #         ptuple=[blob.I, blob.G, edge.M, edge.Ma, [blob.Dy, blob.Dx], blob.A],
+            #         derH=edge.derH,
+            #         valt=edge.valt,
+            #         rdnt=edge.rdnt,
+            #         mask__=blob.mask__,
+            #         root=blob,
+            #         node_=edge.node_,
+            #         P_=edge.P_,
+            #         link_=edge.link_,
+            #         fback_t=edge.fback_t,
+            #         rng=edge.rng,
+            #         box=blob.box,
+            #     )
+            # ]
             self.clear_plot()
-            return SliceVisualizer(img_slice=blob.ibox.slice, element_=PP_, root_visualizer=self)
+            return SliceVisualizer(img_slice=blob.ibox.slice, element_=[edge], root_visualizer=self)
         else:
             # frame visualizer (r+blob)
             if not blob.rlayers or not blob.rlayers[0]: return
@@ -305,9 +305,9 @@ class SliceVisualizer(Visualizer):
     def go_deeper(self, fd):
         PP = self.hovered_element
         if PP is None: return
-        if not PP.node_t: return
-        if not isinstance(PP.node_t[0], list): return  # stop if no deeper layer (PP.node_t filled with Ps)
-        subPP_ = PP.node_t[fd]
+        if not PP.node_: return
+        if not isinstance(PP.node_[0], list): return  # stop if no deeper layer (PP.node_ filled with Ps)
+        subPP_ = PP.node_[fd]
         if not subPP_: return
         self.append_element_stack(subPP_)
         return self
