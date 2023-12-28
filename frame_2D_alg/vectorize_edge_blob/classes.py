@@ -131,8 +131,8 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     link_ : list = z([])  # internal, single-fork
     node_ : list = z([])  # base node_ replaced by node_t in both agg+ and sub+, deeper node-mediated unpacking in agg+
     # graph-external, +level per root sub+:
-    rim_tH : list = z([])  # directly connected nodes, per fork ) layer (this should be init empty, new layer will be added in comp_G)
-    Rim_tH : list = z([])  # the most mediated evaluated nodes
+    rim_tH : list = z([[[],[]]])  # directly connected nodes, per fork ) layer (this should be init empty, new layer will be added in comp_G)
+    Rim_tH : list = z([[[],[]]])  # the most mediated evaluated nodes
     esubH : list = z([])  # external subH: [[daggH,valt,rdnt,dect]] of all der)rng rim links
     evalt : list = z([0,0])  # sum from esubH
     erdnt : list = z([1,1])
@@ -152,9 +152,9 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
     P_: list = z([])
     mask__ : object = None
     # temporary:
-    Vt : list = z([])  # last layer vals for node_connect and clustering
-    Rt : list = z([])
-    Dt : list = z([])
+    Vt : list = z([0, 0])  # last layer vals for node_connect and clustering
+    Rt : list = z([0, 0])
+    Dt : list = z([0, 0])
     it : list = z([None,None])  # graph indices in root node_s, implicitly nested
     roott : list = z([None,None])  # for feedback
     fback_t : list = z([[],[],[]])  # feedback [[aggH,valt,rdnt,dect]] per node fork, maps to node_H
@@ -171,9 +171,9 @@ class Cgraph(ClusterStructure):  # params of single-fork node_ cluster per pplay
 class CderG(ClusterStructure):  # params of single-fork node_ cluster per pplayers
 
     subH : list = z([])  # [[derH_t, valt, rdnt]]: top aggLev derived in comp_G, per rng, all der+
-    Vt : list = z([])  # last layer vals from comp_G
-    Rt : list = z([])
-    Dt : list = z([])
+    Vt : list = z([0, 0])  # last layer vals from comp_G
+    Rt : list = z([0, 0])
+    Dt : list = z([0, 0])
     _G : object = None  # comparand + connec params
     G : object = None
     S : float = 0.0  # sparsity: average distance to link centers

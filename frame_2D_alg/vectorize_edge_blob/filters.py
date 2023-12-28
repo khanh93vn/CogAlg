@@ -22,7 +22,7 @@ ave_Pm = ave_Pd = 10
 P_aves = [ave_Pm,ave_Pd]
 ave_PPm = ave_PPm = 10
 PP_aves = [ave_PPm,ave_PPm]
-ave_Gm = ave_Gd = 10
+ave_Gm = ave_Gd = 50
 G_aves = [ave_Gm,ave_Gd]
 
 ave_splice = 10
