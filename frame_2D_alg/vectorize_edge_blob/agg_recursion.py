@@ -41,29 +41,29 @@ def vectorize_root(blob, verbose):  # vectorization in 3 composition levels of x
 
     comp_P_(edge, adj_Pt_)  # vertical, lateral-overlap P cross-comp -> PP clustering
 
-    for fd, node_ in enumerate(edge.node_):  # always node_t
-        if edge.valt[fd] * (len(node_)-1)*(edge.rng+1) > G_aves[fd] * edge.rdnt[fd]:
-            for PP in node_: PP.roott = [None, None]
-            agg_recursion(None, edge, node_, len_eH=0, fd=0)  # len G.eH
-            # PP cross-comp -> discontinuous clustering, agg+ only, no Cgraph nodes
-    return edge
+    # for fd, node_ in enumerate(edge.node_):  # always node_t
+    #     if edge.valt[fd] * (len(node_)-1)*(edge.rng+1) > G_aves[fd] * edge.rdnt[fd]:
+    #         for PP in node_: PP.roott = [None, None]
+    #         agg_recursion(None, edge, node_, lenH=1, fd=0)
+    #         # PP cross-comp -> discontinuous clustering, agg+ only, no Cgraph nodes
+    # return edge
 
 
-def agg_recursion(rroot, root, G_, len_eH, fd, nrng=1):  # compositional agg|sub recursion in root graph, cluster G_
+def agg_recursion(rroot, root, G_, lenH, fd, nrng=1):  # compositional agg|sub recursion in root graph, cluster G_
 
-    Et = [[0,0],[0,0],[0,0]]  # grapht link_ eValt, eRdnt, eDect(currently not used)
+    Et = [[0,0],[0,0],[0,0]]  # grapht link_' eValt, eRdnt, eDect(currently not used)
 
     if fd:  # der+
         for link in root.link_:  # reform links
             if link.Vt[1] < G_aves[1]*link.Rt[1]: continue  # maybe weak after rdn incr?
-            comp_G(link._G,link.G,link, Et, len_eH)  # len G.eH = len(graph.aggH[-1][0])
+            comp_G(link._G,link.G,link, Et, lenH)
     else:   # rng+
         for i, _G in enumerate(G_):  # form new link_ from original node_
             for G in G_[i+1:]:
                 dy = _G.box.cy - G.box.cy; dx = _G.box.cx - G.box.cx
                 if np.hypot(dy,dx) < 2 * nrng:  # max distance between node centers, init=2
                     link = CderG(_G=_G, G=G)
-                    comp_G(_G, G, link, Et, len_eH)
+                    comp_G(_G, G, link, Et, lenH)
 
     form_graph_t(root, G_, Et, nrng)  # root_fd, eval sub+, feedback per graph
     if isinstance(G_[0],list):  # node_t was formed above
@@ -71,7 +71,7 @@ def agg_recursion(rroot, root, G_, len_eH, fd, nrng=1):  # compositional agg|sub
         for i, node_ in enumerate(G_):
             if root.valt[i] * (len(node_)-1)*root.rng > G_aves[i] * root.rdnt[i]:
                 # agg+/ node_( sub)agg+/ node, vs sub+ only in comp_slice
-                agg_recursion(rroot, root, node_, len_eH=0, fd=0)  # der+ if fd, else rng+ =2
+                agg_recursion(rroot, root, node_, lenH=1, fd=0)  # der+ if fd, else rng+ =2
                 if rroot:
                     rroot.fback_t[i] += [[root.aggH,root.valt,root.rdnt,root.dect]]
                     feedback(rroot,i)  # update root.root..
@@ -113,10 +113,10 @@ def node_connect(_G_):  # node connectivity = sum surround link vals, incr.media
                 val,rdn,dec = G.Vt[i],G.Rt[i],G.Dt[i]  # connect by last layer
                 ave = G_aves[i]
                 for link in G.Rim_tH[-1][i]:
+                    lval,lrdn,ldec = link.Vt[i],link.Rt[i],link.Dt[i]
                     _G = link._G if link.G is G else link.G
                     _val,_rdn,_dec = _G.Vt[i],_G.Rt[i],_G.Dt[i]
-                    ldec = link.Dt[i]
-                    # form Vt.. for segment_node_:
+                    # Vt.. for segment_node_:
                     V = ldec * (val+_val); dv = V-link.Vt[i]; link.Vt[i] = V
                     R = ldec * (rdn+_rdn); dr = R-link.Rt[i]; link.Rt[i] = R
                     D = ldec * (dec+_dec); dd = D-link.Dt[i]; link.Dt[i] = D
@@ -285,7 +285,7 @@ def comp_G(_G, G, link, Et, len_root_H):
 
     if fadd:  # add link
         for fd, (Val,Rdn,Dec) in enumerate(zip(Valt,Rdnt,Dect)):
-            # exclude -ve links:
+            # exclude neg links:
             if Val > G_aves[fd] * Rdn:
                 Et[0][fd]+=Val; Et[1][fd]+=Rdn; Et[2][fd]+=Dec  # to eval grapht in form_graph_t
                 for G in link._G, link.G:
@@ -445,15 +445,8 @@ def comp_ext(_ext, ext, Valt, Rdnt, Dect):  # comp ds:
     _aL = abs(_L); aL = abs(L)
     _aS = abs(_S); aS = abs(S)
 
-    # ave dec = ave (ave dec, ave dec of L,S,A):
-    Dect[0] = ((mL / max(aL,_aL) if aL or _aL else 1 +
-                mS / max(aS,_aS) if aS or _aS else 1 +
-                mA / max_mA if max_mA else 1) /3
-                + Dect[0]) / 2
-    Dect[1] = ((dL / (_aL+aL) if aL+_aL else 1 +
-                dS / (_aS+aS) if aS+_aS else 1 +
-                dA / max_dA if max_mA else 1) /3
-                + Dect[1]) / 2
+    Dect[0] += (mL/ max(aL,_aL) + mS/ max(aS,_aS) if aS or _aS else 1 + (mA / max_mA) if max_mA else 1) /3  # ave dec of 3 vals
+    Dect[1] += (dL/ (_aL+aL) + dS / (_aS+aS) if aS or _aS else 1 + (dA / max_dA) if max_mA else 1) /3
 
     return [[mL,mS,mA], [dL,dS,dA]]
 
