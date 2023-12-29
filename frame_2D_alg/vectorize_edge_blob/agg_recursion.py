@@ -84,18 +84,20 @@ def form_graph_t(root, G_, Et, nrng):  # form Gm_,Gd_ from same-root nodes
     node_connect(_G_)  # Graph Convolution of Correlations over init _G_
     node_t = []
     for fd in 0,1:
-        if Et[0][fd] > ave * Et[1][fd]:  # eValt > ave * eRdnt, else no clustering, keep root.node_
+        if Et[0][fd] > ave * (root.rdnt[fd]+Et[1][fd]):
+            # cluster if eVal > ave * (iRdn+eRdn), else keep root.node_
             graph_ = segment_node_(root, _G_, fd, nrng)  # fd: node-mediated Correlation Clustering
             if not graph_: continue
             for graph in graph_:  # eval sub+ per node
                 if graph.Vt[fd] * (len(graph.node_)-1)*root.rng > G_aves[fd] * graph.Rt[fd]:
-                    agg_recursion(root, graph, graph.node_, len(graph.aggH[-1][0]), fd, nrng+1*(1-fd))  # nrng+ if not fd
+                    # nrng+ if not fd:
+                    agg_recursion(root, graph, graph.node_, len(graph.aggH[-1][0]), fd, nrng+1*(1-fd))
                 else:
                     root.fback_t[root.fd] += [[graph.aggH, graph.valt, graph.rdnt, graph.dect]]
                     feedback(root,root.fd)  # update root.root..
-            node_t += [graph_]  # may be empty
-        else: node_t += []
-    if any(node_t): G_[:] = node_t
+            if graph_:
+                root.rdn+=1; node_t += [graph_,fd]
+    if node_t: G_[:] = node_t
 
 
 def node_connect(_G_):  # node connectivity = sum surround link vals, incr.mediated: Graph Convolution of Correlations
@@ -445,8 +447,15 @@ def comp_ext(_ext, ext, Valt, Rdnt, Dect):  # comp ds:
     _aL = abs(_L); aL = abs(L)
     _aS = abs(_S); aS = abs(S)
 
-    Dect[0] += (mL/ max(aL,_aL) + mS/ max(aS,_aS) if aS or _aS else 1 + (mA / max_mA) if max_mA else 1) /3  # ave dec of 3 vals
-    Dect[1] += (dL/ (_aL+aL) + dS / (_aS+aS) if aS or _aS else 1 + (dA / max_dA) if max_mA else 1) /3
+    # ave dec = ave (ave dec, ave L,S,A dec):
+    Dect[0] = ((mL / max(aL,_aL) if aL or _aL else 1 +
+                mS / max(aS,_aS) if aS or _aS else 1 +
+                mA / max_mA if max_mA else 1) /3
+                + Dect[0]) / 2
+    Dect[1] = ((dL / (_aL+aL) if aL+_aL else 1 +
+                dS / (_aS+aS) if aS+_aS else 1 +
+                dA / max_dA if max_mA else 1) /3
+                + Dect[1]) / 2
 
     return [[mL,mS,mA], [dL,dS,dA]]
 
