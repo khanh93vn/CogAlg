@@ -68,10 +68,10 @@ def agg_recursion(rroot, root, G_, lenH, fd, nrng=1):  # compositional agg|sub r
     form_graph_t(root, G_, Et, nrng)  # root_fd, eval sub+, feedback per graph
     if isinstance(G_[0],list):  # node_t was formed above
 
-        for i, (node_, sfd) in enumerate(G_):
+        for i, node_ in enumerate(G_):
             if root.valt[i] * (len(node_)-1)*root.rng > G_aves[i] * root.rdnt[i]:
                 # agg+/ node_( sub)agg+/ node, vs sub+ only in comp_slice
-                agg_recursion(rroot, root, node_, lenH=1, fd=sfd)  # der+ if fd, else rng+ =2
+                agg_recursion(rroot, root, node_, lenH=1, fd=0)  # der+ if fd, else rng+ =2
                 if rroot:
                     rroot.fback_t[i] += [[root.aggH,root.valt,root.rdnt,root.dect]]
                     feedback(rroot,i)  # update root.root..
@@ -84,19 +84,18 @@ def form_graph_t(root, G_, Et, nrng):  # form Gm_,Gd_ from same-root nodes
     node_connect(_G_)  # Graph Convolution of Correlations over init _G_
     node_t = []
     for fd in 0,1:
-        if Et[0][fd] > ave * (root.rdnt[fd]+Et[1][fd]):
-            # cluster if eVal > ave * (iRdn+eRdn), else keep root.node_
+        if Et[0][fd] > ave * Et[1][fd]:  # eValt > ave * eRdnt, else no clustering, keep root.node_
             graph_ = segment_node_(root, _G_, fd, nrng)  # fd: node-mediated Correlation Clustering
+            if not graph_: continue
             for graph in graph_:  # eval sub+ per node
                 if graph.Vt[fd] * (len(graph.node_)-1)*root.rng > G_aves[fd] * graph.Rt[fd]:
-                    # nrng+ if not fd:
-                    agg_recursion(root, graph, graph.node_, len(graph.aggH[-1][0]), fd, nrng+1*(1-fd))
+                    agg_recursion(root, graph, graph.node_, len(graph.aggH[-1][0]), fd, nrng+1*(1-fd))  # nrng+ if not fd
                 else:
                     root.fback_t[root.fd] += [[graph.aggH, graph.valt, graph.rdnt, graph.dect]]
                     feedback(root,root.fd)  # update root.root..
-            if graph_:
-                root.Rdn+=1; node_t += [[graph_,fd]]
-    if node_t: G_[:] = node_t
+            node_t += [graph_]  # may be empty
+        else: node_t += []
+    if any(node_t): G_[:] = node_t
 
 
 def node_connect(_G_):  # node connectivity = sum surround link vals, incr.mediated: Graph Convolution of Correlations
@@ -155,7 +154,6 @@ def segment_node_(root, root_G_, fd, nrng):  # eval rim links with summed surrou
                 else:
                     G = link._G; _G = link.G
                 if _G in G_: continue
-                assert _G in root_G_
                 # connect by rel match of nodes * match of node Vs: surround M|Ds,
                 # V = how deeply inside the graph is G
                 cval = link.Vt[fd] + get_match(G.Vt[fd],_G.Vt[fd])  # same coef for int and ext match?
@@ -291,7 +289,7 @@ def comp_G(_G, G, link, Et, len_root_H):
             if Val > G_aves[fd] * Rdn:
                 Et[0][fd]+=Val; Et[1][fd]+=Rdn; Et[2][fd]+=Dec  # to eval grapht in form_graph_t
                 for G in link._G, link.G:
-                    if len(G.rim_tH)==len_root_H-1:  # empty rim layer, init with link:
+                    if len(G.rim_tH)==len_root_H:  # empty rim layer, init with link:
                         if fd:
                             G.Vt=[0,Val]; G.Rt=[0,Rdn]; G.Dt=[0,Dec]; G.rim_tH += [[[],[link]]]; G.Rim_tH += [[[],[link]]]
                         else:
