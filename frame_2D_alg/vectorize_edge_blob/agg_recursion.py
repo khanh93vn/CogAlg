@@ -84,9 +84,7 @@ def form_graph_t(root, G_, Et, nrng):  # form Gm_,Gd_ from same-root nodes
     node_connect(_G_)  # Graph Convolution of Correlations over init _G_
     node_t = []
     for fd in 0,1:
-        if Et[0][fd] <= ave * Et[1][fd]:  # eValt <= ave * eRdnt: no clustering, keep root.node_
-            graph_ = []
-        else:
+        if Et[0][fd] > ave * Et[1][fd]:  # eValt > ave * eRdnt: cluster
             graph_ = segment_node_(root, _G_, fd, nrng)  # fd: node-mediated Correlation Clustering
             for graph in graph_:  # eval sub+ per node
                 if graph.Vt[fd] * (len(graph.node_)-1)*root.rng > G_aves[fd] * graph.Rt[fd]:
@@ -94,8 +92,11 @@ def form_graph_t(root, G_, Et, nrng):  # form Gm_,Gd_ from same-root nodes
                 else:
                     root.fback_t[root.fd] += [[graph.aggH, graph.valt, graph.rdnt, graph.dect]]
                     feedback(root,root.fd)  # update root.root..
-        node_t += [graph_]  # may be empty
-    if any(node_t): G_[:] = node_t
+            node_t += [graph_]  # may be empty
+        else:
+            node_t += [[]]
+    if any(node_t):
+        G_[:] = node_t  # else keep root.node_
 
 
 def node_connect(_G_):  # node connectivity = sum surround link vals, incr.mediated: Graph Convolution of Correlations
