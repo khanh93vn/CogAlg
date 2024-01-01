@@ -1,6 +1,6 @@
 import numpy as np
 from copy import deepcopy, copy
-from itertools import zip_longest
+from itertools import combinations, zip_longest
 from .classes import Cgraph, CderG
 from .filters import aves, ave_mL, ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd
 from .slice_edge import slice_edge, comp_angle
@@ -55,15 +55,14 @@ def agg_recursion(rroot, root, G_, lenH, fd, nrng=1):  # compositional agg|sub r
 
     if fd:  # der+
         for link in root.link_:  # reform links
-            if link.Vt[1] < G_aves[1]*link.Rt[1]: continue  # maybe weak after rdn incr?
-            comp_G(link._G,link.G,link, Et, lenH)
+            if link.Vt[1] >= G_aves[1]*link.Rt[1]:  # maybe weak after rdn incr?
+                comp_G(link, Et, lenH)
     else:   # rng+
-        for i, _G in enumerate(G_):  # form new link_ from original node_
-            for G in G_[i+1:]:
-                dy = _G.box.cy - G.box.cy; dx = _G.box.cx - G.box.cx
-                if np.hypot(dy,dx) < 2 * nrng:  # max distance between node centers, init=2
-                    link = CderG(_G=_G, G=G)
-                    comp_G(_G, G, link, Et, lenH)
+        for _G, G in combinations(G_, r=2):  # form new link_ from original node_
+            dy = _G.box.cy - G.box.cy; dx = _G.box.cx - G.box.cx
+            if np.hypot(dy,dx) < 2 * nrng:  # max distance between node centers, init=2
+                link = CderG(_G=_G, G=G)
+                comp_G(link, Et, lenH)
 
     form_graph_t(root, G_, Et, nrng)  # root_fd, eval sub+, feedback per graph
     if isinstance(G_[0],list):  # node_t was formed above
@@ -128,6 +127,7 @@ def node_connect(_G_):  # node connectivity = sum surround link vals, incr.media
                         G.evalt[i] += dv; G.erdnt[i] += dr; G.edect[i] += dd
             if any(uprimt):  # pruned for next loop
                 G.Rim_tH[-1] = uprimt
+                G_ += [G]
 
         if G_: _G_ = G_  # exclude weakly incremented Gs from next connectivity expansion loop
         else:  break
@@ -229,8 +229,9 @@ def sum2graph(root, grapht, fd, nrng):  # sum node and link params into graph, a
     return graph
 
 
-def comp_G(_G, G, link, Et, len_root_H):
+def comp_G(link, Et, len_root_H):
 
+    _G, G = link._G, link.G
     Mval,Dval, Mrdn,Drdn, Mdec,Ddec = 0,0, 1,1, 0,0
 
     # keep separate P ptuple and PP derH, empty derH in single-P G, + empty aggH in single-PP G:
