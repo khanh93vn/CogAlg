@@ -25,7 +25,7 @@ Generic graph is a dual tree with common root: down-forking input node Gs and up
 This resembles a neuron, which has dendritic tree as input and axonal tree as output. 
 But we have recursively structured param sets packed in each level of these trees, which don't exist in neurons.
 Diagram: 
-https://github.com/boris-kz/CogAlg/blob/76327f74240305545ce213a6c26d30e89e226b47/frame_2D_alg/Illustrations/generic%20graph.drawio.png
+https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/generic%20graph.drawio.png
 -
 Clustering criterion is G M|D, summed across >ave vars if selective comp (<ave vars are not compared, so they don't add costs).
 Fork selection should be per var or co-derived der layer or agg level. 
@@ -70,7 +70,7 @@ def agg_recursion(rroot, root, G_, lenH, fd, nrng=1):  # compositional agg|sub r
         for i, node_ in enumerate(G_):
             if root.valt[i] * (len(node_)-1)*root.rng > G_aves[i] * root.rdnt[i]:
                 # agg+/ node_( sub)agg+/ node, vs sub+ only in comp_slice
-                agg_recursion(rroot, root, node_, lenH=1, fd=0)  # der+ if fd, else rng+ =2
+                agg_recursion(rroot, root, node_, lenH=0, fd=0)  # der+ if fd, else rng+ =2
                 if rroot:
                     rroot.fback_t[i] += [[root.aggH,root.valt,root.rdnt,root.dect]]
                     feedback(rroot,i)  # update root.root..
@@ -87,8 +87,8 @@ def form_graph_t(root, G_, Et, nrng):  # form Gm_,Gd_ from same-root nodes
             graph_ = segment_node_(root, _G_, fd, nrng)  # fd: node-mediated Correlation Clustering
             for graph in graph_:
                 # eval sub+ per node
-                if graph.Vt[fd] * (len(graph.node_)-1)*root.rng > G_aves[fd] * graph.Rt[fd]:
-                    agg_recursion(root, graph, graph.node_, len(graph.aggH[-1][0]), fd, nrng+1*(1-fd))  # nrng+ if not fd
+                if graph.Vt[fd] * (len(graph.node_)-1)*graph.rng > G_aves[fd] * graph.Rt[fd]:
+                    agg_recursion(root, graph, graph.node_, len(graph.aggH[-1][0]), fd, nrng+(1-fd))  # nrng+ if not fd
                 else:
                     root.fback_t[root.fd] += [[graph.aggH, graph.valt, graph.rdnt, graph.dect]]
                     feedback(root,root.fd)  # update root.root..
