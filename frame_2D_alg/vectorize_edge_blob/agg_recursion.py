@@ -24,8 +24,6 @@ Sub+ re-compares nodes within Gs, adding intermediate Gs, down-forking levels to
 Generic graph is a dual tree with common root: down-forking input node Gs and up-forking output graph Gs. 
 This resembles a neuron, which has dendritic tree as input and axonal tree as output. 
 But we have recursively structured param sets packed in each level of these trees, which don't exist in neurons.
-Diagram: 
-https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/generic%20graph.drawio.png
 -
 Clustering criterion is G M|D, summed across >ave vars if selective comp (<ave vars are not compared, so they don't add costs).
 Fork selection should be per var or co-derived der layer or agg level. 
@@ -33,6 +31,10 @@ There are concepts that include same matching vars: size, density, color, stabil
 Weak value vars are combined into higher var, so derivation fork can be selected on different levels of param composition.
 
 Clustering by variance: lend|borrow, contribution or counteraction to similarity | stability, such as metabolism? 
+
+Diagrams: 
+https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/generic%20graph.drawio.png
+https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/agg_recursion_unfolded.drawio.png
 '''
 
 def vectorize_root(blob, verbose):  # vectorization in 3 composition levels of xcomp, cluster:
@@ -52,6 +54,7 @@ def vectorize_root(blob, verbose):  # vectorization in 3 composition levels of x
 def agg_recursion(rroot, root, G_, lenH, fd, nrng=1):  # compositional agg|sub recursion in root graph, cluster G_
 
     Et = [[0,0],[0,0],[0,0]]  # grapht link_' eValt, eRdnt, eDect(currently not used)
+    lenH = len(root.aggH[-1][0])  # not sure
 
     if fd:  # der+
         for link in root.link_:  # reform links
@@ -87,8 +90,8 @@ def form_graph_t(root, G_, Et, nrng):  # form Gm_,Gd_ from same-root nodes
             graph_ = segment_node_(root, _G_, fd, nrng)  # fd: node-mediated Correlation Clustering
             for graph in graph_:
                 # eval sub+ per node
-                if graph.Vt[fd] * (len(graph.node_)-1)*graph.rng > G_aves[fd] * graph.Rt[fd]:
-                    agg_recursion(root, graph, graph.node_, len(graph.aggH[-1][0]), fd, nrng+(1-fd))  # nrng+ if not fd
+                if graph.Vt[fd] * (len(graph.node_)-1)*root.rng > G_aves[fd] * graph.Rt[fd]:
+                    agg_recursion(root, graph, graph.node_, len(graph.aggH[-1][0]), fd, nrng+1*(1-fd))  # nrng+ if not fd
                 else:
                     root.fback_t[root.fd] += [[graph.aggH, graph.valt, graph.rdnt, graph.dect]]
                     feedback(root,root.fd)  # update root.root..
@@ -139,8 +142,8 @@ def segment_node_(root, root_G_, fd, nrng):  # eval rim links with summed surrou
     # graph += [node] if >ave (surround connectivity * relative value of link to any internal node)
     igraph_ = []; ave = G_aves[fd]
 
-    for G in root_G_:   # init per node, last-layer Vt,Vt,Dt:
-        grapht = [[G],[], G.Vt,G.Rt,G.Dt, copy(G.rim_t[-1][fd])]
+    for G in root_G_:   # init per node,  last-layer Vt,Vt,Dt:
+        grapht = [[G],[], G.Vt,G.Rt,G.Dt, copy(G.rim_t[-1][fd])]  # init link_ with rim
         G.roott[fd] = grapht  # roott for feedback
         igraph_ += [grapht]
     _graph_ = igraph_
@@ -232,7 +235,7 @@ def sum2graph(root, grapht, fd, nrng):  # sum node and link params into graph, a
     return graph
 
 
-def comp_G(link, Et, len_root_H, len_root_HH=-1):  # len_root_HH used in agg_compress only
+def comp_G(link, Et, lenH):  # len_root_HH used in agg_compress only
 
     _G, G = link._G, link.G
     Mval,Dval, Mrdn,Drdn, Mdec,Ddec = 0,0, 1,1, 0,0
@@ -294,31 +297,36 @@ def comp_G(link, Et, len_root_H, len_root_HH=-1):  # len_root_HH used in agg_com
             if Val > G_aves[fd] * Rdn:
                 Et[0][fd]+=Val; Et[1][fd]+=Rdn; Et[2][fd]+=Dec  # to eval grapht in form_graph_t
                 for G in link._G, link.G:
-
-                    # draft
-                    if len_root_HH > -1:  # for agg_compress only, use increased nesting:
+                    # draft:
+                    ddepth = lenH - G.rim_t[-1]  # nest rim_t to lenH:
+                    while ddepth:
+                        G.rim_t = [G.rim_t]
+                        ddepth -= 1
+                    # old:
+                    if len_root_HH > -1:  # agg_compress, increase nesting
                         if len(G.rim_t)==len_root_HH:  # empty rim layer, init with link:
                             if fd:
-                                G.Vt=[0,Val]; G.Rt=[0,Rdn]; G.Dt=[0,Dec]; G.rim_t += [[[[],[link]]]]; G.rim_t += [[[[],[link]]]]
+                                G.Vt=[0,Val]; G.Rt=[0,Rdn]; G.Dt=[0,Dec]  # temporary
+                                G.rim_t = [[[[[],[link]]]],2]  # init rim_tHH, depth = 2
                             else:
-                                G.Vt=[Val,0]; G.Rt=[Rdn,0]; G.Dt=[Dec,0]; G.rim_t += [[[[link],[]]]]; G.rim_t += [[[[link],[]]]]
+                                G.Vt=[Val,0]; G.Rt=[Rdn,0]; G.Dt=[Dec,0]
+                                G.rim_t = [[[[[link],[]]]],2]
                         else:
-                            # accum rim layer with link:
-                            G.Vt[fd] += Val; G.Rt[fd] += Rdn; G.Dt[fd] += Dec
-                            G.rim_t[-1][-1][fd] += [link]; G.rim_t[-1][-1][fd] += [link]
+                            G.Vt[fd] += Val; G.Rt[fd] += Rdn; G.Dt[fd] += Dec  # accum rim layer with link
+                            G.rim_t[0][-1][-1][fd] += [link]  # append rim_tHH
                     else:
                         if len(G.rim_t)==len_root_H:  # empty rim layer, init with link:
                             if fd:
-                                G.Vt=[0,Val]; G.Rt=[0,Rdn]; G.Dt=[0,Dec]; G.rim_t += [[[],[link]]]; G.rim_t += [[[],[link]]]
+                                G.Vt=[0,Val]; G.Rt=[0,Rdn]; G.Dt=[0,Dec]
+                                G.rim_t = [[[[],[link]]],1]  # init rim_tH, depth = 1
                             else:
-                                G.Vt=[Val,0]; G.Rt=[Rdn,0]; G.Dt=[Dec,0]; G.rim_t += [[[link],[]]]; G.rim_t += [[[link],[]]]
+                                G.Vt=[Val,0]; G.Rt=[Rdn,0]; G.Dt=[Dec,0]
+                                G.rim_t = [[[[link],[]]],1]
                         else:
-                            # accum rim layer with link:
-                            G.Vt[fd] += Val; G.Rt[fd] += Rdn; G.Dt[fd] += Dec
-                            G.rim_t[-1][fd] += [link]; G.rim_t[-1][fd] += [link]
+                            G.Vt[fd] += Val; G.Rt[fd] += Rdn; G.Dt[fd] += Dec  # accum rim layer with link
+                            G.rim_t[0][-1][fd] += [link]  # append rim_tH
 
     link.Vt = Valt; link.Rt = Rdnt; link.Dt = Dect  # reset per comp_G
-    return link
 
 
 def comp_aggHv(_aggH, aggH, rn):  # no separate ext
