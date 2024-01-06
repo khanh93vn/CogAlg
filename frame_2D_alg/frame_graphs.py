@@ -2,7 +2,7 @@
 Cross-compare blobs with incrementally mediated adjacency, forming blobs of blobs
 '''
 
-from class_cluster import ClusterStructure, comp_param
+from class_cluster import CBase, comp_param
 from frame_blobs import CBlob
 from frame_2D_alg.vectorize_edge_blob.comp_slice import ave, ave_daangle, ave_dx, ave_Ma, ave_inv # facing error when comp-slice_ import from comp_blob, hence shift it here.
 from intra_blob import intra_blob_root
@@ -22,7 +22,7 @@ ave_A = 10
 
 param_names = ["I", "G", "M", "A"]
 
-class CderBlob(ClusterStructure):  # set of derivatives per blob param
+class CderBlob(CBase):  # set of derivatives per blob param
 
     p = int  # last compared blob param
     s = int  # p summed in rng
