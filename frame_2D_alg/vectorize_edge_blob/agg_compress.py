@@ -2,7 +2,7 @@ import numpy as np
 from copy import deepcopy, copy
 from itertools import zip_longest, combinations
 from collections import deque, defaultdict
-from .classes import Cgraph, CderG, CPP
+from .classes import Cgraph, CderG
 from .filters import ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd, ave_dI
 from .slice_edge import slice_edge, comp_angle
 from .comp_slice import comp_P_, comp_ptuple, comp_derH, sum_derH, sum_dertuple, get_match
