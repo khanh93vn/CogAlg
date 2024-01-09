@@ -51,13 +51,13 @@ UNFILLED = -1
 EXCLUDED = -2
 
 
-class Cdert(NamedTuple):
+class Cder__t(NamedTuple):
     dy: Any
     dx: Any
     g: Any
 
-    def get_pixel(self, y: Real, x: Real) -> Cdert:
-        return Cdert(self.dy[y, x], self.dx[y, x], self.g[y, x])
+    def get_pixel(self, y: Real, x: Real) -> Tuple[Real, Real, Real]:
+        return self.dy[y, x], self.dx[y, x], self.g[y, x]
 
 
 class Cbox(NamedTuple):
@@ -115,7 +115,7 @@ class CBlob(CBase):
     ibox : Cbox = Cbox(0, 0, 0, 0) # box for i__
     mask__ : object = None
     i__ : object = None     # reference to original input (no shrinking)
-    der__t : Cdert = None   # tuple of derivatives arrays, consistent in shape
+    der__t : Cder__t = None   # tuple of derivatives arrays, consistent in shape
     adj_blobs : list = z([])  # adjacent blobs
     fopen : bool = False
     # intra_blob params: # or pack in intra = lambda: Cintra
@@ -192,7 +192,7 @@ def comp_pixel(pi__):
     )
     G__ = np.hypot(dy__, dx__)                          # compute gradient magnitude
 
-    return Cdert(dy__, dx__, G__)
+    return Cder__t(dy__, dx__, G__)
 
 
 def flood_fill(root_blob, fork_data, verbose=False):
@@ -255,7 +255,7 @@ def flood_fill(root_blob, fork_data, verbose=False):
                             adj_pairs.add((idmap[y2, x2], blob.id))  # blob.id always increases
                 # terminate blob
                 blob.ibox = fork_ibox.sub_box2box(blob.box)
-                blob.der__t = Cdert(
+                blob.der__t = Cder__t(
                     *(par__[blob.box.slice] for par__ in der__t))
                 blob.mask__ = (idmap[blob.box.slice] == blob.id)
                 blob.adj_blobs = [[],[]] # iblob.adj_blobs[0] = adj blobs, blob.adj_blobs[1] = poses
