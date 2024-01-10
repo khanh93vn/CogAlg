@@ -21,19 +21,15 @@ from .filters import ave_dangle, ave_dI, ave_Pd, ave_Pm, aves
     longer names are normally classes
 '''
 
-
 class Cmd(NamedTuple):     # m | d tuple
     m: Any
     d: Any
-
     def __add__(self, other: Cmd | Tuple[Any, Any]) -> Cmd:
         return Cmd(self.m + other[0], self.d + other[1])
-
 
 class Cangle(NamedTuple):
     dy: Real
     dx: Real
-
     # operators:
     def __abs__(self) -> Real: return hypot(self.dy, self.dx)
     def __pos__(self) -> Cangle: return self
@@ -59,6 +55,7 @@ class Cangle(NamedTuple):
 
 
 class Cptuple(NamedTuple):
+
     I: Real = 0
     G: Real = 0
     M: Real = 0
@@ -71,11 +68,11 @@ class Cptuple(NamedTuple):
     def __neg__(self) -> Cptuple: return Cptuple(-self.I, -self.G, -self.M, -self.Ma, -self.angle, -self.L)
 
     def __sub__(self, other: Cptuple) -> Cptuple: return self + (-other)
-
     def __add__(self, other: Cptuple) -> Cptuple:
         return Cptuple(self.I+other.I, self.G+other.G, self.M+other.M, self.Ma+other.Ma, self.angle+other.angle, self.L+other.L)
 
     def comp(self, other: Cptuple, rn: Real) -> Tuple[Cmd, Cmd, Cmd]:     # comp_ptuple
+
         _I, _G, _M, _Ma, _angle, _L = self
         I, G, M, Ma, angle, L = other
 
@@ -89,8 +86,8 @@ class Cptuple(NamedTuple):
         mtuple = Cptuple(mI, mG, mM, mMa, mAngle-aves[5], mL)
         dtuple = Cptuple(dI, dG, dM, dMa, dAngle, dL)
 
-        dertuplet = Cmd(m=mtuple, d=dtuple)                        # or just Cmd(mtuple, dtuple)
-        valt = Cmd(m=sum(mtuple), d=sum(dtuple))                   # or: abs(d) for d in dtuple ?
+        dertuplet = Cmd(m=mtuple, d=dtuple)  # or just Cmd(mtuple, dtuple)
+        valt = Cmd(m=sum(mtuple), d=sum(abs(d) for d in dtuple))
         rdnt = Cmd(m=1+(valt.d>valt.m), d=1+(1-(valt.d>valt.m)))   # or rdn = Dval/Mval?
 
         return dertuplet, valt, rdnt
@@ -127,7 +124,7 @@ class CderH(list):  # derH is a list of der layers or sub-layers, each = ptuple_
     def __sub__(self, other: CderH) -> CderH:
         return CderH((
             # sum der layers, dertuple is mtuple | dtuple, fneg*i: for dtuple only:
-            Cmd((Mtuple + mtuple), (Dtuple - dtuple))
+            Cmd((Mtuple - mtuple), (Dtuple - dtuple))
             for (Mtuple, Dtuple), (mtuple, dtuple)
             in zip_longest(self, other, fillvalue=(Cptuple(), Cptuple()))  # mtuple,dtuple
         ))

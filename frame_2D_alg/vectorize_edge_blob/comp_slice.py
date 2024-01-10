@@ -3,7 +3,7 @@ from copy import deepcopy
 from itertools import zip_longest, combinations
 from collections import deque, defaultdict
 from .slice_edge import comp_angle
-from .classes import CderH, Cmd, Cgraph, get_match
+from .classes import CderP, CderH, Cmd, Cgraph, get_match
 from .filters import ave, ave_dI, aves, P_aves, PP_aves
 '''
 Vectorize is a terminal fork of intra_blob.
