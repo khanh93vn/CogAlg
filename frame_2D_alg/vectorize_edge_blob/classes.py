@@ -26,6 +26,8 @@ class Cmd(NamedTuple):     # m | d tuple
     d: Any
     def __add__(self, other: Cmd | Tuple[Any, Any]) -> Cmd:
         return Cmd(self.m + other[0], self.d + other[1])
+    def __sub__(self, other: Cmd | Tuple[Any, Any]) -> Cmd:
+        return Cmd(self.m - other[0], self.d - other[1])
 
 class Cangle(NamedTuple):
     dy: Real
@@ -66,7 +68,6 @@ class Cptuple(NamedTuple):
     # operators:
     def __pos__(self) -> Cptuple: return self
     def __neg__(self) -> Cptuple: return Cptuple(-self.I, -self.G, -self.M, -self.Ma, -self.angle, -self.L)
-
     def __sub__(self, other: Cptuple) -> Cptuple: return self + (-other)
     def __add__(self, other: Cptuple) -> Cptuple:
         return Cptuple(self.I+other.I, self.G+other.G, self.M+other.M, self.Ma+other.Ma, self.angle+other.angle, self.L+other.L)
@@ -116,16 +117,14 @@ class CderH(list):  # derH is a list of der layers or sub-layers, each = ptuple_
     def __add__(self, other: CderH) -> CderH:
         return CderH((
             # sum der layers, dertuple is mtuple | dtuple, fneg*i: for dtuple only:
-            Cmd((Mtuple + mtuple), (Dtuple + dtuple))
-            for (Mtuple, Dtuple), (mtuple, dtuple)
+            Dertuplet + dertuplet for Dertuplet, dertuplet
             in zip_longest(self, other, fillvalue=(Cptuple(), Cptuple()))  # mtuple,dtuple
         ))
 
     def __sub__(self, other: CderH) -> CderH:
         return CderH((
             # sum der layers, dertuple is mtuple | dtuple, fneg*i: for dtuple only:
-            Cmd((Mtuple - mtuple), (Dtuple - dtuple))
-            for (Mtuple, Dtuple), (mtuple, dtuple)
+            Dertuplet - dertuplet for Dertuplet, dertuplet
             in zip_longest(self, other, fillvalue=(Cptuple(), Cptuple()))  # mtuple,dtuple
         ))
 
