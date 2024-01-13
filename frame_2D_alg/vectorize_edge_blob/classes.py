@@ -101,11 +101,11 @@ class Cptuple(NamedTuple):
             mtuple += [get_match(_par, npar) - ave]
             dtuple += [_par - npar]
 
-        ddertuple = Cmd(m=Cptuple(*mtuple), d=Cptuple(*dtuple))
+        ddertuplet = Cmd(m=Cptuple(*mtuple), d=Cptuple(*dtuple))
         valt = Cmd(m=sum(mtuple), d=sum(abs(d) for d in dtuple))
         rdnt = Cmd(m=valt.d > valt.m, d=valt.d < valt.m)
 
-        return ddertuple, valt, rdnt
+        return ddertuplet, valt, rdnt
 
 
 class CderH(list):  # derH is a list of der layers or sub-layers, each = ptuple_tv
@@ -116,16 +116,16 @@ class CderH(list):  # derH is a list of der layers or sub-layers, each = ptuple_
 
     def __add__(self, other: CderH) -> CderH:
         return CderH((
-            # sum der layers, dertuple is mtuple | dtuple, fneg*i: for dtuple only:
+            # sum der layers, dertuple is mtuple | dtuple
             Dertuplet + dertuplet for Dertuplet, dertuplet
-            in zip_longest(self, other, fillvalue=(Cptuple(), Cptuple()))  # mtuple,dtuple
+            in zip_longest(self, other, fillvalue=Cmd(Cptuple(), Cptuple()))  # mtuple,dtuple
         ))
 
     def __sub__(self, other: CderH) -> CderH:
         return CderH((
-            # sum der layers, dertuple is mtuple | dtuple, fneg*i: for dtuple only:
+            # sum der layers, dertuple is mtuple | dtuple
             Dertuplet - dertuplet for Dertuplet, dertuplet
-            in zip_longest(self, other, fillvalue=(Cptuple(), Cptuple()))  # mtuple,dtuple
+            in zip_longest(self, other, fillvalue=Cmd(Cptuple(), Cptuple()))  # mtuple,dtuple
         ))
 
     def comp(self, other: CderH, rn: Real) -> Tuple[CderH, Cmd, Cmd]:
