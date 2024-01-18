@@ -3,7 +3,7 @@ from __future__ import annotations
 from itertools import zip_longest
 from math import inf, hypot
 from numbers import Real
-from typing import Any, NamedTuple, Tuple
+from typing import Any, List, NamedTuple, Tuple
 
 from class_cluster import CBase, init_param as z
 from frame_blobs import Cbox
@@ -62,30 +62,27 @@ class Cptuple(NamedTuple):
     G: Real = 0
     M: Real = 0
     Ma: Real = 0
-    angle: Cangle | Real = 0
+    angle: Cangle = Cangle(0, 0)
     L: Real = 0
 
     # operators:
     def __pos__(self) -> Cptuple: return self
-    def __neg__(self) -> Cptuple: return Cptuple(-self.I, -self.G, -self.M, -self.Ma, -self.angle, -self.L)
+    def __neg__(self) -> Cptuple: return self.__class__(-self.I, -self.G, -self.M, -self.Ma, -self.angle, -self.L)
     def __sub__(self, other: Cptuple) -> Cptuple: return self + (-other)
     def __add__(self, other: Cptuple) -> Cptuple:
-        return Cptuple(self.I+other.I, self.G+other.G, self.M+other.M, self.Ma+other.Ma, self.angle+other.angle, self.L+other.L)
+        return self.__class__(self.I+other.I, self.G+other.G, self.M+other.M, self.Ma+other.Ma, self.angle+other.angle, self.L+other.L)
 
-    def comp(self, other: Cptuple, rn: Real) -> Tuple[Cmd, Cmd, Cmd]:     # comp_ptuple
+    def comp(self, other: Cptuple, rn: Real) -> Tuple[Cmd, Cmd, Cmd]:
 
-        _I, _G, _M, _Ma, _angle, _L = self
-        I, G, M, Ma, angle, L = other
+        dI  = self.I  - other.I*rn;  mI  = ave_dI - dI
+        dG  = self.G  - other.G*rn;  mG  = min(self.G, other.G*rn) - aves[1]
+        dL  = self.L  - other.L*rn;  mL  = min(self.L, other.L*rn) - aves[2]
+        dM  = self.M  - other.M*rn;  mM  = get_match(self.M, other.M*rn) - aves[3]  # M, Ma may be negative
+        dMa = self.Ma - other.Ma*rn; mMa = get_match(self.Ma, other.Ma*rn) - aves[4]
+        mAngle, dAngle = self.angle.comp(other.angle)
 
-        dI  = _I - I*rn;  mI  = ave_dI - dI
-        dG  = _G - G*rn;  mG  = min(_G, G*rn) - aves[1]
-        dL  = _L - L*rn;  mL  = min(_L, L*rn) - aves[2]
-        dM  = _M - M*rn;  mM  = get_match(_M, M*rn) - aves[3]  # M, Ma may be negative
-        dMa = _Ma- Ma*rn; mMa = get_match(_Ma, Ma*rn) - aves[4]
-        mAngle, dAngle = _angle.comp(angle)
-
-        mtuple = Cptuple(mI, mG, mM, mMa, mAngle-aves[5], mL)
-        dtuple = Cptuple(dI, dG, dM, dMa, dAngle, dL)
+        mtuple = Cdertuple(mI, mG, mM, mMa, mAngle-aves[5], mL)
+        dtuple = Cdertuple(dI, dG, dM, dMa, dAngle, dL)
 
         dertuplet = Cmd(m=mtuple, d=dtuple)  # or just Cmd(mtuple, dtuple)
         valt = Cmd(m=sum(mtuple), d=sum(abs(d) for d in dtuple))
@@ -93,7 +90,11 @@ class Cptuple(NamedTuple):
 
         return dertuplet, valt, rdnt
 
-    def comp_der(self, other: Cptuple, rn: Real) -> Tuple[Cmd, Cmd, Cmd]:    # comp_dertuple
+class Cdertuple(Cptuple):
+
+    angle: Real = 0
+
+    def comp(self, other: Cdertuple, rn: Real) -> Tuple[Cmd, Cmd, Cmd]:    # comp_dertuple
 
         mtuple, dtuple = [], []
         for _par, par, ave in zip(self, other, aves):  # compare ds only
@@ -101,7 +102,7 @@ class Cptuple(NamedTuple):
             mtuple += [get_match(_par, npar) - ave]
             dtuple += [_par - npar]
 
-        ddertuplet = Cmd(m=Cptuple(*mtuple), d=Cptuple(*dtuple))
+        ddertuplet = Cmd(m=Cdertuple(*mtuple), d=Cdertuple(*dtuple))
         valt = Cmd(m=sum(mtuple), d=sum(abs(d) for d in dtuple))
         rdnt = Cmd(m=valt.d > valt.m, d=valt.d < valt.m)
 
@@ -118,14 +119,14 @@ class CderH(list):  # derH is a list of der layers or sub-layers, each = ptuple_
         return CderH((
             # sum der layers, dertuple is mtuple | dtuple
             Dertuplet + dertuplet for Dertuplet, dertuplet
-            in zip_longest(self, other, fillvalue=Cmd(Cptuple(), Cptuple()))  # mtuple,dtuple
+            in zip_longest(self, other, fillvalue=Cmd(Cdertuple(), Cdertuple()))  # mtuple,dtuple
         ))
 
     def __sub__(self, other: CderH) -> CderH:
         return CderH((
             # sum der layers, dertuple is mtuple | dtuple
             Dertuplet - dertuplet for Dertuplet, dertuplet
-            in zip_longest(self, other, fillvalue=Cmd(Cptuple(), Cptuple()))  # mtuple,dtuple
+            in zip_longest(self, other, fillvalue=Cmd(Cdertuple(), Cdertuple()))  # mtuple,dtuple
         ))
 
     def comp(self, other: CderH, rn: Real) -> Tuple[CderH, Cmd, Cmd]:
@@ -135,7 +136,7 @@ class CderH(list):  # derH is a list of der layers or sub-layers, each = ptuple_
 
         for _lay, lay in zip(self, other):  # compare common lower der layers | sublayers in derHs
             # if lower-layers match: Mval > ave * Mrdn?
-            dertuplet, _valt, _rdnt = _lay.d.comp_der(lay.d, rn)  # compare dtuples only
+            dertuplet, _valt, _rdnt = _lay.d.comp(lay.d, rn)  # compare dtuples only
             dderH |= [dertuplet]; valt += _valt; rdnt += _rdnt
 
         return dderH, valt, rdnt  # new derLayer,= 1/2 combined derH
@@ -163,7 +164,7 @@ class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param
     Ddx: int = 0
     '''
 
-    def comp(self, other: CP, link_: list, rn: Real, S: Real = None):
+    def comp(self, other: CP, link_: List[CderP], rn: Real, S: Real = None):
         dertuplet, valt, rdnt = self.ptuple.comp(other.ptuple, rn=rn)
         if valt.m > ave_Pm * rdnt.m or valt.d > ave_Pm * rdnt.d:
             derH = CderH([dertuplet])
@@ -182,7 +183,7 @@ class CderP(CBase):  # tuple of derivatives in P link: binary tree with latuple 
     A: Cangle = None  # angle: dy,dx between centers
     # roott: list = z([None, None])  # for der++, if clustering is per link
 
-    def comp(self, link_: list, rn: Real):
+    def comp(self, link_: List[CderP], rn: Real):
         dderH, valt, rdnt = self._P.derH.comp(self.P.derH, rn=rn)
         if valt.m > ave_Pd * rdnt.m or valt.d > ave_Pd * rdnt.d:
             derH = self.derH | dderH
@@ -207,7 +208,7 @@ class Cgraph(CBase):  # params of single-fork node_ cluster per pplayers
     valt: Cmd = Cmd(0, 0)  # sum ptuple, derH, aggH
     rdnt: Cmd = Cmd(1, 1)
     dect: Cmd = Cmd(0, 0)
-    link_: list = z([])  # internal, single-fork
+    link_: List[CderP | CderG] = z([])  # internal, single-fork
     node_: list = z([])  # base node_ replaced by node_t in both agg+ and sub+, deeper node-mediated unpacking in agg+
     # graph-external, +level per root sub+:
     rim_t: object = None  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
