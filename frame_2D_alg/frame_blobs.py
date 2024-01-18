@@ -28,15 +28,17 @@
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/frame_blobs.png
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/frame_blobs_intra_blob.drawio
 '''
+from __future__ import annotations
 
 import sys
-from typing import Union
+from collections import deque
+from numbers import Real
+from typing import Any, NamedTuple, Tuple
+from time import time
 
 import numpy as np
-from time import time
-from collections import deque, namedtuple
 from visualization.draw_frame import visualize
-from class_cluster import ClusterStructure, init_param as z
+from class_cluster import CBase, init_param as z
 from utils import kernel_slice_3x3 as ks    # use in comp_pixel
 
 # hyper-parameters, set as a guess, latter adjusted by feedback:
@@ -48,24 +50,58 @@ ave_mP = 100
 UNFILLED = -1
 EXCLUDED = -2
 
-dertT = namedtuple('dertT', 'dy, dx, g')  # 'T' for tuple
-dertT.get_pixel = lambda der__t, y, x: dertT(der__t.dy[y, x], der__t.dx[y, x], der__t.g[y, x])
 
-boxT = namedtuple('boxT', 'n, w, s, e')  # 'T' for tuple
-# properties
-boxT.cy = property(lambda b: (b.n+b.s)/2)
-boxT.cx = property(lambda b: (b.w+b.e)/2)
-boxT.slice = property(lambda b: (slice(b.n,b.s), slice(b.w,b.e)))  # box to array slice conversion
-# operators
-boxT.__add__ = lambda b1,b2: boxT(min(b1.n,b2.n),min(b1.w,b2.w),max(b1.s,b2.s),max(b1.e,b2.e))  # add 2 boxes
-# methods
-boxT.accumulate = lambda b,y,x: boxT(min(b.n,y),min(b.w,x),max(b.s,y+1),max(b.e,x+1))  # box coordinate accumulation
-boxT.expand = lambda b,r,Y,X: boxT(max(0,b.n-r),max(0,b.w-r),min(Y,b.s+r),min(X,b.e+r))  # box expansion by margin r
-boxT.shrink = lambda b,r: boxT(b.n+r,b.w+r,b.s-r,b.e-r)  # box shrink by margin r
-boxT.sub_box2box = lambda b,sb: boxT(b.n+sb.n,b.w+sb.w,sb.s+b.n,sb.e+b.w)  # sub_box to box transform
-boxT.box2sub_box = lambda b1, b2: boxT(b2.n-b1.n, b2.w-b1.w, b2.s-b1.n, b2.e-b1.w)  # box to sub_box transform
+class Cder__t(NamedTuple):
+    dy: Any
+    dx: Any
+    g: Any
 
-class CBlob(ClusterStructure):
+    def get_pixel(self, y: Real, x: Real) -> Tuple[Real, Real, Real]:
+        return self.dy[y, x], self.dx[y, x], self.g[y, x]
+
+
+class Cbox(NamedTuple):
+    n: Real
+    w: Real
+    s: Real
+    e: Real
+
+    # properties
+    @property
+    def cy(self) -> Real: return (self.n + self.s) / 2
+    @property
+    def cx(self) -> Real: return (self.w + self.e) / 2
+    @property
+    def slice(self) -> Tuple[slice, slice]: return slice(self.n, self.s), slice(self.w, self.e)
+
+    # operators:
+    def __add__(self, other: Cbox) -> Cbox:
+        """Add 2 boxes."""
+        return Cbox(min(self.n, other.n), min(self.w, other.w), max(self.s, other.s), max(self.e, other.e))
+
+    # methods
+    def accumulate(self, y: Real, x: Real) -> Cbox:
+        """Box coordinate accumulation."""
+        return Cbox(min(self.n, y), min(self.w, x), max(self.s, y + 1), max(self.e, x + 1))
+
+    def expand(self, r: int, h: Real, w: Real) -> Cbox:
+        """Box expansion by margin r."""
+        return Cbox(max(0, self.n - r), max(0, self.w - r), min(h, self.s + r), min(w, self.e + r))
+
+    def shrink(self, r: int) -> Cbox:
+        """Box shrink by margin r."""
+        return Cbox(self.n + r, self.w + r, self.s - r, self.e - r)
+
+    def sub_box2box(self, sb: Cbox) -> Cbox:
+        """sub_box to box transform."""
+        return Cbox(self.n + sb.n, self.w + sb.w, sb.s + self.n, sb.e + self.w)
+
+    def box2sub_box(self, b: Cbox) -> Cbox:
+        """box to sub_box transform."""
+        return Cbox(b.n - self.n, b.w - self.w, b.s - self.n, b.e - self.w)
+
+
+class CBlob(CBase):
     # comp_pixel:
     sign : bool = None
     I : float = 0.0
@@ -75,11 +111,11 @@ class CBlob(ClusterStructure):
     A : float = 0.0 # blob area
     # composite params:
     M : float = 0.0 # summed PP.M, for both types of recursion?
-    box : boxT = boxT(0,0,0,0)  # n,w,s,e
-    ibox : boxT = boxT(0,0,0,0) # box for i__
+    box : Cbox = Cbox(0, 0, 0, 0)  # n,w,s,e
+    ibox : Cbox = Cbox(0, 0, 0, 0) # box for i__
     mask__ : object = None
     i__ : object = None     # reference to original input (no shrinking)
-    der__t : dertT = None   # tuple of derivatives arrays, consistent in shape
+    der__t : Cder__t = None   # tuple of derivatives arrays, consistent in shape
     adj_blobs : list = z([])  # adjacent blobs
     fopen : bool = False
     # intra_blob params: # or pack in intra = lambda: Cintra
@@ -87,7 +123,7 @@ class CBlob(ClusterStructure):
     Mdx : float = 0.0
     Ddx : float = 0.0
     # derivation hierarchy:
-    root_ibox : boxT = boxT(0,0,0,0)  # from root blob
+    root_ibox : Cbox = Cbox(0, 0, 0, 0)  # from root blob
     root_der__t : list = z([])  # from root blob
     prior_forks : str = ''
     fBa : bool = False  # in root_blob: next fork is comp angle, else comp_r
@@ -120,8 +156,8 @@ def frame_blobs_root(i__, intra=False, render=False, verbose=False):
     Y, X = i__.shape[:2]
     der__t = comp_pixel(i__)
     sign__ = ave - der__t.g > 0   # sign is positive for below-average g
-    frame = CBlob(i__=i__, box=boxT(0, 0, Y, X), rlayers=[[]])
-    fork_data = '', boxT(1,1,Y-1,X-1), der__t, sign__, None  # fork, fork_ibox, der__t, sign__, mask__
+    frame = CBlob(i__=i__, der__t=der__t, box=Cbox(0, 0, Y, X), rlayers=[[]])
+    fork_data = '', Cbox(1, 1, Y - 1, X - 1), der__t, sign__, None  # fork, fork_ibox, der__t, sign__, mask__
     # https://en.wikipedia.org/wiki/Flood_fill:
     frame.rlayers[0], idmap, adj_pairs = flood_fill(frame, fork_data, verbose=verbose)
     assign_adjacents(adj_pairs)  # forms adj_blobs per blob in adj_pairs
@@ -156,7 +192,7 @@ def comp_pixel(pi__):
     )
     G__ = np.hypot(dy__, dx__)                          # compute gradient magnitude
 
-    return dertT(dy__, dx__, G__)
+    return Cder__t(dy__, dx__, G__)
 
 
 def flood_fill(root_blob, fork_data, verbose=False):
@@ -180,7 +216,7 @@ def flood_fill(root_blob, fork_data, verbose=False):
             if idmap[y, x] == UNFILLED:  # ignore filled/clustered derts
                 blob = CBlob(
                     i__=root_blob.i__, sign=sign__[y, x], root_ibox=fork_ibox, root_der__t=der__t,
-                    box=boxT(y,x,y+1,x+1), rng=root_blob.rng, prior_forks=root_blob.prior_forks+fork)
+                    box=Cbox(y, x, y + 1, x + 1), rng=root_blob.rng, prior_forks=root_blob.prior_forks + fork)
                 blob_ += [blob]
                 idmap[y, x] = blob.id
                 # flood fill the blob, start from current position
@@ -219,7 +255,7 @@ def flood_fill(root_blob, fork_data, verbose=False):
                             adj_pairs.add((idmap[y2, x2], blob.id))  # blob.id always increases
                 # terminate blob
                 blob.ibox = fork_ibox.sub_box2box(blob.box)
-                blob.der__t = dertT(
+                blob.der__t = Cder__t(
                     *(par__[blob.box.slice] for par__ in der__t))
                 blob.mask__ = (idmap[blob.box.slice] == blob.id)
                 blob.adj_blobs = [[],[]] # iblob.adj_blobs[0] = adj blobs, blob.adj_blobs[1] = poses

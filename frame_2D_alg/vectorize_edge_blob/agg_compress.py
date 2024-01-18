@@ -1,12 +1,12 @@
 import numpy as np
 from copy import deepcopy, copy
-from itertools import zip_longest
+from itertools import zip_longest, combinations
 from collections import deque, defaultdict
-from .classes import Cgraph, CderG, CPP
+from .classes import Cgraph, CderG
 from .filters import ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd, ave_dI
 from .slice_edge import slice_edge, comp_angle
 from .comp_slice import comp_P_, comp_ptuple, comp_derH, sum_derH, sum_dertuple, get_match
-from .agg_recursion import node_connect, segment_node_, comp_G, comp_aggHv, comp_derHv, sum_derHv, sum_ext, sum_subHv, sum_aggHv
+from .agg_recursion import unpack_rim, node_connect, segment_node_, comp_G, comp_aggHv, comp_derHv, sum_derHv, sum_ext, sum_subHv, sum_aggHv
 
 '''
 Implement sparse param tree in aggH: new graphs represent only high m|d params + their root params.
@@ -31,9 +31,9 @@ Then combine graph with alt_graphs?
 def root(blob, verbose):  # vectorization pipeline is 3 composition levels of cross-comp,clustering
     edge = vectorize_root(blob, verbose)
     # temporary
-    for fd, G_ in enumerate(edge.node_[-1]):
+    for fd, G_ in enumerate(edge.node_):
         if edge.aggH:
-            agg_recursion_cpr(None, edge, G_, lenH=0, fd=0, nrng=1)
+            agg_recursion_cpr(None, edge, G_, nrng=1, lenH=0)
 
 
 def vectorize_root(blob, verbose):  # vectorization in 3 composition levels of xcomp, cluster:
@@ -41,35 +41,34 @@ def vectorize_root(blob, verbose):  # vectorization in 3 composition levels of x
     edge, adj_Pt_ = slice_edge(blob, verbose)  # lateral kernel cross-comp -> P clustering
 
     comp_P_(edge, adj_Pt_)  # vertical, lateral-overlap P cross-comp -> PP clustering
-    edge.node_ = [edge.node_]
 
-    for fd, node_ in enumerate(edge.node_[-1]):  # always node_t
+    for fd, node_ in enumerate(edge.node_):  # always node_t
         if edge.valt[fd] * (len(node_) - 1) * (edge.rng + 1) > G_aves[fd] * edge.rdnt[fd]:
-            for PP in node_: PP.roott = [None,None]
-            agg_recursion(None, edge, lenH=0, fd=0)
+            for PP in node_: PP.roott = [None, None]
+            agg_compress(None, edge, node_, nrng=1)  # fd = !nrng
             # PP cross-comp -> discontinuous clustering, agg+ only, no Cgraph nodes
 
-# draft:
-def agg_recursion(rroot, root, lenH, fd, nrng=0):  # compositional agg|sub recursion in root graph, cluster G_
+
+def agg_compress(rroot, root, node_, nrng=0, lenHH=0):  # compositional agg|sub recursion in root graph, cluster G_
 
     Et = [[0,0],[0,0],[0,0]]
-    for G in root.node[-1][fd]:  # root.aggH is appended later, implicitly nested as rim_tH?
-        G.rim_tH = [G.rim_tH]  # convert to ftree HH, conditional append in rd_recursion
+    lenH = None  # no empty append lenHH[-1] = 0?
 
-    # init lenH = lenHH[-1] = 0:
-    rd_recursion(rroot, root, 0, Et, fd, nrng=1)
-    # may convert root.node_[-1] to node_t:
-    _GG_t = form_graph_t(root, root.node_[-1], Et, nrng)
-    GGG_t = []  # agg+ fork tree
-    rng = 2
+    nrng = rd_recursion(rroot, root, node_, Et, nrng, lenH, lenHH)  # rng+, adds rim_ as rim_t[-1][0]
+    if root.link_ and isinstance(root.link_[0], CderG):  # else CderP in edge before agg+
+        rd_recursion(rroot, root, root.link_, Et, 0, lenH, lenHH)  # der+, adds link_, rim_ as rim_t[-1][1]
 
-    while _GG_t:  # fork layer, recursive unpack lower forks
+    _GG_t = form_graph_t_cpr(root, node_, Et, nrng, lenH, lenHH)  # may convert root.node_[-1] to node_t
+    GGG_t = []  # add agg+ fork tree:
+
+    while _GG_t:  # unpack fork layers?
         GG_t, GGG_t = [],[]
         for fd, GG_ in enumerate(_GG_t):
-            if not fd: rng+=2
-            if root.Vt[fd] * (len(GG_)-1)*rng > G_aves[fd] * root.Rt[fd]:
-                # agg+/ node_( sub)agg+/ node, vs sub+ only in comp_slice
-                GGG_t, Vt, Rt  = agg_recursion(rroot, root, lenH+1, fd=0)
+
+            if not fd: nrng+=1  # also nrng+ in rd+
+            if root.Vt[fd] * (len(GG_)-1)*nrng*2 > G_aves[fd] * root.Rt[fd]:
+                # agg+/ node_t, vs. sub+/ node_:
+                GGG_t, Vt, Rt  = agg_compress(rroot, root, root.node[fd], nrng=1)
                 if rroot:
                     rroot.fback_t[fd] += [[root.aggH, root.valt, root.rdnt, root.dect]]
                     feedback(rroot,fd)  # update root.root..
@@ -86,89 +85,75 @@ def agg_recursion(rroot, root, lenH, fd, nrng=0):  # compositional agg|sub recur
 
     return GGG_t  # should be tree nesting lower forks
 
+# draft:
+def rd_recursion(rroot, root, Q, Et, nrng=1, lenH=None, lenHH=None):  # rng,der incr over same G_,link_ -> fork tree, represented in rim_t
 
-def rd_recursion(rroot, root, lenH, Et, fd, nrng=1):  # rng,der incr over same G_,link_ -> fork tree, represented in rim_tH
+    fd = not nrng; link_ = []; ave = G_aves[fd]  # this ave can be rmeoved now?
+    et = [[0,0],[0,0],[0,0]]  # grapht link_' eValt, eRdnt, eDect(currently not used)
 
-    Vt, Rt, Dt = Et
-    for fd, Q, V,R,D in zip((0,1),(root.node_,root.link_), Vt,Rt,Dt):  # recursive rng+,der+
-
-        ave = G_aves[fd]
-        if fd and rroot == None: continue  # no link_ and der+ in base fork
-
-        if V >= ave * R:  # true for init 0 V,R; nrng if rng+, else 0:
-            if not fd: nrng += 1
-            link_,(vt,rt,dt) = cross_comp(Q, lenH, nrng*(1-fd))
-
-            for i, v,r,d in zip((0,1), vt,rt,dt):
-                Vt[i]+=v; Rt[i]+=rt[i]; Dt[i]+=d
-                if v >= ave * r:
-                    # draft, not sure:
-                    if len(Q[0].rim_tH)==lenH:  # init fork tree if empty:
-                        for G in Q: G.rim_tH += [[link_]]
-
-                    if i: root.link_+= link_  # rng+ links
-                    # adds to root Et + rim_tH, and Et per G:
-                    rd_recursion(rroot, root, lenH, [vt,rt,dt], nrng)
-
-def cross_comp(Q, lenH, nrng):
-
-    et = [[0,0],[0,0],[0,0]]
-    link_ = []
-    if nrng:  # rng+
-        for i, _G in enumerate(Q):  # inp_= G_, form new link_ from original node_
-            for G in Q[i+1:]:
-                dy = _G.box.cy - G.box.cy; dx = _G.box.cx - G.box.cx
-                if np.hypot(dy, dx) < 2 * nrng:  # max distance between node centers, init=2
-                    link = CderG(_G=_G, G=G)
-                    comp_G(_G, G, link, et, lenH)
-                    link_ += [link]
-    else:  # der+
+    if fd:  # der+
+        G_ = []
         for link in Q:  # inp_= root.link_, reform links
-            if link.Vt[1] < G_aves[1] * link.Rt[1]: continue  # maybe weak after rdn incr?
-            comp_G(link._G, link.G, link, et, lenH)
-            link_ += [link]
+            if link.Vt[1] > G_aves[1]*link.Rt[1]:  # >rdn incr
+                comp_G(link, Et, lenH, lenHH,  fdcpr=1)
+                if link.G not in G_: G_ += [link.G]
+                if link._G not in G_: G_ += [link._G]
+    else:  # rng+
+        G_ = Q
+        for _G, G in combinations(G_, r=2):  # form new link_ from original node_
+            dy = _G.box.cy - G.box.cy; dx = _G.box.cx - G.box.cx
+            dist = np.hypot(dy, dx)
+            # max distance between node centers, init=2
+            if 2*nrng > dist > 2*(nrng-1):  # G,_G are within rng and were not compared in prior rd+
+                link = CderG(_G=_G, G=G)
+                comp_G(link, et, lenH, lenHH, fdcpr=0)
 
-    return link_, et
+    if et[0][fd] > ave_Gm * et[1][fd]:  # single layer accum
+        for Part, part in zip(Et, et):
+            for i, par in enumerate(part):
+                # Vt[i]+=v; Rt[i]+=rt[i]; Dt[i]+=d:
+                Part[i] += par
+        if fd:
+            for G in G_:
+                for link in unpack_rim(G.rim_t, fd):
+                    if len(link.subH[0][-1]) > (lenH or 0):  # link.subH was appended in this rd cycle
+                        link_ += [link]  # for next rd cycle
+
+        rd_recursion(rroot, root, link_ if fd else G_, Et, 0 if fd else nrng+1, (lenH or 0)+1, lenHH)
+
+    return nrng
 
 
-# not revised:
-def form_graph_t(root, G_, Et, nrng):
+def form_graph_t_cpr(root, G_, Et, nrng, lenH=None, lenHH=None):  # form Gm_,Gd_ from same-root nodes
 
-    _G_ = [G for G in G_ if len(G.rim_tH)>len(root.rim_tH)]  # prune Gs unconnected in current layer
+    fd = not nrng
+    _G_ = []
+    for G in G_:  # select Gs connected in current layer:
+        if G.rim_t:  # without depth, rim_t is init as an empty list
+            if lenHH: rim_tH = G.rim_t[-1][fd]  # sub+'H
+            else:     rim_tH = G.rim_t[fd]  # rim_
+            if len(rim_tH) > (lenH or 0): _G_ += [G]
 
-    node_connect(_G_)  # Graph Convolution of Correlations over init _G_
+    node_connect(_G_, lenHH!=None)  # Graph Convolution of Correlations over init _G_
     node_t = []
     for fd in 0,1:
-        if Et[0][fd] > ave * Et[1][fd]:  # eValt > ave * eRdnt, else no clustering, keep root.node_
-            graph_ = segment_node_(root, _G_, fd, nrng)  # fd: node-mediated Correlation Clustering
-            if not graph_: continue
-            for graph in graph_:  # eval sub+ per node
-                if graph.Vt[fd] * (len(graph.node_[-1])-1)*root.rng > G_aves[fd] * graph.Rt[fd]:
-                    # last sub+ val -> sub+:
-                    agg_recursion(root, graph, graph.node_[-1], len(graph.aggH[-1][0]), nrng+1*(1-fd))  # nrng+ if not fd
-                    rroot = graph
-                    rfd = rroot.fd
-                    while isinstance(rroot.roott, list) and rroot.roott[rfd]:  # not blob
-                        rroot = rroot.roott[rfd]
-                        Val,Rdn = 0,0
-                        if isinstance(rroot.node_[-1][0], list):  # node_ is node_t
-                            node_ = rroot.node_[-1][rfd]
-                        else: node_ = rroot.node_[-1]
-
-                        for node in node_:  # sum vals and rdns from all higher nodes
-                            Rdn += node.rdnt[rfd]
-                            Val += node.valt[rfd]
-                        # include rroot.Vt and Rt?
-                        if Val * (len(rroot.node_[-1])-1)*rroot.rng > G_aves[fd] * Rdn:
-                            # not sure about nrg here
-                            agg_recursion(root, graph, rroot.node_[-1], len(rroot.aggH[-1][0]), rfd, nrng+1*(1-rfd))  # nrng+ if not fd
-
+        if Et[0][fd] > ave * Et[1][fd]:  # eValt > ave * eRdnt: cluster
+            graph_ = segment_node_(root, _G_, fd, nrng, lenH)  # fd: node-mediated Correlation Clustering
+            for graph in graph_:
+                # eval sub+ per node
+                if graph.Vt[fd] * (len(graph.node_)-1)*root.rng > G_aves[fd] * graph.Rt[fd]:
+                    node_ = graph.node_  # flat in sub+
+                    if lenH: lenH = len(node_[0].esubH[-lenH:])  # in agg_compress
+                    else:    lenH = len(graph.aggH[-1][0])  # in agg_recursion
+                    agg_compress(root, graph, node_, nrng, lenH, lenHH)
                 else:
                     root.fback_t[root.fd] += [[graph.aggH, graph.valt, graph.rdnt, graph.dect]]
                     feedback(root,root.fd)  # update root.root..
             node_t += [graph_]  # may be empty
-        else: node_t += []
-    if any(node_t): G_[:] = node_t
+        else:
+            node_t += [[]]
+    if any(node_t):
+        G_[:] = node_t  # else keep root.node_
 
 
 def feedback(root, fd):  # called from form_graph_, append new der layers to root
@@ -211,13 +196,15 @@ def select_init_(Gt_, fd):  # local max selection for sparse graph init, if posi
             init_ += [[node,val]]
     return init_
 
+# not updated below:
+
 def agg_recursion_cpr(rroot, root, G_, fd):  # compositional agg+|sub+ recursion in root graph, clustering G_
 
     parHv = [root.aggH,root.valt[fd],root.rdnt[fd],root.dect[fd]]
     form_pP_(pP_=[], parHv=parHv, fd=fd)  # sum is not needed here
     # compress aggH -> pP_,V,R,Y: select G' V,R,Y?
 
-# to create 1st compressed layer
+# form 1st compressed layer:
 def init_parHv(parH, V, R, Y, fd):
 
     # 1st layer
@@ -233,7 +220,7 @@ def init_parHv(parH, V, R, Y, fd):
 
     return pP_, parHv
 
-# not updated:
+
 def form_pP_(pP_, parHv, fd):  # fixed H nesting: aggH( subH( derH( parttv_ ))), pPs: >ave param clusters, nested
     '''
     p_sets with nesting depth, Hv is H, valt,rdnt,dect:
