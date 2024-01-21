@@ -183,8 +183,8 @@ class CderP(CBase):  # tuple of derivatives in P link: binary tree with latuple 
     def comp(self, link_: List[CderP], rn: Real):
         dderH, valt, rdnt = self._P.derH.comp(self.P.derH, rn=rn)
         if valt.m > ave_Pd * rdnt.m or valt.d > ave_Pd * rdnt.d:
-            derH = self.derH + dderH
-            link_ += [CderP(derH=derH, valt=valt, rdnt=rdnt, _P=self._P, P=self.P, S=self.S)]
+            self.derH += dderH; self.valt = valt; self.rdmt = rdnt  # update derP not form new one
+            link_ += [self]
 
 '''
 max n of tuples per der layer = summed n of tuples in all lower layers: 1, 1, 2, 4, 8..:
