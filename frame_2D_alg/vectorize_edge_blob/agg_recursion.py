@@ -43,12 +43,14 @@ def vectorize_root(blob, verbose):  # vectorization in 3 composition levels of x
 
     comp_P_(edge, adj_Pt_)  # vertical, lateral-overlap P cross-comp -> PP clustering
 
-    for fd, node_ in enumerate(edge.node_):  # always node_t
-        if edge.valt[fd] * (len(node_)-1)*(edge.rng+1) > G_aves[fd] * edge.rdnt[fd]:
-
-            for PP in node_: PP.roott = [None, None]
-            # discontinuous PP cross-comp, cluster -> G_t
-            agg_recursion(None, edge, node_, nrng=1)  # agg+, no Cgraph nodes
+    # for fd, node_ in enumerate(edge.node_):  # always node_t
+    #     if edge.valt[fd] * (len(node_)-1)*(edge.rng+1) > G_aves[fd] * edge.rdnt[fd]:
+    #
+    #         for PP in node_: PP.roott = [None, None]
+    #         # discontinuous PP cross-comp, cluster -> G_t
+    #         agg_recursion(None, edge, node_, nrng=1)  # agg+, no Cgraph nodes
+    for derP in edge.link_:
+        print(len(derP.derH), end=" ")
 
     return edge
 
