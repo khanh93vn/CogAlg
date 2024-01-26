@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from itertools import zip_longest
+from itertools import count, zip_longest
 from math import inf, hypot
 from numbers import Real
 from typing import Any, List, NamedTuple, Tuple
@@ -126,12 +126,13 @@ class CderH(list):  # derH is a list of der layers or sub-layers, each = ptuple_
             in zip_longest(self, other, fillvalue=self.empty_layer())  # mtuple,dtuple
         ))
 
-    def comp(self, other: CderH, rn: Real) -> Tuple[CderH, Cmd, Cmd]:
+    def comp(self, other: CderH, rn: Real, n: Real = inf) -> Tuple[CderH, Cmd, Cmd]:
 
-        dderH = CderH([self.empty_layer()])  # or not-missing comparand: xor?
+        dderH = CderH([])  # or not-missing comparand: xor?
         valt, rdnt = Cmd(0, 0), Cmd(1, 1)
 
-        for _lay, lay in zip(self, other):  # compare common lower der layers | sublayers in derHs
+        for i, _lay, lay in zip(count(), self, other):  # compare common lower der layers | sublayers in derHs
+            if i >= n: break
             # if lower-layers match: Mval > ave * Mrdn?
             dertuplet, _valt, _rdnt = _lay.d.comp(lay.d, rn)  # compare dtuples only
             dderH |= [dertuplet]; valt += _valt; rdnt += _rdnt
@@ -181,9 +182,9 @@ class CderP(CBase):  # tuple of derivatives in P link: binary tree with latuple 
     # roott: list = z([None, None])  # for der++, if clustering is per link
 
     def comp(self, link_: List[CderP], rn: Real):
-        dderH, valt, rdnt = self._P.derH.comp(self.P.derH, rn=rn)
+        dderH, valt, rdnt = self._P.derH.comp(self.P.derH, rn=rn, n=len(self.derH))
         if valt.m > ave_Pd * rdnt.m or valt.d > ave_Pd * rdnt.d:
-            self.derH += dderH; self.valt = valt; self.rdmt = rdnt  # update derP not form new one
+            self.derH |= dderH; self.valt = valt; self.rdmt = rdnt  # update derP not form new one
             link_ += [self]
 
 '''
