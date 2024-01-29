@@ -119,6 +119,9 @@ class CderH(list):  # derH is a list of der layers or sub-layers, each = ptuple_
             in zip_longest(self, other, fillvalue=self.empty_layer())  # mtuple,dtuple
         ))
 
+    def __iadd__(self, other):
+        return self + other
+
     def __sub__(self, other: CderH) -> CderH:
         return CderH((
             # sum der layers, dertuple is mtuple | dtuple
