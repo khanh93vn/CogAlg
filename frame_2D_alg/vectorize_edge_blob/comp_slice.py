@@ -29,7 +29,7 @@ len prior root_ sorted by G is rdn of each root, to evaluate it for inclusion in
 def comp_P_(edge: Cgraph, adj_Pt_: List[Tuple[CP, CP]]):  # cross-comp P_ in edge: high-gradient blob, sliced in Ps in the direction of G
 
     for _P, P in adj_Pt_:  # scan, comp contiguously uplinked Ps, rn: relative weight of comparand
-        _P.comp(P, edge.link_, rn=len(_P.dert_)/len(P.dert_))
+        _P.comp(P, edge.link_)
 
     form_PP_t(edge, edge.link_, base_rdn=2)
 
@@ -39,12 +39,8 @@ def comp_rng(ilink_, rng):  # form new Ps and links, switch to rng+n to skip clu
 
     link_ = []  # rng+ links
     for _derP, derP in combinations(ilink_, 2):  # scan last-layer link pairs
-        _P = _derP.P; P = derP.P
-        if _derP.P is not derP._P: continue  # same as derP._P is _derP._P or derP.P is _derP.P
-        __P = _derP._P  # next layer of Ps
-        distance = np.hypot(__P.yx[1]-P.yx[1],__P.yx[0]-P.yx[0])   # distance between midpoints
-        if distance < rng:  # distance=S, mostly lateral, /= L for eval?
-            __P.comp(P, link_, rn=len(__P.dert_)/len(P.dert_), S=distance)
+        if _derP.P is derP._P:
+            _derP._P.comp(derP.P, link_)  # _derP._P is __P, next layer of Ps
 
     return link_
 
@@ -57,7 +53,7 @@ def comp_der(ilink_):  # node-mediated correlation clustering: keep same Ps and 
     link_ = []  # extended-derH derPs
     for derP in ilink_:  # scan root PP links, no concurrent rng+
         P = derP.P; _P = derP._P
-        if not P.derH or not _P.derH: continue
+        assert len(P.derH) and len(_P.derH)
         # comp extended derH of previously compared Ps, sum in lower-composition sub_PPs,
         # weight of compared derH is relative compound scope of (sum linked Ps( sum P derts)):
         derP.comp(link_, rn=(len(_P.dert_)/len(P.dert_)) * (n_uplinks[_P]/n_uplinks[P]))

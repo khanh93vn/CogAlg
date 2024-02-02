@@ -21,21 +21,21 @@ from .filters import ave_dangle, ave_dI, ave_Pd, ave_Pm, aves
     longer names are normally classes
 '''
 
-class Cangle(NamedTuple):
+class Cvec2d(NamedTuple):
     dy: Real
     dx: Real
     # operators:
     def __abs__(self) -> Real: return hypot(self.dy, self.dx)
-    def __pos__(self) -> Cangle: return self
-    def __neg__(self) -> Cangle: return Cangle(-self.dy, -self.dx)
-    def __add__(self, other: Cangle) -> Cangle: return Cangle(self.dy + other.dy, self.dx + other.dx)
-    def __sub__(self, other: Cangle) -> Cangle: return self + (-other)
+    def __pos__(self) -> Cvec2d: return self
+    def __neg__(self) -> Cvec2d: return Cvec2d(-self.dy, -self.dx)
+    def __add__(self, other: Cvec2d) -> Cvec2d: return Cvec2d(self.dy + other.dy, self.dx + other.dx)
+    def __sub__(self, other: Cvec2d) -> Cvec2d: return self + (-other)
 
-    def normalize(self) -> Cangle:
+    def normalize(self) -> Cvec2d:
         dist = abs(self)
-        return Cangle(self.dy / dist, self.dx / dist)
+        return Cvec2d(self.dy / dist, self.dx / dist)
 
-    def comp(self, other: Cangle) -> Cmd:  # rn doesn't matter for angles
+    def comp_angle(self, other: Cvec2d) -> Cmd:  # rn doesn't matter for angles
 
         # angle = [dy,dx]
         _sin, sin = self.normalize()
@@ -58,7 +58,7 @@ class Cptuple(CBaseLite):
     G: Real = 0
     M: Real = 0
     Ma: Real = 0
-    angle: Cangle = Cangle(0, 0)
+    angle: Cvec2d = Cvec2d(0, 0)
     L: Real = 0
 
     # operators:
@@ -66,13 +66,13 @@ class Cptuple(CBaseLite):
     def __neg__(self) -> Cptuple: return self.__class__(-self.I, -self.G, -self.M, -self.Ma, -self.angle, -self.L)
 
     def comp(self, other: Cptuple, rn: Real) -> Tuple[Cmd, Cmd, Cmd]:
-
+        # not sure why rn is needed?
         dI  = self.I  - other.I*rn;  mI  = ave_dI - dI
         dG  = self.G  - other.G*rn;  mG  = min(self.G, other.G*rn) - aves[1]
         dL  = self.L  - other.L*rn;  mL  = min(self.L, other.L*rn) - aves[2]
         dM  = self.M  - other.M*rn;  mM  = get_match(self.M, other.M*rn) - aves[3]  # M, Ma may be negative
         dMa = self.Ma - other.Ma*rn; mMa = get_match(self.Ma, other.Ma*rn) - aves[4]
-        mAngle, dAngle = self.angle.comp(other.angle)
+        mAngle, dAngle = self.angle.comp_angle(other.angle)
 
         mtuple = Cdertuple(mI, mG, mM, mMa, mAngle-aves[5], mL)
         dtuple = Cdertuple(dI, dG, dM, dMa, dAngle, dL)
@@ -100,36 +100,6 @@ class Cdertuple(Cptuple):
         rdnt = Cmd(valt.d > valt.m, valt.d < valt.m)
 
         return ddertuplet, valt, rdnt
-
-
-class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
-
-    ptuple: Cptuple = z(Cptuple())  # latuple: I,G,M,Ma, angle(Dy,Dx), L
-    rnpar_H: list = z([])
-    derH: CderH = z(CderH())  # [(mtuple, ptuple)...] vertical derivatives summed from P links
-    valt: Cmd = z(Cmd(0, 0))  # summed from the whole derH
-    rdnt: Cmd = z(Cmd(1, 1))
-    dert_: list = z([])  # array of pixel-level derts, ~ node_
-    cells: set = z(set())  # pixel-level kernels adjacent to P axis, combined into corresponding derts projected on P axis.
-    roott: list = z([None,None])  # PPrm,PPrd that contain this P, single-layer
-    axis: Cangle = Cangle(0, 1)  # prior slice angle, init sin=0,cos=1
-    yx: tuple = None
-    ''' 
-    link_H: list = z([[]])  # all links per comp layer, rng+ or der+
-    dxdert_: list = z([])  # only in Pd
-    Pd_: list = z([])  # only in Pm
-    Mdx: int = 0  # if comp_dx
-    Ddx: int = 0
-    '''
-
-    # it's conditional in comp_rng, and we need to pass A,S, so it should be in comp_slice?
-    def comp(self, other: CP, link_: List[CderP], rn: Real, S: Real = None):
-
-        dertuplet, valt, rdnt = self.ptuple.comp(other.ptuple, rn=rn)
-
-        if valt.m > ave_Pm * rdnt.m or valt.d > ave_Pm * rdnt.d:
-            derH = CderH([dertuplet])
-            link_ += [CderP(derH=derH, valt=valt, rdnt=rdnt, _P=self, P=other, S=S)]
 
 
 class CderH(list):  # derH is a list of der layers or sub-layers, each = ptuple_tv
@@ -173,6 +143,45 @@ class CderH(list):  # derH is a list of der layers or sub-layers, each = ptuple_
         return dderH, valt, rdnt  # new derLayer,= 1/2 combined derH
 
 
+class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
+
+    ptuple: Cptuple = z(Cptuple())  # latuple: I,G,M,Ma, angle(Dy,Dx), L
+    rnpar_H: list = z([])
+    derH: CderH = z(CderH())  # [(mtuple, ptuple)...] vertical derivatives summed from P links
+    valt: Cmd = z(Cmd(0, 0))  # summed from the whole derH
+    rdnt: Cmd = z(Cmd(1, 1))
+    dert_: list = z([])  # array of pixel-level derts, ~ node_
+    cells: set = z(set())  # pixel-level kernels adjacent to P axis, combined into corresponding derts projected on P axis.
+    roott: list = z([None,None])  # PPrm,PPrd that contain this P, single-layer
+    axis: Cvec2d = Cvec2d(0, 1)  # prior slice angle, init sin=0,cos=1
+    yx: Cvec2d = None
+    ''' 
+    link_H: list = z([[]])  # all links per comp layer, rng+ or der+
+    dxdert_: list = z([])  # only in Pd
+    Pd_: list = z([])  # only in Pm
+    Mdx: int = 0  # if comp_dx
+    Ddx: int = 0
+    '''
+
+    # it's conditional in comp_rng, and we need to pass A,S, so it should be in comp_slice?
+    def comp(self, other: CP, link_: List[CderP], rng: int = None):
+
+        A = self.yx - other.yx
+        assert isinstance(A, Cvec2d)
+        if rng is not None:
+            distance = abs(A)  # distance between midpoints
+            if distance < rng:  # distance=S, mostly lateral, /= L for eval?
+                return  # no comp
+        else:
+            distance = 1
+
+        dertuplet, valt, rdnt = self.ptuple.comp(other.ptuple, rn=len(self.dert_)/len(other.dert_))
+
+        if valt.m > ave_Pm * rdnt.m or valt.d > ave_Pm * rdnt.d:
+            derH = CderH([dertuplet])
+            link_ += [CderP(derH=derH, valt=valt, rdnt=rdnt, _P=self, P=other, S=distance, A=A)]
+
+
 class CderP(CBase):  # tuple of derivatives in P link: binary tree with latuple root and vertuple forks
 
     _P: CP  # higher comparand
@@ -182,7 +191,7 @@ class CderP(CBase):  # tuple of derivatives in P link: binary tree with latuple 
     rdnt: Cmd = z(Cmd(1, 1))  # mrdn + uprdn if branch overlap?
     roott: list = z([None, None])  # PPdm,PPdd that contain this derP
     S: float = 0.0  # sparsity: distance between centers
-    A: Cangle = None  # angle: dy,dx between centers
+    A: Cvec2d = None  # angle: dy,dx between centers
     # roott: list = z([None, None])  # for der++, if clustering is per link
 
     def comp(self, link_: List[CderP], rn: Real):
@@ -222,10 +231,10 @@ class Cgraph(CBase):  # params of single-fork node_ cluster
     evalt: list = z([0,0])  # sum from esubH
     erdnt: list = z([1,1])
     edect: list = z([0,0])
-    ext: list = z(Cangle,0,0)  # replacing the below:
+    ext: list = z([Cvec2d(0, 0), 0, 0])  # replacing the below:
     L: int = 0 # len base node_; from internal links:
-    S: float = 0.0  # sparsity: average distance to link centers
-    A: list = z([0,0])  # angle: average dy,dx to link centers
+    S: Real = 1  # sparsity: average distance to link centers
+    A: Cvec2d = Cvec2d(0,1)  # angle: average dy,dx to link centers
     rng: int = 1
     box: Cbox = Cbox(inf,inf,-inf,-inf)  # y0,x0,yn,,xn
     # tentative:
@@ -261,7 +270,7 @@ class CderG(CBase):  # params of single-fork node_ cluster per pplayers
     Rt: Cmd = z(Cmd(1,1))
     Dt: Cmd = z(Cmd(0,0))
     S: float = 0.0  # sparsity: average distance to link centers
-    A: Cangle = None  # angle: average dy,dx to link centers
+    A: Cvec2d = None  # angle: average dy,dx to link centers
     roott: list = z([None,None])
     # dir: bool  # direction of comparison if not G0,G1, only needed for comp link?
 
