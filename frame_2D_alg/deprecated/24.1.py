@@ -439,6 +439,42 @@ def agg_recursion(rroot, root, node_, nrng=1, lenH=0, lenHH=None):  # lenH = len
                     feedback(rroot,i)  # update root.root..
 
 
+def agg_recursion_old(rroot, root, node_, nrng=1, fagg=0, rfd=0):  # cross-comp and sub-cluster Gs in root graph node_:
+
+    Et = [[0,0],[0,0],[0,0]]
+
+    # agg+: der=1 xcomp of new Gs if fagg, else sub+: der+ xcomp of old Gs:
+    nrng = rng_recursion(rroot, root, root.link_ if rfd else node_, Et, nrng, rfd)  # rng+ appends rim, link.derH
+
+    GG_t = form_graph_t(root, node_, Et, nrng, fagg=fagg)  # may convert root.node_[-1] to node_t
+    GGG_t = []  # add agg+ fork tree:
+
+    while GG_t:  # unpack fork layers?
+        # not sure:
+        _GG_t, GGG_t = [],[]
+        for fd, GG_ in enumerate(_GG_t):
+            if not fd: nrng+=1
+            if root.Vt[fd] * (len(GG_)-1) * nrng*2 > G_aves[fd] * root.Rt[fd]:
+                # agg+ / node_t, vs. sub+ / node_:
+                GGG_t, Vt, Rt  = agg_recursion(rroot, root, GG_, nrng=1, fagg=1, rfd=fd)  # for agg+, lenHH stays constant
+                '''
+                if rroot:
+                    rroot.fback_t[fd] += [[root.aggH, root.valt, root.rdnt, root.dect]]
+                    feedback(rroot,fd)  # update root.root..
+                for i in 0,1:
+                    if Vt[i] > G_aves[i] * Rt[i]:
+                        GGG_t += [[i, GGG_t[fd][i]]]
+                        # sparse agglomerated current layer of forks across GG_tree
+                        GG_t += [[i, GG_t[fd][i],1]]  # i:fork, 1:packed sub_GG_t?
+                        # sparse lower layer of forks across GG_tree
+                    else:
+                        GGG_t += [[i, GG_t[fd][i]]]  # keep lower-composition GGs
+                '''
+            GG_t = _GG_t  # for next loop
+
+    return GGG_t  # should be tree nesting lower forks
+
+
 def form_graph_t(root, G_, Et, nrng, lenH=0, lenHH=None):  # form Gm_,Gd_ from same-root nodes
 
     # select Gs connected in current layer:
@@ -770,4 +806,31 @@ def unpack_rim(G, fd):  # rim_t =  [] | rimt|rim_t | rim_tH
     # not sure:
     if rim and isinstance(rim[0],list):  rim = rim[-1]  # not CderG, rim is rim_
     return rim
+
+
+def form_graph_t(root, G_, Et, nrng, fagg=0):  # form Gm_,Gd_ from same-root nodes
+
+    node_connect(G_)  # Graph Convolution of Correlations over init _G_
+    node_t = []
+    for fd in 0, 1:
+        if Et[0][fd] > ave * Et[1][fd]:  # eValt > ave * eRdnt: cluster
+            graph_ = segment_node_(root, G_, fd, nrng)  # fd: node-mediated Correlation Clustering
+            for graph in graph_:
+                # add graph link_ in the evaluation instead of node? Because we need link in der+ sub later
+                if graph.Vt[fd] * (len(graph.node_)-1)*root.rng * len(graph.link_) > G_aves[fd] * graph.Rt[fd]:
+                    for node in graph.node_:
+                        if node.rimH and isinstance(node.rimH[0],CderG):  # 1st sub+: convert rim to rimH
+                            node.rimH = [node.rimH]
+                        node.rimH += [[]]  # the simplest method is to add new rim layer here?
+                    agg_recursion(root, graph, graph.node_, nrng, fagg=0)
+                else:
+                    root.fback_t[root.fd] += [[graph.aggH, graph.valt, graph.rdnt, graph.dect]]
+                    # feedback(root,root.fd)  # update root.root..
+            node_t += [graph_]  # may be empty
+        else:
+            node_t += [[]]
+    if fagg:
+        return node_t
+    elif any(node_t):
+        G_[:] = node_t  # else keep root.node_  (replacement only in sub+?)
 
