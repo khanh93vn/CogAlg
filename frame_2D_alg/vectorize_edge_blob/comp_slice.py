@@ -2,10 +2,9 @@ import numpy as np
 from collections import deque, defaultdict
 from copy import deepcopy
 from itertools import zip_longest, combinations
-from typing import List, Tuple
-from .classes import get_match, CderH, CderP, Cgraph, Cmd, CP, Cangle
+from .classes import get_match, CderH, CderP, Cgraph, Cmd, Cangle
 from .filters import ave, ave_dI, aves, P_aves, PP_aves
-from .slice_edge import comp_angle, sum_angle
+from .slice_edge import comp_angle
 '''
 Vectorize is a terminal fork of intra_blob.
 
@@ -26,12 +25,12 @@ Connectivity in P_ is traced through root_s of derts adjacent to P.dert_, possib
 len prior root_ sorted by G is rdn of each root, to evaluate it for inclusion in PP, or starting new P by ave*rdn.
 '''
 
-def comp_P_(edge: Cgraph, adj_Pt_: List[Tuple[CP, CP]]):  # cross-comp P_ in edge: high-gradient blob, sliced in Ps in the direction of G
+def comp_P_(edge, adj_Pt_):  # cross-comp P_ in edge: high-gradient blob, sliced in Ps in the direction of G
 
     for _P, P in adj_Pt_:  # scan, comp contiguously uplinked Ps, rn: relative weight of comparand
         # initial comp is rng+
-        distance = np.hypot(_P.yx[1]-P.yx[1],_P.yx[0]-P.yx[0])
-        comp_P(edge.link_, _P, P, rn=len(_P.dert_)/len(P.dert_), derP=distance, fd=0)
+        distance = abs(_P.yx - P.yx)
+        comp_P(edge.link_, _P, P, rn=len(_P.dert_)/len(P.dert_), S=distance)
 
     form_PP_t(edge, edge.link_, base_rdn=2)
 
@@ -51,7 +50,7 @@ def comp_rng(ilink_, rng):  # form new Ps and links
         distance = np.hypot(__P.yx[1]-P.yx[1],__P.yx[0]-P.yx[0])   # distance between midpoints
         if distance < rng:  # distance=S, mostly lateral, /= L for eval?
             if P.valt[0] + __P.valt[0] > ave * (P.rdnt[0] + _P.rdnt[0]):  # add pairwise eval
-                comp_P(link_, __P, P, rn=len(__P.dert_)/len(P.dert_), derP=distance, fd=0)  # derP is distance here
+                comp_P(link_, __P, P, rn=len(__P.dert_)/len(P.dert_), S=distance)  # derP is distance here
 
     return link_
 
@@ -67,7 +66,7 @@ def comp_der(ilink_):  # node-mediated correlation clustering: keep same Ps and 
         if not P.derH or not _P.derH: continue
         # comp extended derH of previously compared Ps, sum in lower-composition sub_PPs,
         # weight of compared derH is relative compound scope of (sum linked Ps( sum P derts)):
-        comp_P(link_, derP._P, derP.P, rn=len(derP._P.dert_)/len(derP.P.dert_), derP=derP, fd=1)
+        comp_P(link_, derP._P, derP.P, rn=len(derP._P.dert_)/len(derP.P.dert_), derP=derP)
 
     return link_
 
@@ -182,20 +181,23 @@ def feedback(root, fd):  # in form_PP_, append new der layers to root PP, single
         if fback_ and (len(fback_)==len(node_)):  # all nodes terminated and fed back
             feedback(rroot, fd)  # sum2PP adds derH per rng, feedback adds deeper sub+ layers
 
-def comp_P(link_, _P, P, rn, fd=1, derP=None):  #  derP if der+, reused as S if rng+
-    aveP = P_aves[fd]
+def comp_P(link_, _P, P, rn, derP=None, S=None):  #  derP if der+, reused as S if rng+
 
-    if fd:  # der+: extend in-link derH, in sub+ only
+    if derP is not None:  # der+: extend in-link derH, in sub+ only
         dderH, valt, rdnt = comp_derH(_P.derH, P.derH, rn=rn)  # += fork rdn
         derH = derP.derH | dderH; S = derP.S  # dderH valt,rdnt for new link
-    else:  # rng+: add derH
+        aveP = P_aves[1]
+    elif S is not None:  # rng+: add derH
         mtuple, dtuple = comp_ptuple(_P.ptuple, P.ptuple, rn, fagg=0)
         valt = Cmd(sum(mtuple), sum(abs(d) for d in dtuple))
         rdnt = Cmd(1+(valt.d>valt.m), 1+(1-(valt.d>valt.m)))   # or rdn = Dval/Mval?
-        derH = CderH([Cmd(mtuple, dtuple)]); S = derP
+        derH = CderH([Cmd(mtuple, dtuple)])
+        aveP = P_aves[0]
+    else:
+        raise ValueError("either derP (der+) or S (rng+) should be specified")
 
-    A = Cangle(dy=_P.yx[0] - P.yx[0], dx=P.yx[1] - P.yx[1])
-    derP = CderP(derH=derH, valt=valt, rdnt=rdnt, P=P,_P=_P, S=S, A=A)
+    A = Cangle(*(_P.yx - P.yx))
+    derP = CderP(derH=derH, valt=valt, rdnt=rdnt, P=P,_P=_P, S=S, A=A)  # this, this causes issue from before: new derP is created in both rng+ and der+, is this intended?
 
     if valt.m > aveP*rdnt.m or valt.d > aveP*rdnt.d:
         link_ += [derP]
