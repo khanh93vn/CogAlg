@@ -2,8 +2,7 @@ import numpy as np
 from collections import deque, defaultdict
 from copy import deepcopy
 from itertools import zip_longest, combinations
-from typing import List, Tuple
-from .classes import get_match, CderH, CderP, Cgraph, Cmd, CP, Cangle
+from .classes import get_match, CderH, CderP, Cgraph, Cmd, Cangle
 from .filters import ave, ave_dI, aves, P_aves, PP_aves
 from .slice_edge import comp_angle, sum_angle
 '''
@@ -105,17 +104,16 @@ def form_PP_t(root, root_link_, base_rdn):  # form PPs of derP.valt[fd] + connec
             PP_t[fd] += [PP]  # no if Val > PP_aves[fd] * Rdn:
             inP_ += cP_  # update clustered Ps
 
-    for PP_ in PP_t[1]:  # eval der+/ PPd only, after form_PP_t -> P.roott
-        for PP in PP_:
-            if PP.valt[1] * len(PP.link_) > PP_aves[1] * PP.rdnt[1]:  # sum ave matches - fixed PP cost
-                # der+: node-mediated correlation clustering, increment link derH -> P derH in sum2PP
+    for PP in PP_t[1]:  # eval der+/ PPd only, after form_PP_t -> P.roott
+        if PP.valt[1] * len(PP.link_) > PP_aves[1] * PP.rdnt[1]:  # sum ave matches - fixed PP cost
+            # der+: node-mediated correlation clustering, increment link derH -> P derH in sum2PP
 
-                rng_recursion(PP.link_, PP.rng)  # extend PP.link_ and derHs with same-der rng+ comps
-                form_PP_t(PP, PP.link_, base_rdn=PP.rdnt[1])
-                root.fback += [[PP.derH, PP.valt, PP.rdnt]]  # single-fork feedback
+            rng_recursion(PP.link_, PP.rng)  # extend PP.link_ and derHs with same-der rng+ comps
+            form_PP_t(PP, PP.link_, base_rdn=PP.rdnt[1])
+            root.fback += [[PP.derH, PP.valt, PP.rdnt]]  # single-fork feedback
 
-        if root.fback_:
-            feedback(root, fd)  # after der+ in all nodes, no single node feedback up multiple layers
+    if root.fback_:
+        feedback(root, fd)  # after der+ in all nodes, no single node feedback up multiple layers
 
     root.node_ = PP_t  # nested in der+, add_alt_PPs_?
 
