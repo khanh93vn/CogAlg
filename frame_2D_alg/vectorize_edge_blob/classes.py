@@ -142,7 +142,6 @@ class CderH(list):  # derH is a list of der layers or sub-layers, each = ptuple_
         return dderH, valt, rdnt  # new derLayer,= 1/2 combined derH
 
 
-
 class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param if derP, always positive
 
     ptuple: Cptuple = z(Cptuple())  # latuple: I,G,M,Ma, angle(Dy,Dx), L
@@ -163,7 +162,6 @@ class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param
     Ddx: int = 0
     '''
 
-    # it's conditional in comp_rng, and we need to pass A,S, so it should be in comp_slice?
     def comp(self, other, link_, rn, A, S):
 
         dertuplet, valt, rdnt = self.ptuple.comp(other.ptuple, rn=rn)
@@ -192,6 +190,7 @@ class CderP(CBase):  # tuple of derivatives in P link: binary tree with latuple 
             self.derH |= dderH; self.valt = valt; self.rdmt = rdnt  # update derP not form new one
             link_ += [self]
 '''
+len layers with ext: 2, 3, 6, 12, 24... 
 max n of tuples per der layer = summed n of tuples in all lower layers: 1, 1, 2, 4, 8..:
 lay1: par     # derH per param in vertuple, layer is derivatives of all lower layers:
 lay2: [m,d]   # implicit nesting, brackets for clarity:
@@ -200,10 +199,7 @@ lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays
 '''
 
 class Cgraph(CBase):  # params of single-fork node_ cluster
-    '''
-    We may need nested ext: top level summed from link_, lower levels from nodes, per level of node_ hierarchy.
-    That's parallel to aggH( subH, so we should have ext packed in each subLay and aggLev, same as in derH?
-    '''
+
     fd: int = 0  # fork if flat layers?
     ptuple: Cptuple = z(Cptuple())  # default P
     derH: CderH = z(CderH())  # from PP, not derHv
@@ -215,7 +211,6 @@ class Cgraph(CBase):  # params of single-fork node_ cluster
     link_: list = z([])  # internal, single-fork
     node_: list = z([])  # base node_ replaced by node_t in both agg+ and sub+, deeper node-mediated unpacking in agg+
     # graph-external, +level per root sub+:
-    fHH: int = 0  # aggH + [daggH]: add nesting per agg+?
     rimH: list = z([])  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
     RimH: list = z([])  # links to the most mediated nodes
     extH: list = z([])  # G-external daggH( dsubH( dderH, summed from rim links
@@ -233,16 +228,16 @@ class Cgraph(CBase):  # params of single-fork node_ cluster
     # PP:
     P_: list = z([])
     mask__: object = None
-    # temporary:
+    # temporary, replace with Et:
     Vt: Cmd = z(Cmd(0, 0))  # last layer | last fork tree vals for node_connect and clustering
     Rt: Cmd = z(Cmd(1, 1))
     Dt: Cmd = z(Cmd(0, 0))
-    it: list = z([None,None])  # graph indices in root node_s, implicitly nested
-    roott: list = z([None,None])  # for feedback
-    fback_t: list = z([[],[],[]])  # feedback [[aggH,valt,rdnt,dect]] per node fork, maps to node_H
+    root: list = z([None])  # for feedback
+    fback_: list = z([[],[],[]])  # feedback [[aggH,valt,rdnt,dect]] per node layer, maps to node_H
     compared_: list = z([])
     Rdn: int = 0  # for accumulation or separate recursion count?
 
+    # it: list = z([None,None])  # graph indices in root node_s, implicitly nested
     # depth: int = 0  # n sub_G levels over base node_, max across forks
     # nval: int = 0  # of open links: base alt rep
     # id_H: list = z([[]])  # indices in the list of all possible layers | forks, not used with fback merging
