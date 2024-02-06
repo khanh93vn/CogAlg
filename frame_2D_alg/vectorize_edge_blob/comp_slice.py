@@ -33,7 +33,7 @@ def der_recursion(root, PP):  # node-mediated correlation clustering: keep same 
     # n_uplinks = defaultdict(int)  # number of uplinks per P
     # for derP in PP.link_: n_uplinks[derP.P] += 1
 
-    rng_recursion(PP.link_, PP.rng)  # extend PP.link_ and derHs with same-der rng+ comps
+    rng_recursion(PP, PP.rng)  # extend PP.link_ and derHs with same-der rng+ comps
     form_PP_t(PP, PP.link_, base_rdn=PP.rdnt[1])  # der+ is mediated through form_PP_t
     root.fback += [[PP.derH, PP.valt, PP.rdnt]]  # feedback from PPds, no forking?
 
