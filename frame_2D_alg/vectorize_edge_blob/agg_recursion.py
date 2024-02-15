@@ -1,7 +1,7 @@
 import numpy as np
 from copy import deepcopy, copy
 from itertools import combinations, zip_longest
-from .classes import CderP, Cgraph, CderG, Cmd, CderH, Cangle
+from .classes import CderP, Cgraph, CderG, CderH
 from .filters import aves, ave_mL, ave_dangle, ave, ave_distance, G_aves, ave_Gm, ave_Gd
 from .slice_edge import slice_edge, comp_angle
 from .comp_slice import der_recursion, comp_derH, sum_derH, comp_ptuple, sum_dertuple, comp_dtuple, get_match
@@ -10,18 +10,18 @@ from .comp_slice import der_recursion, comp_derH, sum_derH, comp_ptuple, sum_der
 Blob edges may be represented by higher-composition patterns, etc., if top param-layer match,
 in combination with spliced lower-composition patterns, etc, if only lower param-layers match.
 This may form closed edge patterns around flat core blobs, which defines stable objects. 
-Graphs are formed from blobs that match over <max distance. 
+Graphs are formed from blobs that match over < max distance. 
 -
 They are also assigned adjacent alt-fork graphs, which borrow predictive value from the graph. 
-Primary value is match, so difference patterns don't have independent value. 
-They borrow value from proximate or average match patterns, to the extent that they cancel their projected match. 
-But alt match patterns borrow already borrowed value, which may be too tenuous to track, we can use the average instead.
+Primary value is match, diff.patterns borrow value from proximate match patterns, canceling their projected match. 
+But alt match patterns borrow already borrowed value, which may be too tenuous to track, we use average borrowed value.
 -
 Clustering criterion is G M|D, summed across >ave vars if selective comp (<ave vars are not compared, so they don't add costs).
 Fork selection should be per var or co-derived der layer or agg level. 
+Exclusive clustering per (fork,ave), the nodes may overlap between clusters of different forks.  
+
 There are concepts that include same matching vars: size, density, color, stability, etc, but in different combinations.
 Weak value vars are combined into higher var, so derivation fork can be selected on different levels of param composition.
-
 Clustering by variance: lend|borrow, contribution or counteraction to similarity | stability, such as metabolism? 
 -
 graph G:
@@ -46,7 +46,7 @@ def vectorize_root(blob):  # vectorization in 3 composition levels of xcomp, clu
         if edge.valt[fd] * (len(node_)-1)*(edge.rng+1) > G_aves[fd] * edge.rdnt[fd]:
 
             for PP in node_: PP.root = None
-            # discontinuous PP cross-comp, cluster -> G_t
+            # discontinuous PP rng+ cross-comp, cluster -> G_t
             agg_recursion(None, edge, node_, nrng=1, fagg=1)  # agg+, no Cgraph nodes
 
     return edge
@@ -54,12 +54,12 @@ def vectorize_root(blob):  # vectorization in 3 composition levels of xcomp, clu
 
 def agg_recursion(rroot, root, node_, nrng=1, fagg=0):  # lenH = len(root.aggH[-1][0]), lenHH: same in agg_compress
 
-    Et = [[0,0],[0,0],[0,0]]  # grapht link_ Valt,Rdnt,Dect(currently not used)
+    Et = [[0,0],[0,0],[0,0]]  # G-external vals summed from grapht link_ Valt, Rdnt, Dect(currently not used)
 
     # agg+ der=1 xcomp of new Gs if fagg, else sub+: der+ xcomp of old Gs:
     nrng = rng_recursion(rroot, root, combinations(node_,r=2) if fagg else root.link_, Et, nrng)  # rng+ appends rim, link.derH
 
-    form_graph_t(root, node_, Et, nrng, fagg)  # root_fd, eval sub+, feedback per graph
+    form_graph_t(root, node_, Et, nrng, fagg)  # root_fd, eval der++ and feedback per Gd, not sub-recursion in Gms
 
     if node_ and isinstance(node_[0], list):
         for fd, G_ in enumerate(node_):
@@ -74,33 +74,34 @@ def agg_recursion(rroot, root, node_, nrng=1, fagg=0):  # lenH = len(root.aggH[-
 def rng_recursion(rroot, root, Q, Et, nrng=1):  # rng++/ G_, der+/ link_ if called from sub+ fork of agg_recursion, -> rimH
 
     et = [[0,0],[0,0],[0,0]]  # grapht link_ Valt,Rdnt,Dect
-    _G_,_link_ = set(),set()  # for next rng+ | sub+
+    _G_,_link_ = set(),set()  # for next rng+, der+
     fd = isinstance(Q,set)  # link_ is a set
 
-    if fd:  # der+, but recursion is still rng+
-        for link in Q:  # inp_= root.link_, reform links
-            if link.Vt[1] > G_aves[1] * link.Rt[1]:  # >rdn incr
+    if fd:
+        for link in Q:  # init rng+ from der+, extend root links
+            G = link.G; _G = link._G
+            if _G in G.compared_: continue
+            if link.Vt[1] > G_aves[1] * link.Rt[1]:
+                G.compared_+=[_G]; _G.compared_+=[G]
                 comp_G(link, Et)
-                comp_rim(_link_, link, nrng)  # add matching-direction rim links for next rng+
-    else:  # rng+, only before sub+
-        Gt_ = Q
-        for (_G, G) in Gt_:  # form new link_ from original node_
-            dy = _G.box.cy - G.box.cy; dx = _G.box.cx - G.box.cx
+                comp_rim(_link_,link,nrng)  # add matching-direction rim links for next rng+?
+    else:
+        Gt_ = Q  # prelinks for init or recursive rng+, form new link_, or make it general?
+        for (_G, G) in Gt_:
+            if _G in G.compared_: continue
+            dy = _G.box.cy - G.box.cy; dx = _G.box.cx - G.box.cx  # compute distance between node centers:
             dist = np.hypot(dy, dx)
-            if 2*nrng >= dist > 2*(nrng-1):  # G,_G are within rng and were not compared at prior rng
+            if (G.Vt[0]+_G.Vt[0])/ (dist/ave_distance) > ave*(G.Rt[0]+_G.Rt[0]):  # combined val and distance eval
                 # pairwise eval in rng++, or directional?
                 if nrng==1 or (G.Vt[0]+_G.Vt[0]) > ave * (G.Rt[0]+_G.Rt[0]):
-                    link = CderG(_G=_G, G=G, A=Cangle(dy,dx), S=dist)
+                    link = CderG(_G=_G, G=G, A=[dy,dx], S=dist)
+                    G.compared_+=[_G]; _G.compared_+=[G]
                     comp_G(link, et)
-                else:
-                    _G_.add((_G, G))  # for next rng+
-    '''
-    recursion eval per original cluster because comp eval is bilateral, we need to test all pairs?
-    '''
-    if et[0][0] > ave_Gm * et[1][0]:  # eval single layer accum, for rng++ only
-        for Part, part in zip(Et, et):
-            for i, par in enumerate(part):  # Vt[i]+=v; Rt[i]+=rt[i]; Dt[i]+=d:
-                Part[i] += par
+            else:
+                _G_.add((_G, G))  # for next rng+
+
+    if et[0][0] > ave_Gm * et[1][0]:  # rng+ eval per arg cluster because comp is bilateral, 2nd test per new pair
+        for Part, part in zip(Et,et): np.add(Part,part)  # Vt[i]+=v; Rt[i]+=rt[i]; Dt[i]+=d
         _Q = _link_ if fd else list(_G_)
         if _Q:
             nrng = rng_recursion(rroot, root, _Q, Et, nrng+1)  # eval rng+ for der+ too
@@ -119,7 +120,7 @@ def comp_rim(_link_, link, nrng):  # for next rng+:
 
                 # compare direction of link to all links in link.G.rimH[-1] and link._G.rimH[-1]:
                 if comp_angle(link.A,_link.A)[0] > ave:
-                    _link_.add(CderG(G=G, _G=_G, A=Cangle(dy,dx), S=dist))  # to compare in rng+
+                    _link_.add(CderG(G=G, _G=_G, A=[dy,dx], S=dist))  # to compare in rng+
 
 
 def form_graph_t(root, G_, Et, nrng, fagg=0):  # form Gm_,Gd_ from same-root nodes
@@ -129,7 +130,7 @@ def form_graph_t(root, G_, Et, nrng, fagg=0):  # form Gm_,Gd_ from same-root nod
     for fd in 0, 1:
         if Et[0][fd] > ave * Et[1][fd]:  # eValt > ave * eRdnt
             graph_ = segment_node_(root, G_, fd, nrng, fagg)  # fd: node-mediated Correlation Clustering
-            if fd:  # der+ only, rng+ exhausted before sub+, can't be effectively extended in sub Gs?
+            if fd:  # der+ only, rng++ term by high diffs, can't be extended much in sub Gs
                 for graph in graph_:
                     if graph.link_ and graph.Vt[1] > G_aves[1] * graph.Rt[1]:
                         graph.Vt = [0,0]; graph.Rt = [0,0]; graph.Dt = [0,0]  # reset
@@ -183,15 +184,14 @@ def node_connect(_G_):  # node connectivity = sum surround link vals, incr.media
         if G_: _G_ = G_  # exclude weakly incremented Gs from next connectivity expansion loop
         else:  break
 
-
 def segment_node_(root, root_G_, fd, nrng, fagg):  # eval rim links with summed surround vals for density-based clustering
 
     # graph += [node] if >ave (surround connectivity * relative value of link to any internal node)
     igraph_ = []; ave = G_aves[fd]
 
-    for G in root_G_:   # init per node,  last-layer Vt,Vt,Dt:
-        grapht = [[G],[], G.Vt,G.Rt,G.Dt, copy(G.rimH[-1] if G.rimH and isinstance(G.rimH[0],list) else G.rimH)]  # link_ = last rim
-        if fd: G.root = grapht  # for feedback
+    for G in root_G_:   # init per node, last-layer Vt,Vt,Dt:
+        grapht = [[G],[],G.Vt,G.Rt,G.Dt, copy(G.rimH[-1] if G.rimH and isinstance(G.rimH[0],list) else G.rimH)]  # link_ = last rim
+        G.root = grapht  # for G merge
         igraph_ += [grapht]
     _graph_ = igraph_
 
@@ -213,11 +213,11 @@ def segment_node_(root, root_G_, fd, nrng, fagg):  # eval rim links with summed 
                 crdn = link.Rt[fd] + (G.Rt[fd] + _G.Rt[fd]) / 2
                 if cval > ave * crdn:  # _G and its root are effectively connected
                     # merge _root:
-                    _grapht = _G.root[fd]
+                    _grapht = _G.root
                     _G_,_Link_,_Vt,_Rt,_Dt,_Rim = _grapht
                     Link_[:] = list(set(Link_+_Link_)) + [link]
                     for g in _G_:
-                        g.root[fd] = grapht
+                        g.root = grapht
                         if g not in G_: G_+=[g]
                     for i in 0,1:
                         Vt[i]+=_Vt[i]; Rt[i]+=_Rt[i]; Dt[i]+=_Dt[i]
@@ -255,7 +255,7 @@ def sum2graph(root, grapht, fd, nrng, fagg):  # sum node and link params into gr
     for G in G_:
         graph.ext[0] += 1
         sum_last_lay(G, fd)
-        graph.box += G.box
+        graph.box.extend(G.box)
         graph.ptuple += G.ptuple
         sum_derH([graph.derH,[0,0],[1,1]], [G.derH,[0,0],[1,1]], base_rdn=1)
         sum_Hv([extH,evalt,erdnt,edect,2], [G.extH,G.evalt,G.erdnt,G.edect,2], base_rdn=G.erdnt[fd])
@@ -263,11 +263,10 @@ def sum2graph(root, grapht, fd, nrng, fagg):  # sum node and link params into gr
         for j in 0,1:
             evalt[j] += G.evalt[j]; erdnt[j] += G.erdnt[j]; edect[j] += G.edect[j]
             valt[j] += G.valt[j]; rdnt[j] += G.rdnt[j]; dect[j] += G.dect[j]
-    graph.aggH += extH  # concat dsubH or daggH
+    graph.aggH.append(extH)  # dsubH| daggH
     # graph internals = G Internals + Externals:
-    valt = Cmd(*valt) + evalt; graph.valt = valt
-    rdnt = Cmd(*rdnt) + erdnt; graph.rdnt = rdnt
-    dect = Cmd(*dect) + edect; graph.dect = dect
+    for gT,T,t in zip((graph.valt,graph.rdnt,graph.dect), (valt,rdnt,dect), (evalt,erdnt,edect)):
+        T[:] = np.add(T,t); gT[:] = T
     if fagg:
         if not G.aggH or (G_[0].aggH and G_[0].aggH[-1] == 1):
             # 1st agg+, init aggH = [subHv]:
@@ -303,60 +302,50 @@ def sum_last_lay(G, fd):  # eLay += last layer of link.daggH (dsubH|ddaggH)
 
     if eLay: G.extH += [eLay]
 
-
+# not updated
 def comp_G(link, Et):
 
     _G, G = link._G, link.G
-    Valt, Rdnt, Dect, Ext = Cmd(0,0), Cmd(1,1), Cmd(0,0), []
+    Valt, Rdnt, Dect, Extt = [0,0], [1,1], [0,0], []
     # keep separate P ptuple and PP derH, empty derH in single-P G, + empty aggH in single-PP G:
 
     # / P:
     mtuple, dtuple, Mtuple, Dtuple = comp_ptuple(_G.ptuple, G.ptuple, rn=1, fagg=1)
-    valt = Cmd(sum(mtuple), sum(abs(d) for d in dtuple))  # mval is signed, m=-min in comp x sign
-    rdnt = Cmd(valt[1]>valt[0], valt[1]<=valt[0])
-    dect = Cmd(0,0)
+    valt = [sum(mtuple), sum(abs(d) for d in dtuple)]  # mval is signed, m=-min in comp x sign
+    rdnt = [valt[1]>valt[0], valt[1]<=valt[0]]
+    dect = [0,0]
     for fd, (ptuple,Ptuple) in enumerate(zip((mtuple,dtuple),(Mtuple,Dtuple))):
         for i, (par, max, ave) in enumerate(zip(ptuple, Ptuple, aves)):
             # compute link decay coef: par/ max(self/same)
             if fd: dect[1] += abs(par)/ abs(max) if max else 1
             else:  dect[0] += (par+ave)/ (max+ave) if max else 1
     dect[0] = dect[0]/6; dect[1] = dect[1]/6  # ave of 6 params
-    Valt += valt; Rdnt += rdnt; Dect += dect
-    dertv = CderH([[mtuple,dtuple], valt,rdnt,dect,0])  # no ext in dertvs
+    Valt = np.add(Valt,valt); Rdnt = np.add(Rdnt,rdnt); Dect = np.divide(np.add(Dect,dect), 2)
+    dertv = CderH(H=[mtuple,dtuple], valt=valt,rdnt=rdnt,dect=dect,depth=0)  # no ext in dertvs
 
     # / PP:
-    dderH = CderH([dertv])
-    if _G.derH and _G.derH:  # empty in single-P Gs?
-        for _lay, lay in zip(_G.derH,_G.derH):
-            mtuple,dtuple, Mtuple,Dtuple = comp_dtuple(_lay[1], lay[1], rn=1, fagg=1)
-            valt = Cmd(sum(mtuple),sum(abs(d) for d in dtuple))
-            rdnt = Cmd(valt[1] > valt[0], valt[1] <= valt[0])
-            dect = Cmd(0,0)
-            for fd, (ptuple,Ptuple) in enumerate(zip((mtuple,dtuple),(Mtuple,Dtuple))):
-                for (par, max, ave) in zip(ptuple, Ptuple, aves):  # different ave for comp_dtuple
-                    if fd: dect[1] += abs(par)/ abs(max) if max else 1
-                    else:  dect[0] += (par+ave)/ (max+ave) if max else 1
-            dect[0] = dect[0]/6; dect[1] = dect[1]/6  # ave of 6 params
-            Valt += valt; Rdnt += rdnt; Dect[0] = (Dect[0] + dect[0]) /2; Dect[1] = (Dect[1] + dect[1]) /2
-            dderH.append(CderH([[mtuple,dtuple], valt,rdnt,dect,0]))  # new dderH layer
+    extt,valt,rdnt,dect = comp_ext(_G.ext,G.ext)
+    Valt = np.add(Valt, valt); Rdnt = np.add(Rdnt, rdnt); Dect = np.divide(np.add(Dect,dect), 2)
+    for Ext,ext in zip(Extt,extt): sum_ext(Ext,ext)
 
+    dderH = [dertv, extt]
+    if _G.derH.H and G.derH.H:  # empty in single-P Gs?
+        ddertv = comp_derH(_G.derH, G.derH)
+        Valt = np.add(Valt,ddertv.valt); Rdnt = np.add(Rdnt,ddertv.rdnt); Dect = np.divide(np.add(Dect,ddertv.dect), 2)
+        dderH += [ddertv]  # new dderH layer
+    dderH = CderH(H=dderH,valt=copy(Valt),rdnt=copy(Rdnt),dect=copy(Dect), depth=1)
     # / G:
-    der_ext,valt,rdnt,dect = comp_ext(_G.ext,G.ext)
-    Valt += valt; Rdnt += rdnt; Dect += dect
-    dderH.append(der_ext)
-    dderH = CderH([dderH,copy(Valt),copy(Rdnt),copy(Dect), 1])
-    sum_ext(Ext, der_ext)
 
     if _G.aggH and G.aggH:
-        daggH = CderH([dderH])
-        dH, valt,rdnt,dect = comp_Hv([_G.aggH,_G.valt,_G.rdnt,_G.dect,2], [G.aggH,G.valt,G.rdnt,G.dect,2], rn=1)
+        H = [dderH]
+        dHv = comp_Hv(CderH(_G.aggH,_G.valt,_G.rdnt,_G.dect,2), CderH(G.aggH,G.valt,G.rdnt,G.dect,2), rn=1, depth=2)
+        dH = dHv.H; valt=dHv.valt; rdnt = dHv.rdnt; ext = dHv.ext
         # aggH is subH before agg+
-        Valt += valt
+        Valt = np.add(Valt, valt)
         Rdnt[0] += rdnt[0] + (valt[1]>valt[0]); Rdnt[1] += rdnt[1] + (valt[1]<=valt[0])
-        Dect[0] = (Dect[0] + dect[0]) /2; Dect[1] = (Dect[1] + dect[1]) /2
+        Dect = np.divide(np.add(Dect,dect), 2)
         # flat, appendleft:
-        daggH.append(dH); daggH.append(Ext)
-        daggH = CderH([daggH,copy(Valt),copy(Rdnt),copy(Dect),2])
+        daggH = CderH(H+dH+[Extt], copy(Valt),copy(Rdnt),copy(Dect),2)
     else:
         daggH = dderH
     link.daggH += [daggH]
@@ -365,8 +354,7 @@ def comp_G(link, Et):
 
     for fd, (Val,Rdn,Dec) in enumerate(zip(Valt,Rdnt,Dect)):
         if Val > G_aves[fd] * Rdn:
-            # to eval fork grapht in form_graph_t:
-            Et[0][fd] += Val; Et[1][fd] += Rdn; Et[2][fd] += Dec
+            Et[0][fd] += Val; Et[1][fd] += Rdn; Et[2][fd] += Dec  # to eval grapht in form_graph_t
             G.Vt[fd] += Val;  G.Rt[fd] += Rdn;  G.Dt[fd] += Dec
             if not fd:
                 for G in link.G, link._G:
@@ -378,40 +366,44 @@ def comp_G(link, Et):
                         rimH += [link]  # rim
 
 
-def comp_Hv(_Hv, Hv, rn):  # for derH, subH, or aggH
+def comp_Hv(_Hv, Hv, rn,depth):  # for derH, subH, or aggH
 
-    _H, H = _Hv[0], Hv[0]
-    Valt, Rdnt, Dect = Cmd(0,0), Cmd(1,1), Cmd(0,0)
-    DH = CderH([])
+    DHv = CderH(depth=depth)
 
-    for _lev, lev in zip_longest(_H, H, fillvalue=0):  # compare common subHs, if lower-der match?
+    for _lev, lev in zip_longest(_Hv.H, Hv.H, fillvalue=0):  # compare common subHs, if lower-der match?
         if _lev and lev:
             if lev[-1] == 0:  # ptuplet
                 mtuple,dtuple, Mtuple,Dtuple = comp_dtuple(_lev[0][1], lev[0][1], rn, fagg=1)
                 mval = sum(mtuple); dval = sum(abs(d) for d in dtuple)
                 mrdn = dval > mval; drdn = dval < mval
-                dect = Cmd(0,0)
+                dect = [0,0]
                 for fd, (ptuple,Ptuple) in enumerate(zip((mtuple,dtuple),(Mtuple,Dtuple))):
                     for (par, max, ave) in zip(ptuple, Ptuple, aves):
                         if fd: dect[1] += abs(par)/abs(max) if max else 1
                         else:  dect[0] += (par+ave)/abs(max)+ave if max else 1
                 dect[0]/=6; dect[1]/=6
-                valt = Cmd(mval, dval); rdnt = Cmd(mrdn, drdn)
-                DH.append(CderH([[mtuple,dtuple],valt,rdnt,dect,0]))
+                valt = [mval, dval]; rdnt = [mrdn, drdn]
+                dhv = CderH([mtuple,dtuple],valt,rdnt,dect,0)
+                DHv.H += [dhv]
+                DHv.valt=np.add(DHv.valt,dhv.valt); DHv.rdnt=np.add(DHv.rdnt ,dhv.rdnt); DHv.dect=np.add(DHv.dect,dhv.dect)
             elif lev[-1] == 1:  # derHv
-                dH,valt,rdnt,dect = comp_Hv(_lev,lev, rn)
-                DH.append(CderH([dH, valt,rdnt,dect,1]))
+                dHv = comp_Hv(_lev,lev, rn, 1)
+                DHv += [dHv]
+                DHv.valt=np.add(DHv.valt,dhv.valt); DHv.rdnt=np.add(DHv.rdnt ,dhv.rdnt); DHv.dect=np.add(DHv.dect,dhv.dect)
             elif lev[-1] == 2:  # subHv
-                dH,valt,rdnt,dect = comp_Hv(_lev,lev, rn)
-                DH.extend(dH)  # concat
+                dHv = comp_Hv(_lev,lev, rn, 2)
+                DHv.H += dHv.H  # concat
+                DHv.valt=np.add(DHv.valt,dhv.valt); DHv.rdnt=np.add(DHv.rdnt ,dhv.rdnt); DHv.dect=np.add(DHv.dect,dhv.dect)
             else:  # ext
                 dext,valt,rdnt,dect = comp_ext(_lev[1],lev[1])  # comp dext only
-                DH.append(dext)
-                Valt += valt; Rdnt += rdnt; Rdnt[0] += valt[1] > valt[0]; Rdnt[1] += valt[0] > valt[1]; Dect += dect
-    if DH:
-        S = min(len(_H),len(H)); Dect[0]/= S; Dect[1]/= S   # normalize
+                DHv.H += [dext]
+                DHv.valt = np.add(DHv.valt,valt)
+                DHv.rdnt = np.add(DHv.rdnt,rdnt); DHv.rdnt[0] += valt[1] > valt[0]; DHv.rdnt[1] += valt[0] > valt[1]
+                DHv.dect = np.divide(np.add(DHv.dect,dect), 2)
+    if DHv.H:
+        S = min(len(_Hv.H),len(Hv.H)); DHv.dect[0]/= S; DHv.dect[1]/= S   # normalize
 
-    return DH, Valt,Rdnt,Dect
+    return DHv
 
 
 def comp_ext(_ext, ext):  # comp ds:
@@ -420,7 +412,7 @@ def comp_ext(_ext, ext):  # comp ds:
     dL = _L-L
     Mval, Dval, Mrdn, Drdn = 0,0,1,1
 
-    if isinstance(A,Cangle):
+    if isinstance(A,list):
         if any(A) and any(_A):
             mA,dA = comp_angle(_A,A); adA=dA
         else:
@@ -449,7 +441,7 @@ def comp_ext(_ext, ext):  # comp ds:
                 dS / (_aS+aS) if aS+_aS else 1 +
                 dA / max_dA if max_mA else 1) /3
 
-    return [[mL,mS,mA], [dL,dS,dA]],Cmd(Mval, Dval),Cmd(Mrdn, Drdn),Cmd(Mdec, Ddec)
+    return [[mL,mS,mA], [dL,dS,dA]],[Mval, Dval],[Mrdn, Drdn],[Mdec, Ddec]
 
 
 # tentative
@@ -493,11 +485,9 @@ def sum_H(H, h, depth, base_rdn, fneg=0):
 def sum_ext(Ext, ext):  # ext: m|d L,S,A
 
     for i,(Par,par) in enumerate(zip(Ext,ext)):
-        if isinstance(Par, list):
-            Par[0]+=par[0]  # angle
-            Par[1]+=par[1]
-        else:
-            Ext[i] = Par+par
+
+        if isinstance(Par,list): np.add(Par,par)  # sum angle
+        else: Ext[i] = Par+par
 
 
 def feedback(root):  # called from form_graph_, append new der layers to root
@@ -505,7 +495,7 @@ def feedback(root):  # called from form_graph_, append new der layers to root
     AggH, Valt, Rdnt, Dect = deepcopy(root.fback_.pop(0))  # init
     while root.fback_:
         aggH, valt, rdnt, dect = root.fback_.pop(0)
-        sum_aggH(AggH, aggH, base_rdn=0); Valt += valt; Rdnt += rdnt; Dect += dect
+        sum_Hv(AggH, aggH, base_rdn=0); Valt += valt; Rdnt += rdnt; Dect += dect
 
     if Valt[1] > G_aves[1] * Rdnt[1]:  # compress levels?
         root.aggH += AggH; root.valt += Valt; root.rdnt += Rdnt; root.dect += Dect

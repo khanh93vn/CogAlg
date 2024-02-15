@@ -332,3 +332,61 @@ def sum_derHv(T,t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers,
 
         else:
             T[:] = deepcopy(t)
+
+def rng_recursion(PP, rng=1):  # similar to agg+ rng_recursion, but contiguously link mediated
+
+    _link_ = PP.link_  # init proto-links = [_P,P] in der0
+
+    while True:  # form new links with recursive rng+ in edge|PP, secondary pair comp eval
+        link_ = []
+        V = 0
+        for link in _link_:
+            V = comp_P(link_,link, V=V) # link layer match
+        PP.link_ += link_  # rng+/ last der+, or link_ should be mlink_ only?
+
+        if V >= ave * len(link_) * 6:  # len mtuple
+            rng += 1
+            for _derP, derP in combinations(link_, 2):  # scan new link pairs
+                # or trace through P.uplink_?
+                _P = _derP.P; P = derP.P
+                if _derP.P is not derP._P:  # same as derP._P is _derP._P or derP.P is _derP.P
+                    continue
+                __P = _derP._P  # next layer of Ps
+                if len(__P.derH) < len(P.derH):  # for call from der+: compare same der layers only
+                    continue
+                distance = np.hypot(*(__P.yx - P.yx))  # distance between P midpoints, /= L for eval?
+                if rng-1 < distance <= rng:
+                    if P.valt[0]+__P.valt[0] > ave * (P.rdnt[0]+_P.rdnt[0]):
+                        link_ += [CderP(_P=__P, P=P, S=distance, A=Cangle(*(_P.yx-P.yx)))]
+            _link_ = link_
+        else:
+            break
+    PP.rng=rng
+
+class Ct(list):     # tuple operations
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args)
+        self.extend(kwargs.values())
+
+    def __abs__(self): return hypot(self.p1, self.p1)
+    def __pos__(self): return self
+    def __neg__(self): return self.__class__(-self.p1, -self.p2, -self.p3)
+
+    def __add__(self, other): return Ct([a+b for a,b in zip(self, other)]) if self else copy(other)
+    def __sub__(self, other): return Ct([a-b for a,b in zip(self, other)]) if self else copy(other)
+
+    def normalize(self):
+        dist = abs(self)
+        return self.__class__(self.p1 / dist, self.p2 / dist)
+
+class Cangle(NamedTuple):  # not sure it's needed
+
+    dy: Real
+    dx: Real
+    # operators:
+    def __abs__(self): return hypot(self.dy, self.dx)
+    def __pos__(self): return self
+    def __neg__(self): return self.__class__(-self.dy, -self.dx)
+    def __add__(self, other): return self + other  # .__class__(self.dy + other.dy, self.dx + other.dx) ?
+    def __sub__(self, other): return self + (-other)
