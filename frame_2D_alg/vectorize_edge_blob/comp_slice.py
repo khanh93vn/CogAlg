@@ -1,11 +1,10 @@
 import numpy as np
 from collections import deque, defaultdict
 from copy import deepcopy, copy
-from itertools import zip_longest, combinations
-from typing import List, Tuple
-from .classes import add_, sub_, acc_, get_match, CderH, CderP, Cgraph
+from itertools import zip_longest
+from types import SimpleNamespace
 from .filters import ave, ave_dI, aves, P_aves, PP_aves
-from .slice_edge import comp_angle
+from .slice_edge import comp_angle, new_derH
 
 '''
 Vectorize is a terminal fork of intra_blob.
@@ -37,9 +36,6 @@ len prior root_ sorted by G is root.rdn, to eval for inclusion in PP or start ne
   # root function:
 def der_recursion(root, PP):  # node-mediated correlation clustering: keep same Ps and links, increment link derH, then P derH in sum2PP
 
-    # n_uplinks = defaultdict(int)  # number of uplinks per P, not used?
-    # for derP in PP.link_: n_uplinks[derP.P] += 1
-
     if PP.derH.depth == 1:  # not initial call, form prelinks per P
         for P in PP.P_:  # add prelink_ for rng++:
             P.link_ += [[link._P for link in unpack_last_link_(P.link_)]]
@@ -55,7 +51,7 @@ def rng_recursion(PP, rng=1):  # similar to agg+ rng_recursion, but contiguously
     while True:
         P_ = []; V = 0
         for P in iP_:
-            if not P.link_: continue
+            if not hasattr(P, 'link_'): continue
             __P_ = []  # temporary prelinks per P
             _P_ = P.link_.pop()  # P.link_ nesting doesn't matter
             for _P in _P_:
@@ -90,7 +86,7 @@ def rng_recursion(PP, rng=1):  # similar to agg+ rng_recursion, but contiguously
 
 def comp_P(link):
 
-    if isinstance(link,CderP): _P, P = link._P, link.P  # in der+
+    if isinstance(link,SimpleNamespace): _P, P = link._P, link.P  # in der+
     else:                      _P, P, S, A = link  # list in rng+
     rn = len(_P.dert_) / len(P.dert_)
 
@@ -110,10 +106,10 @@ def comp_P(link):
         if fd:
             if link.derH.depth==0:  # add nesting dertv-> derH:
                 link.derH.H = [link.derH.H], link.derH.depth==1
-            link.derH += derLay; link.vt=vt; link.rt=rt
+            sum_derH(link.derH, derLay); link.vt=vt; link.rt=rt
         else:
-            derH = CderH(H=[mtuple, dtuple], valt=vt, rdnt=rt, depth=0)  # dertv
-            link = CderP(P=P,_P=_P, derH=derH, vt=copy(vt), rt=copy(rt), S=S, A=A)
+            derH = new_derH(H=[mtuple, dtuple], valt=vt, rdnt=rt, depth=0)  # dertv
+            link = SimpleNamespace(P=P,_P=_P, derH=derH, vt=copy(vt), rt=copy(rt), S=S, A=A)
 
         return link
 
@@ -153,7 +149,7 @@ def form_PP_t(root, P_, irdn):  # form PPs of derP.valt[fd] + connected Ps val
 
 def sum2PP(root, P_, derP_, irdn, fd):  # sum links in Ps and Ps in PP
 
-    PP = Cgraph(fd=fd, root=root, P_=P_, rng=root.rng+1)  # initial PP.box = (inf,inf,-inf,-inf)
+    PP = SimpleNamespace(fd=fd, root=root, P_=P_, rng=root.rng+1)  # initial PP.box = (inf,inf,-inf,-inf)
     # += uplinks:
     S,A = 0, [0,0]
     for derP in derP_:
@@ -186,14 +182,14 @@ def sum2PP(root, P_, derP_, irdn, fd):  # sum links in Ps and Ps in PP
 
 def feedback(root):  # in form_PP_, append new der layers to root PP, single vs. root_ per fork in agg+
 
-    derH, valt, rdnt = CderH(),[0,0],[0,0]
+    derH, valt, rdnt = new_derH(),[0,0],[0,0]
     while root.fback_:
         _derH, _valt, _rdnt = root.fback_.pop(0)
         derH += _derH; acc_(valt,_valt); acc_(rdnt,_rdnt)
 
     root.derH += derH; add_(root.valt,_valt); add_(root.rdnt,_rdnt)
 
-    if isinstance(root.root, Cgraph):  # skip if root is Edge
+    if hasattr(root.root, 'derH'):  # skip if root is Edge
         rroot = root.root  # single PP.root, can't be P
         fback_ = rroot.fback_
         node_ = rroot.node_[1] if isinstance(rroot.node_[0],list) else rroot.node_  # node_ is updated to node_t in sub+
@@ -263,7 +259,7 @@ def comp_derH(_derH, derH, rn=1, fagg=0):  # derH is a list of der layers or sub
 
     Ht = []
     for derH in [_derH, derH]:  # init H is dertuplet, local convert to dertv_ (permanent conversion in sum2PP):
-        Ht += [derH.H] if isinstance(derH.H[0],CderH) else [CderH(H=derH.H, valt=copy(derH.valt), rdnt=copy(derH.rdnt), dect=copy(derH.dect), depth=0)]
+        Ht += [derH.H] if isinstance(derH.H[0],SimpleNamespace) else [new_derH(H=derH.H, valt=copy(derH.valt), rdnt=copy(derH.rdnt), dect=copy(derH.dect), depth=0)]
     derLay = []; Vt,Rt,Dt = [0,0],[0,0],[0,0]
 
     for _lay, lay in zip(Ht):
@@ -281,24 +277,48 @@ def comp_derH(_derH, derH, rn=1, fagg=0):  # derH is a list of der layers or sub
 
         Vt = np.add(Vt,valt); Rt = np.add(Rt,rdnt)
         if fagg: Dt = np.divide(np.add(Dt,dect),2)
-        derLay += [CderH(H=[mtuple,dtuple], valt=valt,rdnt=rdnt,dect=dect, depth=0)]  # dertvs
+        derLay += [new_derH(H=[mtuple,dtuple], valt=valt,rdnt=rdnt,dect=dect, depth=0)]  # dertvs
 
     return derLay, Vt,Rt,Dt  # to sum in each G Et
 
 
-# replaced by += overload for CderH in classes:
-def sum_derH(T, t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
+# def sum_derH(DerH, derH, fneg=0):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
+#
+#     DerH[:] = [
+#         # sum der layers, dertuple is mtuple | dtuple, fneg*i: for dtuple only:
+#         [ sum_dertuple(Mtuple, mtuple, fneg=fneg), sum_dertuple(Dtuple, dtuple, fneg=fneg) ]
+#         for [Mtuple, Dtuple], [mtuple, dtuple]
+#         in zip_longest(DerH, derH, fillvalue=[[0,0,0,0,0,0],[0,0,0,0,0,0]])  # mtuple,dtuple
+#     ]
+# replaced below:
 
-    DerH, Valt, Rdnt = T; derH, valt, rdnt = t
-    for i in 0,1:
-        Valt[i] += valt[i]
-        Rdnt[i] += rdnt[i] + base_rdn
-    DerH[:] = [
-        # sum der layers, dertuple is mtuple | dtuple, fneg*i: for dtuple only:
-        [ sum_dertuple(Mtuple, mtuple, fneg=0), sum_dertuple(Dtuple, dtuple, fneg=fneg) ]
-        for [Mtuple, Dtuple], [mtuple, dtuple]
-        in zip_longest(DerH, derH, fillvalue=[[0,0,0,0,0,0],[0,0,0,0,0,0]])  # mtuple,dtuple
-    ]
+def sum_derH(Hv, hv, irdn, fneg=0, fagg=0):
+    if hv:
+        if Hv:
+            H, Valt, Rdnt, Dect, Extt, Depth = Hv
+            h, valt, rdnt, dect, extt, depth = hv
+            Valt[:] = np.add(Valt,valt)
+            Rdnt[:] = np.add( np.add(Rdnt,rdnt), [irdn,irdn])
+            Rdnt[0] += Valt[1] > Valt[0]
+            Rdnt[1] += Valt[0] > Valt[1]
+            if fagg:
+                Dect[:] = np.divide( np.add(Dect,dect), 2)
+            fC=0
+            if isinstance(H, SimpleNamespace):
+                fC=1
+                if isinstance(h, list):  # convert dertv to derH:
+                    h = [new_derH(H=h, valt=copy(hv.valt), rdnt=copy(hv.rdnt), dect=copy(hv.dect), ext=copy(hv.ext), depth=0)]
+            elif isinstance(h, SimpleNamespace):
+                fC=1; H = [new_derH(H=H, valt=copy(Hv.valt), rdnt=copy(Hv.rdnt), dect=copy(Hv.dect), ext=copy(Hv.ext), depth=0)]
+
+            if fC:  # both derH_:
+                H = [sum_derH(DerH, derH, irdn, fneg) for DerH, derH in zip_longest(H,h)]
+            else:  # both dertuplets:
+                H = [list(np.sub(Dertuple,dertuple) if fneg else np.add(Dertuple,dertuple))
+                     for Dertuple, dertuple in zip(H,h)]  # mtuple,dtuple
+        else:
+            Hv[:] = deepcopy(hv)
+    return Hv
 
 def sum_dertuple(Ptuple, ptuple, fneg=0):
     _I, _G, _M, _Ma, _A, _L = Ptuple
@@ -306,6 +326,21 @@ def sum_dertuple(Ptuple, ptuple, fneg=0):
     if fneg: Ptuple[:] = [_I-I, _G-G, _M-M, _Ma-Ma, _A-A, _L-L]
     else:    Ptuple[:] = [_I+I, _G+G, _M+M, _Ma+Ma, _A+A, _L+L]
     return   Ptuple
+
+def get_match(_par, par):
+    match = min(abs(_par),abs(par))
+    return -match if (_par<0) != (par<0) else match    # match = neg min if opposite-sign comparands
+
+def acc_(a_,b_, n=1): # accum iterables
+
+    a_[:] = np.add(a_,b_) if a_ else copy(b_)
+    np.divide(a_,n)
+
+def add_(a_,b_, n=1):  # sum iterables
+    return np.divide( np.add(a_,b_) if a_ else [b for b in b_], n)
+
+def sub_(a_,b_):  # subtract iterables
+    return [a - b for a, b in zip(a_, b_)]
 
 def sum_derH_generic(T, t, base_rdn, fneg=0):  # derH is a list of layers or sub-layers, each = [mtuple,dtuple, mval,dval, mrdn,drdn]
 
@@ -330,4 +365,3 @@ def unpack_last_link_(link_):  # unpack last link layer
     link_ = []
     while link_ and isinstance(link_[-1], list): link_ = link_[-1]
     return link_
-
