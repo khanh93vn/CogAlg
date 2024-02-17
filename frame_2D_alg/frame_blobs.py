@@ -36,10 +36,7 @@ from time import time
 from types import SimpleNamespace
 import numpy as np
 from visualization.draw_frame import visualize
-from utils import (
-    kernel_slice_3x3 as ks,    # use in comp_pixel
-    get_instance, box2slice, accum_box, sub_box2box,
-)
+from utils import kernel_slice_3x3 as ks, get_instance, box2slice, accum_box, sub_box2box
 # from vectorize_edge.classes import Ct
 # hyper-parameters, set as a guess, latter adjusted by feedback:
 ave = 30  # base filter, directly used for comp_r fork
@@ -49,7 +46,6 @@ aveBa = 1.5
 ave_mP = 100
 UNFILLED = -1
 EXCLUDED = -2
-
 '''
     Conventions:
     postfix 't' denotes tuple, multiple ts is a nested tuple
