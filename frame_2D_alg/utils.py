@@ -46,8 +46,9 @@ SIGN_MAPS = {
 # ----------------------------------------------------------------------------
 # General purpose functions
 
-def get_instance(obj_id):
+def di(obj_id):
     """Get python object by id."""
+    if obj_id < 0: return None
     return ctypes.cast(int(obj_id), ctypes.py_object).value
 
 
