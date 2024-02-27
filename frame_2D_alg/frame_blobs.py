@@ -30,7 +30,6 @@
 '''
 from itertools import product
 import numpy as np
-from utils import kernel_slice_3x3 as ks
 # hyper-parameters, set as a guess, latter adjusted by feedback:
 ave = 30  # base filter, directly used for comp_r fork
 ave_a = 1.5  # coef filter for comp_a fork
@@ -50,20 +49,21 @@ ave_mP = 100
 
 def frame_blobs_root(i__):
     der__t = comp_pixel(i__)  # compare all in parallel -> i__, dy__, dx__, g__, s__
-    frame = der__t, I, Dy, Dx, blob_ = [der__t, 0, 0, 0, []]  # init frame as output
+    frame = i__, I, Dy, Dx, blob_ = [i__, 0, 0, 0, []]  # init frame as output
 
-    # Flood-fill 1 pixel at a time https://en.wikipedia.org/wiki/Flood_fill:
-    yxt_ = [*product(*map(range, der__t[1].shape))]  # set of pixel coordinates to be filled
+    # Flood-fill 1 pixel at a time
+    Y, X = i__.shape  # get i__ height and width
+    fyx_ = list(product(range(1,Y-1), range(1,X-1)))  # set of pixel coordinates to be filled (fill_yx_)
     root__ = {}  # id map pixel to blob
-    perimeter_ = []     # perimeter pixels
-    while yxt_:
-        if not perimeter_:  # initialize blob
-            blob = [frame, None, 0, 0, 0, [], []]  # root (frame), sign, I, Dy, Dx, yxt_, link_ (up-links)
-            perimeter_ += [yxt_[0]]
+    perimeter_ = []  # perimeter pixels
+    while fyx_:  # fyx_ is popped per filled pixel, in form_blob
+        if not perimeter_:  # init blob
+            blob = [frame, None, 0, 0, 0, [], [], []]  # root (frame), sign, I, Dy, Dx, yx_, dert_, link_ (up-links)
+            perimeter_ += [fyx_[0]]
 
-        form_blob(blob, yxt_, perimeter_, root__, der__t)  # https://en.wikipedia.org/wiki/Flood_fill
+        form_blob(blob, fyx_, perimeter_, root__, der__t)  # https://en.wikipedia.org/wiki/Flood_fill
 
-        if not perimeter_:  # terminate blob
+        if not perimeter_:  # term blob
             frame[1] += blob[2]  # I
             frame[2] += blob[3]  # Dy
             frame[3] += blob[4]  # Dx
@@ -76,14 +76,14 @@ def frame_blobs_root(i__):
 def comp_pixel(i__):
     # compute directional derivatives:
     dy__ = (
-        (i__[ks.bl] - i__[ks.tr]) * 0.25 +
-        (i__[ks.bc] - i__[ks.tc]) * 0.50 +
-        (i__[ks.br] - i__[ks.tl]) * 0.25
+        (i__[2:,  :-2] - i__[:-2, 2:  ]) * 0.25 +
+        (i__[2:, 1:-1] - i__[:-2, 1:-1]) * 0.50 +
+        (i__[2:, 2:  ] - i__[:-2, 2:  ]) * 0.25
     )
     dx__ = (
-        (i__[ks.tr] - i__[ks.bl]) * 0.25 +
-        (i__[ks.mr] - i__[ks.mc]) * 0.50 +
-        (i__[ks.br] - i__[ks.tl]) * 0.25
+        (i__[ :-2, 2:] - i__[2:  ,  :-2]) * 0.25 +
+        (i__[1:-1, 2:] - i__[1:-1,  :-2]) * 0.50 +
+        (i__[2:  , 2:] - i__[ :-2, 2:  ]) * 0.25
     )
     g__ = np.hypot(dy__, dx__)                          # compute gradient magnitude
     s__ = ave - g__ > 0  # sign is positive for below-average g
@@ -91,29 +91,34 @@ def comp_pixel(i__):
     return i__, dy__, dx__, g__, s__
 
 
-def form_blob(blob, yxt_, perimeter_, root__, der__t):
+def form_blob(blob, fyx_, perimeter_, root__, der__t):
     # unpack structures
-    root, sign, I, Dy, Dx, blob_yxt_, link_ = blob
+    root, sign, I, Dy, Dx, yx_, dert_, link_ = blob
     i__, dy__, dx__, g__, s__ = der__t
     Y, X = g__.shape
 
-    y, x = perimeter_.pop()  # get coord
-    if y < 0 or y >= Y or x < 0 or x >= X: return  # out of bound
-    if (y, x) not in yxt_:  # filled
-        assert (y, x) in root__ # must have been assigned
+    # get and check coord
+    y, x = perimeter_.pop()  # get pixel coord
+    if y < 1 or y > Y or x < 1 or x > X: return  # out of bound
+    i = i__[y, x]; dy = dy__[y-1, x-1]; dx = dx__[y-1, x-1]; s = s__[y-1, x-1] # get dert from arrays, -1 coords for shrunk arrays
+    if (y, x) not in fyx_:  # if adjacent filled, this is pixel of an adjacent blob
         _blob = root__[y, x]
         if _blob not in link_: link_ += [_blob]
         return
-    if sign is None: sign = s__[y, x]  # assign sign to new blob
-    if sign != s__[y, x]: return   # different sign, stop
+    if sign is None: sign = s  # assign sign to new blob
+    if sign != s: return   # different sign, stop
 
-    yxt_.remove((y, x))  # remove from yxt_
+    # fill coord, proceed with form_blob
+    fyx_.remove((y, x))  # remove from yx_
     root__[y, x] = blob  # assign root, for link forming
-    I += i__[ks.mc][y, x]; Dy += dy__[y, x]; Dx += dx__[y, x]; blob_yxt_ += [(y, x)] # update params
+    I += i; Dy += dy; Dx += dx  # update params
+    yx_ += [(y, x)]; dert_ += [(i, dy, dx)]  # update elements
+
+    # update perimeter_
     perimeter_ += [(y-1,x), (y,x+1), (y+1,x), (y,x-1)]  # extend perimeter
     if sign: perimeter_ += [(y-1,x-1), (y-1,x+1), (y+1,x+1), (y+1,x-1)]  # ... include diagonals for +blobs
 
-    blob[:] = root, sign, I, Dy, Dx, blob_yxt_, link_ # update blob
+    blob[:] = root, sign, I, Dy, Dx, yx_, dert_, link_ # update blob
 
 
 if __name__ == "__main__":
@@ -128,4 +133,36 @@ if __name__ == "__main__":
     image = imread(args.image)
 
     frame = frame_blobs_root(image)
-    # TODO: reusable visualize blobs for higher modules?
+
+    # verification/visualization:
+    import matplotlib.pyplot as plt
+    _, I, Dy, Dx, blob_ = frame  # ignore
+
+    i__ = np.zeros_like(image, dtype=np.float32)
+    dy__ = np.zeros_like(image, dtype=np.float32)
+    dx__ = np.zeros_like(image, dtype=np.float32)
+    s__ = np.zeros_like(image, dtype=np.float32)
+    line_ = []
+
+    for blob in blob_:
+        root, sign, I, Dy, Dx, yx_, dert_, link_ = blob
+        for yx, (i, dy, dx) in zip(yx_, dert_):
+            i__[yx] = i
+            dy__[yx] = dy
+            dx__[yx] = dx
+            s__[yx] = sign
+        y, x = map(np.mean, zip(*yx_))  # blob center of gravity
+        for _blob in link_:  # show links
+            _, _, _, _, _, _yx_, _, _ = _blob
+            _y, _x = map(np.mean, zip(*_yx_))  # _blob center of gravity
+            line_ += [((_x, x), (_y, y))]
+
+    plt.imshow(i__, cmap='gray'); plt.show()    # show reconstructed i__
+    plt.imshow(dy__, cmap='gray'); plt.show()   # show reconstructed dy__
+    plt.imshow(dx__, cmap='gray'); plt.show()   # show reconstructed dx__
+
+    # show blobs and links
+    plt.imshow(s__, cmap='gray')
+    for line in line_:
+        plt.plot(*line, "b-")
+    plt.show()

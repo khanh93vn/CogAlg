@@ -9,19 +9,6 @@ import matplotlib.pyplot as plt
 # ----------------------------------------------------------------------------
 # Constants
 
-# kernel slices
-kernel_slice_3x3 = SimpleNamespace(
-    tl=(Ellipsis, slice(0, -2), slice(None, -2)),
-    tc=(Ellipsis, slice(0, -2), slice(1, -1)),
-    tr=(Ellipsis, slice(0, -2), slice(2, None)),
-    ml=(Ellipsis, slice(1, -1), slice(None, -2)),
-    mc=(Ellipsis, slice(1, -1), slice(1, -1)),
-    mr=(Ellipsis, slice(1, -1), slice(2, None)),
-    bl=(Ellipsis, slice(2, None), slice(None, -2)),
-    bc=(Ellipsis, slice(2, None), slice(1, -1)),
-    br=(Ellipsis, slice(2, None), slice(2, None)),
-)
-
 # colors
 WHITE = 255
 BLACK = 0
