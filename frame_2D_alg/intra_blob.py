@@ -96,7 +96,7 @@ def compute_kernel(rng):
     y, x = k = np.indices((ksize, ksize)) - rng  # kernel span around (0, 0)
     sqr_dist = x*x + y*y  # squared distance
     sqr_dist[rng, rng] = 1  # avoid division by 0
-    coeff = k / sqr_dist # kernel coefficient
+    coeff = k / sqr_dist  # kernel coefficient
     coeff[1:-1, 1:-1] = 0  # non-rim = 0
 
     return coeff

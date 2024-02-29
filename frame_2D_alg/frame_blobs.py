@@ -53,15 +53,15 @@ def frame_blobs_root(i__):
 
     # Flood-fill 1 pixel at a time
     Y, X = i__.shape  # get i__ height and width
-    fyx_ = list(product(range(1,Y-1), range(1,X-1)))  # set of pixel coordinates to be filled (fill_yx_)
+    fill_yx_ = list(product(range(1,Y-1), range(1,X-1)))  # set of pixel coordinates to be filled (fill_yx_)
     root__ = {}  # id map pixel to blob
     perimeter_ = []  # perimeter pixels
-    while fyx_:  # fyx_ is popped per filled pixel, in form_blob
+    while fill_yx_:  # fill_yx_ is popped per filled pixel, in form_blob
         if not perimeter_:  # init blob
             blob = [frame, None, 0, 0, 0, [], [], []]  # root (frame), sign, I, Dy, Dx, yx_, dert_, link_ (up-links)
-            perimeter_ += [fyx_[0]]
+            perimeter_ += [fill_yx_[0]]
 
-        form_blob(blob, fyx_, perimeter_, root__, der__t)  # https://en.wikipedia.org/wiki/Flood_fill
+        form_blob(blob, fill_yx_, perimeter_, root__, der__t)  # https://en.wikipedia.org/wiki/Flood_fill
 
         if not perimeter_:  # term blob
             frame[1] += blob[2]  # I
@@ -70,8 +70,6 @@ def frame_blobs_root(i__):
             blob_ += [blob]
 
     return frame
-
-
 
 def comp_pixel(i__):
     # compute directional derivatives:
@@ -91,7 +89,7 @@ def comp_pixel(i__):
     return i__, dy__, dx__, g__, s__
 
 
-def form_blob(blob, fyx_, perimeter_, root__, der__t):
+def form_blob(blob, fill_yx_, perimeter_, root__, der__t):
     # unpack structures
     root, sign, I, Dy, Dx, yx_, dert_, link_ = blob
     i__, dy__, dx__, g__, s__ = der__t
@@ -101,7 +99,7 @@ def form_blob(blob, fyx_, perimeter_, root__, der__t):
     y, x = perimeter_.pop()  # get pixel coord
     if y < 1 or y > Y or x < 1 or x > X: return  # out of bound
     i = i__[y, x]; dy = dy__[y-1, x-1]; dx = dx__[y-1, x-1]; s = s__[y-1, x-1] # get dert from arrays, -1 coords for shrunk arrays
-    if (y, x) not in fyx_:  # if adjacent filled, this is pixel of an adjacent blob
+    if (y, x) not in fill_yx_:  # if adjacent filled, this is pixel of an adjacent blob
         _blob = root__[y, x]
         if _blob not in link_: link_ += [_blob]
         return
@@ -109,7 +107,7 @@ def form_blob(blob, fyx_, perimeter_, root__, der__t):
     if sign != s: return   # different sign, stop
 
     # fill coord, proceed with form_blob
-    fyx_.remove((y, x))  # remove from yx_
+    fill_yx_.remove((y, x))  # remove from yx_
     root__[y, x] = blob  # assign root, for link forming
     I += i; Dy += dy; Dx += dx  # update params
     yx_ += [(y, x)]; dert_ += [(i, dy, dx)]  # update elements
