@@ -122,13 +122,9 @@ def form_blob(blob, fill_yx_, perimeter_, root__, der__t):
 if __name__ == "__main__":
     # standalone script, frame_blobs doesn't import from higher modules (like intra_blob).
     # Instead, higher modules will import from frame_blobs and will have their own standalone scripts like below.
-    import argparse
     from utils import imread
-    # Parse arguments
-    argument_parser = argparse.ArgumentParser()
-    argument_parser.add_argument('-i', '--image', help='path to image file', default='./images//raccoon_eye.jpeg')
-    args = argument_parser.parse_args()
-    image = imread(args.image)
+    image_file = './images//raccoon_eye.jpeg'
+    image = imread(image_file)
 
     frame = frame_blobs_root(image)
 
