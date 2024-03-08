@@ -19,28 +19,26 @@ ave_g = 30  # change to Ave from the root intra_blob?
 ave_dangle = .2  # vertical difference between angles: -1->1, abs dangle: 0->1, ave_dangle = (min abs(dangle) + max abs(dangle))/2,
 
 def slice_edge_root(frame):
-    # unpack all sub-blobs
-    eblob_ = []  # edge
-    blobQue = frame[-1]  # start with frame's blob_
-    while blobQue:
-        get_vblobs(eblob_, blobQue)
 
-    # slice all sub-blobs
-    edge_ = [slice_edge(blob) for blob in eblob_]
+    flat_blob_ = []  # unpacked sub-blobs
+    blob_ = frame[-1]  # init frame blob_
+    while blob_:
+        flatten_blob_(flat_blob_, blob_)
+    edge_ = [slice_edge(blob) for blob in flat_blob_]
 
     return edge_
 
-def get_vblobs(eblob_, blobQue):
-    root, sign, I, Dy, Dx, G, yx_, dert_, link_, *other_params = blob = blobQue.pop(0)
+def flatten_blob_(flat_blob_, blob_):
+    root, sign, I, Dy, Dx, G, yx_, dert_, link_, *other_params = blob = blob_.pop(0)
     if sign:  # positive sign
         if other_params:  # blob has rng+ (non-empty other_params), unfold sub-blobs:
             rdn, rng, sub_blob_ = other_params
-            blobQue += sub_blob_
+            blob_ += sub_blob_
     else:  # negative sign, filter
         try: rdn = root[9]  # root is extended blob
         except IndexError: rdn = 1  # root is frame
         if G > aveG * rdn:
-            eblob_ += [blob]
+            flat_blob_ += [blob]
 
 def slice_edge(edge):   # edge-blob
     root, sign, I, Dy, Dx, G, yx_, dert_, link_ = edge
@@ -58,23 +56,20 @@ def slice_edge(edge):   # edge-blob
 def select_max(yx_, dert_):
     max_ = []
     for (y, x), (i, gy, gx, g) in zip(yx_, dert_):
-        # compute angle
-        sa, ca = gy/g, gx/g  # sin_angle, cos_angle
-
+        # get sin_angle, cos_angle:
+        sa, ca = gy/g, gx/g
         # get neighbor direction
         dy = 1 if sa > octant else -1 if sa < -octant else 0
         dx = 1 if ca > octant else -1 if ca < -octant else 0
-
-        # check if (y, x) is max
-        is_max = True
+        # is y,x g > blob max?:
+        new_max = True
         for _y, _x in [(y-dy, x-dx), (y+dy, x+dx)]:
             if (_y, _x) not in yx_: continue  # skip if pixel not in edge blob
             _i, _gy, _gx, _g = dert_[yx_.index((_y, _x))]  # get g of neighbor
             if g < _g:
-                is_max = False
+                new_max = False
                 break
-
-        if is_max: max_ += [((y, x), (sa, ca))]
+        if new_max: max_ += [((y, x), (sa, ca))]
 
     return max_
 
@@ -82,40 +77,37 @@ class CP:
     def __init__(self, edge, yx, axis, root__):  # form_P:
 
         y, x = yx
-        pvdert = i, gy, gx, g = interpolate2dert(edge, y, x)    # pivot dert
+        pivot = i, gy, gx, g = interpolate2dert(edge, y, x)  # pivot dert
         ma = ave_dangle  # max value because P direction is the same as dert gradient direction
         m = ave_g - g
-        pvdert += ma, m   # pack extra ders
+        pivot += ma, m   # pack extra ders
 
         I, G, M, Ma, L, Dy, Dx = 0, 0, 0, 0, 0, 0, 0
         self.axis = ay, ax = axis
-        self.yx_, self.dert_, self.link_ = [yx], [pvdert], []
+        self.yx_, self.dert_, self.link_ = [yx], [pivot], []
 
-        for dy, dx in [(-ay, -ax), (ay, ax)]: # scan in 2 opposite directions
+        for dy, dx in [(-ay, -ax), (ay, ax)]: # scan in 2 opposite directions to add derts to P
             self.yx_.reverse(); self.dert_.reverse()
-            (_y, _x), (_, _gy, _gx, *_) = yx, pvdert  # start from pivot
-            y, x = _y+dy, _x+dx  # first directional step
-
-            while True:  # scan to blob boundary or angle miss
-
+            (_y, _x), (_, _gy, _gx, *_) = yx, pivot  # start from pivot
+            y, x = _y+dy, _x+dx  # 1st extension
+            while True:
+                # scan to blob boundary or angle miss:
                 try: i, gy, gx, g = interpolate2dert(edge, y, x)
                 except TypeError: break  # out of bound (TypeError: cannot unpack None)
 
                 mangle,dangle = comp_angle((_gy,_gx), (gy, gx))
                 if mangle < ave_dangle: break  # terminate P if angle miss
-
                 # update P:
                 m = ave_g - g
                 I += i; Dy += dy; Dx += dx; G += g; Ma += ma; M += m; L += 1
                 self.yx_ += [(y, x)]; self.dert_ += [(i, gy, gx, g, ma, m)]
-
-                # update for next iteration:
+                # for next loop:
                 y += dy; x += dx
                 _y, _x, _gy, _gx = y, x, gy, gx
 
-        # scan P neighbors, update link_:
+        # scan for neighbor Ps, update link_:
         for _y, _x in [(y-1,x-1), (y-1,x), (y-1,x+1), (y,x-1), (y,x+1), (y+1,x-1), (y+1,x), (y+1,x+1)]:
-            if (_y, _x) in root__:  # if neighbor has P formed
+            if (_y, _x) in root__:  # neighbor has P
                 self.link_ += [root__[_y, _x]]
         root__[y, x] = self    # update root__
 
@@ -124,6 +116,7 @@ class CP:
 
     def __repr__(self):
         return f"P({', '.join(map(str, self.latuple))})"
+
 
 def interpolate2dert(edge, y, x):
     root, sign, I, Dy, Dx, G, yx_, dert_, link_ = edge
@@ -143,6 +136,7 @@ def interpolate2dert(edge, y, x):
                 I += _i; Dy += _dy; Dx += _dx; G += _g; n += 1
 
     if n >= 2: return I/n, Dy/n, Dx/n, G/n
+
 
 def comp_angle(_A, A):  # rn doesn't matter for angles
 
