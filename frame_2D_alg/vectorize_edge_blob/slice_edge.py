@@ -82,7 +82,7 @@ class CP:
         m = ave_g - g
         pivot += ma, m   # pack extra ders
 
-        I, G, M, Ma, L, Dy, Dx = 0, 0, 0, 0, 0, 0, 0
+        I, G, M, Ma, L, Dy, Dx = i, g, m, ma, 1, gy, gx
         self.axis = ay, ax = axis
         self.yx_, self.dert_, self.link_ = [yx], [pivot], []
 
@@ -106,6 +106,7 @@ class CP:
                 _y, _x, _gy, _gx = y, x, gy, gx
 
         # scan for neighbor Ps, update link_:
+        y, x = yx   # get pivot
         for _y, _x in [(y-1,x-1), (y-1,x), (y-1,x+1), (y,x-1), (y,x+1), (y+1,x-1), (y+1,x), (y+1,x+1)]:
             if (_y, _x) in root__:  # neighbor has P
                 self.link_ += [root__[_y, _x]]
