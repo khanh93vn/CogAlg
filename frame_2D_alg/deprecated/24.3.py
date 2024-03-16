@@ -48,38 +48,6 @@ def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but contig
     der++ is tested in PPds formed by rng++, no der++ inside rng++: high diff @ rng++ termination only?
     '''
 
-def comp_P(link, fd):
-
-    if isinstance(link,z): _P, P = link._P, link.P  # in der+
-    else:                  _P, P, S, A = link  # list in rng+
-    rn = len(_P.dert_) / len(P.dert_)
-
-    if _P.He and P.He:
-        # der+: append link derH, init in rng++ from form_PP_t
-        depth,(vm,vd,rm,rd),H, n = comp_(_P.He, P.He, rn=rn)
-        rm += vd > vm; rd += vm >= vd
-        aveP = P_aves[1]
-    else:
-        # rng+: add link derH
-        H = comp_ptuple(_P.ptuple, P.ptuple, rn)
-        vm = sum(H[::2]); vd = sum(abs(d) for d in H[1::2])
-        rm = 1 + vd > vm; rd = 1 + vm >= vd
-        aveP = P_aves[0]
-        n = 1  # 6 compared params is a unit of n
-
-    if vm > aveP*rm:  # always rng+
-        if fd:
-            He = link.He
-            if not He[0]: He = link.He = [1,[*He[1]],[He]]  # nest md_ as derH
-            He[1] = np.add(He[1],[vm,vd,rm,rd])
-            He[2] += [[0, [vm,vd,rm,rd], H]]  # nesting, Et, H
-            link.et = [V+v for V, v in zip(link.et,[vm,vd, rm,rd])]
-        else:
-            link = CderP(P=P,_P=_P, He=[0,[vm,vd,rm,rd],H], et=[vm,vd,rm,rd], S=S, A=A, n=n, roott=[[],[]])
-
-        return link
-
-
 def form_PP_t(root, P_, iRt):  # form PPs of derP.valt[fd] + connected Ps val
 
     PP_t = [[],[]]
@@ -435,6 +403,7 @@ def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but contig
                 if not fd: prelink_ = [link._P for link in prelink_]  # prelinks are __Ps, else __links
                 P.link_ += [prelink_]  # temporary prelinks
                 P_ += [P]  # for next loop
+            else: P.link_ += [[]]  # for consistent unpack in _Ps
         rng += 1
         if V > ave * len(P_) * 6:  #  implied val of all __P_s, 6: len mtuple
             iP_ = P_
@@ -493,3 +462,144 @@ def comp_G(link, iEt):  # add flat dderH to link and link to the rims of compara
                         rim_H[-1] += [link]  # rim_H
                     else:
                         rim_H += [link]  # rim
+
+
+# old:
+def rotate_P_(P__, dert__, mask__):  # rotate each P to align it with direction of P gradient
+
+    yn, xn = dert__[0].shape[:2]
+    for P_ in P__:
+        for P in P_:
+            daxis = P.ptuple.angle[0] / P.ptuple.L  # dy: deviation from horizontal axis
+            while P.ptuple.G * abs(daxis) > ave_rotate:
+                P.ptuple.axis = P.ptuple.angle
+                rotate_P(P, dert__, mask__, yn, xn)  # recursive reform P along new axis in blob.dert__
+                _, daxis = comp_angle(P.ptuple.axis, P.ptuple.angle)
+            # store P.daxis to adjust params?
+
+def rotate_P(P, dert__t, mask__, yn, xn):
+
+    L = len(P.dert_)
+    rdert_ = [P.dert_[int(L/2)]]  # init rotated dert_ with old central dert
+
+    ycenter = int(P.y0 + P.ptuple.axis[0]/2)  # can be negative
+    xcenter = int(P.x0 + abs(P.ptuple.axis[1]/2))  # always positive
+    Dy, Dx = P.ptuple.angle
+    dy = Dy/L; dx = abs(Dx/L)  # hypot(dy,dx)=1: each dx,dy adds one rotated dert|pixel to rdert_
+    # scan left:
+    rx=xcenter-dx; ry=ycenter-dy; rdert=1  # to start while:
+    while rdert and rx>=0 and ry>=0 and np.ceil(ry)<yn:
+        rdert = form_rdert(rx,ry, dert__t, mask__)
+        if rdert:
+            rdert_.insert(0, rdert)
+        rx += dx; ry += dy  # next rx, ry
+    P.x0 = rx+dx; P.y0 = ry+dy  # revert to leftmost
+    # scan right:
+    rx=xcenter+dx; ry=ycenter+dy; rdert=1  # to start while:
+    while rdert and ry>=0 and np.ceil(rx)<xn and np.ceil(ry)<yn:
+        rdert = form_rdert(rx,ry, dert__t, mask__)
+        if rdert:
+            rdert_ += [rdert]
+            rx += dx; ry += dy  # next rx,ry
+    # form rP:
+    # initialization:
+    rdert = rdert_[0]; _, G, Ga, I, Dy, Dx, Sin_da0, Cos_da0, Sin_da1, Cos_da1 = rdert; M=ave_g-G; Ma=ave_ga-Ga; ndert_=[rdert]
+    # accumulation:
+    for rdert in rdert_[1:]:
+        _, g, ga, i, dy, dx, sin_da0, cos_da0, sin_da1, cos_da1 = rdert
+        I+=i; M+=ave_g-g; Ma+=ave_ga-ga; Dy+=dy; Dx+=dx; Sin_da0+=sin_da0; Cos_da0+=cos_da0; Sin_da1+=sin_da1; Cos_da1+=cos_da1
+        ndert_ += [rdert]
+    # re-form gradients:
+    G = np.hypot(Dy,Dx);  Ga = (Cos_da0 + 1) + (Cos_da1 + 1)
+    ptuple = Cptuple(I=I, M=M, G=G, Ma=Ma, Ga=Ga, angle=(Dy,Dx), aangle=(Sin_da0, Cos_da0, Sin_da1, Cos_da1))
+    # add n,val,L,x,axis?
+    # replace P:
+    P.ptuple=ptuple; P.dert_=ndert_
+
+
+def form_rdert(rx,ry, dert__t, mask__):
+
+    # coord, distance of four int-coord derts, overlaid by float-coord rdert in dert__, int for indexing
+    # always in dert__ for intermediate float rx,ry:
+    x1 = int(np.floor(rx)); dx1 = abs(rx - x1)
+    x2 = int(np.ceil(rx));  dx2 = abs(rx - x2)
+    y1 = int(np.floor(ry)); dy1 = abs(ry - y1)
+    y2 = int(np.ceil(ry));  dy2 = abs(ry - y2)
+
+    # scale all dert params in proportion to inverted distance from rdert, sum(distances) = 1?
+    # approximation, square of rpixel is rotated, won't fully match not-rotated derts
+    mask = mask__[y1, x1] * (1 - np.hypot(dx1, dy1)) \
+         + mask__[y2, x1] * (1 - np.hypot(dx1, dy2)) \
+         + mask__[y1, x2] * (1 - np.hypot(dx2, dy1)) \
+         + mask__[y2, x2] * (1 - np.hypot(dx2, dy2))
+    mask = int(mask)  # summed mask is fractional, round to 1|0
+    if not mask:
+        ptuple = []
+        for dert__ in dert__t:  # 10 params in dert: i, g, ga, ri, dy, dx, day0, dax0, day1, dax1
+            param = dert__[y1, x1] * (1 - np.hypot(dx1, dy1)) \
+                  + dert__[y2, x1] * (1 - np.hypot(dx1, dy2)) \
+                  + dert__[y1, x2] * (1 - np.hypot(dx2, dy1)) \
+                  + dert__[y2, x2] * (1 - np.hypot(dx2, dy2))
+            ptuple += [param]
+        return ptuple
+
+def comp_P(link):
+
+    if isinstance(link, Clink):
+        _P, P = link._node, link.node
+        if _P.derH and P.derH:  # append link dderH, init in form_PP_t rng++, comp_latuple was already done
+            # der+:
+            dHe = comp_(_P.derH, P.derH, rn= len(_P.dert_)/len(P.dert_))
+            vm,vd,rm,rd = dHe.Et[:4]  # works if called from comp_G too
+            rm += vd > vm; rd += vm >= vd
+            aveP = P_aves[1]
+            He = link.dderH  # append link dderH:
+            if not He.nest: He = link.He = CH(nest=1, Et=[*He.Et], H=[He])  # nest md_ as derH
+            He.Et = np.add(He.Et, [vm, vd, rm, rd])
+            He.H += [dHe]
+            if vm > aveP*rm:  # always rng+
+                return link
+    else:  # rng+:
+        _P, P, S, A = link  # prelink
+        H = comp_latuple(_P.latuple, P.latuple, rn=len(_P.dert_)/len(P.dert_))
+        vm = sum(H[::2]); vd = sum(abs(d) for d in H[1::2])
+        rm = 1 + vd > vm; rd = 1 + vm >= vd
+        n = (len(_P.dert_)+len(P.dert_)) /2  # der value = ave compared n?
+        aveP = P_aves[0]
+        if vm > aveP*rm:  # always rng+
+            return Clink(node=P,_node=_P, dderH = CH(nest=0,Et=[vm,vd,rm,rd],H=H,n=n), S=S, A=A, roott=[[],[]])
+
+
+# not relevant, check all combinations anyway?
+def comp_rim(node_, link, nrng):  # for next rng+:
+
+    for G in link._node, link.node:
+        for _link in G.rim_H[-1]:
+            _G = _link.node if _link.node in [link._node,link.node] else _link.node  # new to link
+            _cy, _cx = box2center(_G.box); cy, cx = box2center(_G.box)
+            dy = _cy - cy; dx = _cx - cx
+            dist = np.hypot(dy, dx)  # distance between node centers
+            # or use compared?
+            if 2*nrng > dist > 2*(nrng-1):  # init max comparison distance = 2
+                # potentially connected G,_G: within rng, no comp in prior rng
+                if comp_angle(link.A,_link.A)[0] > ave:  # link direction matches in G|_G rim_H[-1]
+                    node_ += [G,_G]  # to compare in rng+
+
+# unpacked
+def comp_ext(_ext, ext, rn):  # primary ext only
+
+    _L,_S,_A = _ext; L,S,A = ext; L/=rn; S/=rn  # angle is not normalized
+
+    mA, dA = comp_angle(_A, A)
+    mS, dS = min(_S,S)-ave_mL, _S/_L - S/L  # S is summed over L, dS is not summed over dL
+    mL, dL = min(_L,L)-ave_mL, _L -L
+    M = mL + mS + mA
+    D = abs(dL) + abs(dS) + dA
+    mrdn = M > D
+    drdn = D<= M
+    # all comparands are positive: maxm = maxd
+    Lmax = max(L,_L); Smax = max(S,_S); Amax = 1
+    mdec = mL/Lmax + mS/Smax + mA/Amax
+    ddec = dL/Lmax + dS/Smax + dA/Amax
+
+    return [M,D,mrdn,drdn,mdec,ddec], [mL,dL,mS,dS,mA,dA]
