@@ -1,4 +1,5 @@
 from math import atan2, cos, floor, pi
+import weakref
 
 '''
 In natural images, objects look very fuzzy and frequently interrupted, only vaguely suggested by initial blobs and contours.
@@ -17,6 +18,20 @@ octant = 0.3826834323650898  # radians per octant
 aveG = 10  # for vectorize
 ave_g = 30  # change to Ave from the root intra_blob?
 ave_dangle = .2  # vertical difference between angles: -1->1, abs dangle: 0->1, ave_dangle = (min abs(dangle) + max abs(dangle))/2,
+
+class CBase:
+    refs = []
+    def __init__(self):
+        self._id = len(self.refs)
+        self.refs.append(weakref.ref(self))
+    def __hash__(self): return self.id
+    @property
+    def id(self): return self._id
+    @classmethod
+    def get_instance(cls, _id):
+        inst = cls.refs[_id]()
+        if inst is not None and inst.id == _id:
+            return inst
 
 def slice_edge_root(frame):
 
@@ -74,9 +89,10 @@ def select_max(yx_, dert_):
 
     return max_
 
-class CP:
+class CP(CBase):
     def __init__(self, edge, yx, axis, root__):  # form_P:
 
+        super().__init__()
         y, x = yx
         pivot = i, gy, gx, g = interpolate2dert(edge, y, x)  # pivot dert
         ma = ave_dangle  # max value because P direction is the same as dert gradient direction
@@ -117,7 +133,7 @@ class CP:
         self.latuple = I, G, M, Ma, L, (Dy, Dx)
 
     def __repr__(self):
-        return f"P({', '.join(map(str, self.latuple))})"
+        return f"P({', '.join(map(str, self.latuple))})"  # or return f"P(id={self.id})" ?
 
 
 def interpolate2dert(edge, y, x):
