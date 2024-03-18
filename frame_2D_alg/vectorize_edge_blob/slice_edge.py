@@ -33,10 +33,11 @@ class CBase:
         if inst is not None and inst.id == _id:
             return inst
 
+
 def slice_edge_root(frame):
 
     flat_blob_ = []  # unpacked sub-blobs
-    blob_ = frame[-1]  # init frame blob_
+    blob_ = frame  # init frame blob_
 
     while blob_: flatten_blob_(flat_blob_, blob_)  # get all sub_blobs as a flat list
 
@@ -122,8 +123,8 @@ class CP(CBase):
                 y += dy; x += dx
                 _y, _x, _gy, _gx = y, x, gy, gx
 
-        # scan for neighbor Ps, update link_:
-        y, x = yx   # get pivot
+        # scan for neighbor P pivots, update link_:
+        y, x = yx   # pivot
         for _y, _x in [(y-1,x-1), (y-1,x), (y-1,x+1), (y,x-1), (y,x+1), (y+1,x-1), (y+1,x), (y+1,x+1)]:
             if (_y, _x) in root__:  # neighbor has P
                 self.link_ += [root__[_y, _x]]
@@ -159,10 +160,11 @@ def interpolate2dert(edge, y, x):
 def comp_angle(_A, A):  # rn doesn't matter for angles
 
     _angle, angle = [atan2(Dy, Dx) for Dy, Dx in [_A, A]]
-
     dangle = _angle - angle  # difference between angles
+
     if dangle > pi: dangle -= 2*pi  # rotate full-circle clockwise
     elif dangle < -pi: dangle += 2*pi  # rotate full-circle counter-clockwise
+
     mangle = (cos(dangle)+1)/2  # angle similarity, scale to [0,1]
     dangle /= 2*pi  # scale to the range of mangle, signed: [-.5,.5]
 
