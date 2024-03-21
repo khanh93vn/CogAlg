@@ -29,6 +29,7 @@
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/frame_blobs_intra_blob.drawio
 '''
 from itertools import product
+import weakref
 import numpy as np
 # hyper-parameters, set as a guess, latter adjusted by feedback:
 ave = 30  # base filter, directly used for comp_r fork
@@ -46,88 +47,182 @@ ave_mP = 100
     capitalized variables are normally summed small-case variables,
     longer names are normally classes
 '''
+# --------------------------------------------------------------------------------------------------------------
+# classes: CBase, CFrame, CG, CBlob, CH
 
-def frame_blobs_root(i__):
-    der__t = comp_pixel(i__)  # compare all in parallel -> i__, dy__, dx__, g__, s__
-    frame = i__, I, Dy, Dx, G, blob_ = [i__, 0, 0, 0, 0, []]  # init frame as output
+class CBase:
+    refs = []
+    def __init__(self):
+        self._id = len(self.refs)
+        self.refs.append(weakref.ref(self))
+    def __hash__(self): return self.id
+    @property
+    def id(self): return self._id
+    @classmethod
+    def get_instance(cls, _id):
+        inst = cls.refs[_id]()
+        if inst is not None and inst.id == _id:
+            return inst
 
-    # Flood-fill 1 pixel at a time
-    Y, X = i__.shape  # get i__ height and width
-    fill_yx_ = list(product(range(1,Y-1), range(1,X-1)))  # set of pixel coordinates to be filled (fill_yx_)
-    root__ = {}  # map pixel to blob
-    perimeter_ = []  # perimeter pixels
-    while fill_yx_:  # fill_yx_ is popped per filled pixel, in form_blob
-        if not perimeter_:  # init blob
-            blob = [frame, None, 0, 0, 0, 0, [], [], []]  # root (frame), sign, I, Dy, Dx, G, yx_, dert_, link_ (up-links)
-            perimeter_ += [fill_yx_[0]]
+class CFrame(CBase):
+    def __init__(self, i__):
+        super().__init__()
+        self.i__, self.latuple, self.blob_ = i__, [0, 0, 0, 0], []
 
-        form_blob(blob, fill_yx_, perimeter_, root__, der__t)  # https://en.wikipedia.org/wiki/Flood_fill
+    def evaluate(self):
+        dert__ = self.comp()
+        self.flood_fill(dert__)
+        return self
 
-        if not perimeter_:  # term blob
-            frame[1] += blob[2]  # I
-            frame[2] += blob[3]  # Dy
-            frame[3] += blob[4]  # Dx
-            frame[4] += blob[4]  # G
-            blob_ += [blob]
+    def comp(self): # compare all in parallel -> i__, dy__, dx__, g__, s__
+        # compute directional derivatives:
+        dy__ = (
+                (self.i__[2:, :-2] - self.i__[:-2, 2:]) * 0.25 +
+                (self.i__[2:, 1:-1] - self.i__[:-2, 1:-1]) * 0.50 +
+                (self.i__[2:, 2:] - self.i__[:-2, 2:]) * 0.25
+        )
+        dx__ = (
+                (self.i__[:-2, 2:] - self.i__[2:, :-2]) * 0.25 +
+                (self.i__[1:-1, 2:] - self.i__[1:-1, :-2]) * 0.50 +
+                (self.i__[2:, 2:] - self.i__[:-2, 2:]) * 0.25
+        )
+        g__ = np.hypot(dy__, dx__)  # compute gradient magnitude, -> separate G because it's not signed, dy,dx cancel out in Dy,Dx
+        s__ = ave - g__ > 0  # sign is positive for below-average g
 
-    return frame
+        # convert into dert__:
+        y__, x__ = np.indices(self.i__.shape)
+        dert__ = dict(zip(
+            zip(y__[1:-1, 1:-1].flatten(), x__[1:-1, 1:-1].flatten()),
+            zip(self.i__[1:-1, 1:-1].flatten(), dy__.flatten(), dx__.flatten(), g__.flatten(), s__.flatten()),
+        ))
 
+        return dert__
 
-def comp_pixel(i__):
-    # compute directional derivatives:
-    dy__ = (
-        (i__[2:,  :-2] - i__[:-2, 2:  ]) * 0.25 +
-        (i__[2:, 1:-1] - i__[:-2, 1:-1]) * 0.50 +
-        (i__[2:, 2:  ] - i__[:-2, 2:  ]) * 0.25
-    )
-    dx__ = (
-        (i__[ :-2, 2:] - i__[2:  ,  :-2]) * 0.25 +
-        (i__[1:-1, 2:] - i__[1:-1,  :-2]) * 0.50 +
-        (i__[2:  , 2:] - i__[ :-2, 2:  ]) * 0.25
-    )
-    g__ = np.hypot(dy__, dx__)  # compute gradient magnitude, -> separate G because it's not signed, dy,dx cancel out in Dy,Dx
-    s__ = ave - g__ > 0  # sign is positive for below-average g
+    def flood_fill(self, dert__):
+        # Flood-fill 1 pixel at a time
+        fill_yx_ = list(dert__.keys())  # set of pixel coordinates to be filled (fill_yx_)
+        root__ = {}  # map pixel to blob
+        perimeter_ = []  # perimeter pixels
+        while fill_yx_:  # fill_yx_ is popped per filled pixel, in form_blob
+            if not perimeter_:  # init blob
+                blob = CBlob(self); perimeter_ += [fill_yx_[0]]
 
-    return i__, dy__, dx__, g__, s__
+            blob.form(fill_yx_, perimeter_, root__, dert__)  # https://en.wikipedia.org/wiki/Flood_fill
 
+            if not perimeter_:  # term blob
+                blob.term()
 
-def form_blob(blob, fill_yx_, perimeter_, root__, der__t):
+    def __repr__(self): return f"frame(id={self.id})"
 
-    # all lists:
-    root, sign, I, Dy, Dx, G, yx_, dert_, link_ = blob
-    i__, dy__, dx__, g__, s__ = der__t
-    Y, X = g__.shape
-    y, x = perimeter_.pop()  # pixel coord
-    if y < 1 or y > Y or x < 1 or x > X: return  # out of bound
-    i = i__[y, x]; dy = dy__[y-1, x-1]; dx = dx__[y-1, x-1]; g = g__[y-1, x-1];  s = s__[y-1, x-1]  # dert, -1 coords for shrunk arrays
-    if (y, x) not in fill_yx_:  # else this is a pixel of adjacent blob
-        _blob = root__[y, x]
-        if _blob not in link_: link_ += [_blob]
-        return
-    if sign is None: sign = s  # assign sign to new blob
-    if sign != s: return   # different sign, stop
+class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
-    fill_yx_.remove((y, x))
-    root__[y, x] = blob  # assign root, for link forming
-    I += i; Dy += dy; Dx += dx; G += g  # update params
-    yx_ += [(y, x)]; dert_ += [(i, dy, dx, g)]  # update elements
+    def __init__(self, rng=1, fd=0):
 
-    perimeter_ += [(y-1,x), (y,x+1), (y+1,x), (y,x-1)]  # extend perimeter
-    if sign: perimeter_ += [(y-1,x-1), (y-1,x+1), (y+1,x+1), (y+1,x-1)]  # ... include diagonals for +blobs
+        super().__init__()
 
-    blob[:] = root, sign, I, Dy, Dx, G, yx_, dert_, link_ # update blob
+        self.rng = rng
+        self.fd = fd  # fork if flat layers?
+        self.n = 0  # external n (last layer n)
+        self.area = 0
+        self.S = 0  # sparsity: distance between node centers
+        self.A = 0, 0  # angle: summed dy,dx in links
 
+        self.Et = []  # external eval tuple, summed from rng++ before forming new graph and appending G.extH
+        self.latuple = []  # lateral I,G,M,Ma,L,[Dy,Dx]
+        self.iderH = CH()  # summed from PPs
+        self.derH = CH()  # nested derH in Gs: [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
+        self.node_ = []  # node_t after sub_recursion
+        self.link_ = []  # links per comp layer, nest in rng+)der+
+        self.roott = []  # Gm,Gd that contain this G, single-layer
+        self.box = [np.inf, np.inf, -np.inf, -np.inf]  # y,x,y0,x0,yn,xn
+        # graph-external, +level per root sub+:
+        self.rim_H = []  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
+        self.extH = CH()  # G-external daggH( dsubH( dderH, summed from rim links
+        self.alt_graph_ = []  # adjacent gap+overlap graphs, vs. contour in frame_graphs
+
+    def __bool__(self):  # to test empty
+        if self.n: return True
+        else: return False
+    def __repr__(self): return f"blob(id={self.id})"
+
+class CBlob(CG):
+    def __init__(self, root, rng=1):
+        super().__init__(rng)
+        self.root = root
+        self.sign = None
+        self.latuple = [0, 0, 0, 0, 0, 0]  # Y, X, I, Dy, Dx, G
+        self.dert_ = {}  # keys: (y, x). values: (i, dy, dx, g)
+        self.adj_ = []  # adjacent blobs
+
+    def form(self, fill_yx_, perimeter_, root__, dert__):
+        y, x = perimeter_.pop()  # pixel coord
+        if (y, x) not in dert__: return  # out of bound
+        i, dy, dx, g, s = dert__[y, x]
+        if (y, x) not in fill_yx_:  # else this is a pixel of adjacent blob
+            _blob = root__[y, x]
+            if _blob not in self.adj_: self.adj_ += [_blob]
+            return
+        if self.sign is None: self.sign = s  # assign sign to new blob
+        if self.sign != s: return  # different self.sign, stop
+
+        fill_yx_.remove((y, x))
+        root__[y, x] = self  # assign root, for link forming
+        self.n += 1
+        Y, X, I, Dy, Dx, G = self.latuple
+        Y += y; X += x; I += i; Dy += dy; Dx += dx; G += g  # update params
+        self.latuple = Y, X, I, Dy, Dx, G
+        self.dert_[y, x] = i, dy, dx, g  # update elements
+
+        perimeter_ += [(y-1,x), (y,x+1), (y+1,x), (y,x-1)]  # extend perimeter
+        if self.sign: perimeter_ += [(y-1,x-1), (y-1,x+1), (y+1,x+1), (y+1,x-1)]  # ... include diagonals for +blobs
+
+    def term(self):
+        frame = self.root
+        *_, I, Dy, Dx, G = frame.latuple
+        *_, i, dy, dx, g = self.latuple
+        I += i; Dy += dy; Dx += dx; G += g
+        frame.latuple[-4:] = I, Dy, Dx, G
+        frame.blob_ += [self]
+
+    @property
+    def yx_(self):
+        return list(self.dert_.keys())
+
+    @property
+    def yx(self):  # as float
+        return map(np.mean, zip(*self.yx_))
+
+class CH:  # generic derivation hierarchy of variable nesting
+
+    def __init__(self, nest=0, n=0, Et=None, H=None):
+
+        self.nest = nest  # nesting depth: -1/ ext, 0/ md_, 1/ derH, 2/ subH, 3/ aggH
+        self.n = n  # total number of params compared to form derH, summed in comp_G and then from nodes in sum2graph
+        self.Et = Et if Et is not None else []  # evaluation tuple: valt, rdnt, normt
+        self.H = H if H is not None else []  # hierarchy of der layers or md_
+
+    def __bool__(self):  # to test empty
+        if self.n: return True
+        else: return False
+    '''
+    len layer +extt: 2, 3, 6, 12, 24,
+    or without extt: 1, 1, 2, 4, 8..: max n of tuples per der layer = summed n of tuples in all lower layers:
+    lay1: par     # derH per param in vertuple, layer is derivatives of all lower layers:
+    lay2: [m,d]   # implicit nesting, brackets for clarity:
+    lay3: [[m,d], [md,dd]]: 2 sLays,
+    lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays
+    '''
 
 if __name__ == "__main__":
 
     from utils import imread
     image_file = './images//raccoon_eye.jpeg'
     image = imread(image_file)
-    frame = frame_blobs_root(image)
+    frame = CFrame(image).evaluate()
 
     # verification/visualization:
     import matplotlib.pyplot as plt
-    _, I, Dy, Dx, G, blob_ = frame  # ignore
+    I, Dy, Dx, G = frame.latuple
 
     i__ = np.zeros_like(image, dtype=np.float32)
     dy__ = np.zeros_like(image, dtype=np.float32)
@@ -136,18 +231,12 @@ if __name__ == "__main__":
     s__ = np.zeros_like(image, dtype=np.float32)
     line_ = []
 
-    for blob in blob_:
-        root, sign, I, Dy, Dx, G, yx_, dert_, link_ = blob
-        for yx, (i, dy, dx, g) in zip(yx_, dert_):
-            i__[yx] = i
-            dy__[yx] = dy
-            dx__[yx] = dx
-            g__[yx] = g
-            s__[yx] = sign
-        y, x = map(np.mean, zip(*yx_))  # blob center of gravity
-        for _blob in link_:  # show links
-            _, _, _, _, _, _, _yx_, _, _ = _blob
-            _y, _x = map(np.mean, zip(*_yx_))  # _blob center of gravity
+    for blob in frame.blob_:
+        for (y, x), (i, dy, dx, g) in blob.dert_.items():
+            i__[y, x] = i; dy__[y, x] = dy; dx__[y, x] = dx; g__[y, x] = g; s__[y, x] = blob.sign
+        y, x = blob.yx  # blob center of gravity
+        for _blob in blob.adj_:  # show adjacents
+            _y, _x = _blob.yx  # _blob center of gravity
             line_ += [((_x, x), (_y, y))]
 
     plt.imshow(i__, cmap='gray'); plt.show()  # show reconstructed i__
