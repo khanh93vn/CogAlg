@@ -30,14 +30,14 @@ class CIntraBlobFrame(CFrame):
 
 class CIntraBlobLayer(CFrame):
     def __init__(self, blob, rdn=1, rng=1):
-        super().__init__(blob.root.i__)
+        super().__init__(blob.root.i__)  # init params, extra params init below:
         self.root = blob
         self.rdn = rdn
         self.rng = rng
 
     def evaluate(self):  # recursive evaluation of cross-comp rng+ per blob
         root_blob = self.root
-        Y, X, I, Dy, Dx, G = root_blob.latuple  # unpack latuple
+        Y, X, I, Dy, Dx, G = root_blob.vetuple  # unpack vetuple
 
         if not root_blob.sign: return  # only for below-average G
         if G >= ave*root_blob.n + aveR*self.rdn: return  # eval for comp_r
@@ -53,7 +53,7 @@ class CIntraBlobLayer(CFrame):
             CIntraBlobLayer(blob, self.rdn, self.rng).evaluate()
         return self
 
-    def comp(self):
+    def comp(self):   # rng+ comp
         root_blob = self.root
         Y, X = self.i__.shape
 

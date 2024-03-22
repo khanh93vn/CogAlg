@@ -1,5 +1,8 @@
 from math import atan2, cos, floor, pi
-import weakref
+import sys
+sys.path.append("..")
+from frame_blobs import CBase
+from intra_blob import CIntraBlobFrame
 
 '''
 In natural images, objects look very fuzzy and frequently interrupted, only vaguely suggested by initial blobs and contours.
@@ -19,71 +22,43 @@ aveG = 10  # for vectorize
 ave_g = 30  # change to Ave from the root intra_blob?
 ave_dangle = .2  # vertical difference between angles: -1->1, abs dangle: 0->1, ave_dangle = (min abs(dangle) + max abs(dangle))/2,
 
-class CBase:
-    refs = []
-    def __init__(self):
-        self._id = len(self.refs)
-        self.refs.append(weakref.ref(self))
-    def __hash__(self): return self.id
-    @property
-    def id(self): return self._id
-    @classmethod
-    def get_instance(cls, _id):
-        inst = cls.refs[_id]()
-        if inst is not None and inst.id == _id:
-            return inst
+class CSliceEdgeFrame(CIntraBlobFrame):
+    def evaluate(self):    # root routine
+        super().evaluate()  # frame_blobs and rng+
+        self.rdn = 1
+        self.edge_ = [slice_edge(blob) for blob in self.flatten_blob_()]
 
+        return self
 
-def slice_edge_root(frame):
-
-    flat_blob_ = []  # unpacked sub-blobs
-    i__, I, Dy, Dx, G, blob_ = frame  # unpack frame object
-
-    while blob_:
-        flatten_blob_(flat_blob_, blob_)  # get all sub_blobs as a flat list
-
-    return [slice_edge(blob) for blob in flat_blob_]  # form 2D array of Ps: horizontal blob slices in dert__
-
-
-def flatten_blob_(flat_blob_, blob_):
-
-    root, sign, I, Dy, Dx, G, yx_, dert_, link_, *other_params = blob = blob_.pop(0)
-    if sign:  # positive sign
-        if other_params:  # blob has rng+ (non-empty other_params), unfold sub-blobs:
-            rdn, rng, sub_blob_ = other_params
-            blob_ += sub_blob_
-    else:  # negative sign, filter
-        try: rdn = root[9]  # root is extended blob
-        except IndexError: rdn = 1  # root is frame
-        if G > aveG * rdn:
-            flat_blob_ += [blob]
+    def flatten_blob_(self):
+        edge_ = []
+        edgeQue = list(self.blob_)
+        while edgeQue:
+            blob = edgeQue.pop(0)
+            *_, G = blob.vetuple
+            if hasattr(blob, "lay"):    # flatten blob
+                edgeQue += blob.lay.blob_
+            elif not blob.sign and G > aveG * blob.root.rdn:
+                edge_ += [blob]     # filter edge
+        return edge_
 
 def slice_edge(edge):   # edge-blob
-    root, sign, I, Dy, Dx, G, yx_, dert_, link_ = edge
-
-    P_ = []
     root__ = {}  # map max yx to P, like in frame_blobs
-    for yx, axis in select_max(yx_, dert_):  # max = (yx, axis)
-        P = CP(edge, yx, axis, root__)
-        P_ += [P]
-
-    edge[:] = root, sign, I, Dy, Dx, G, yx_, dert_, link_, P_  # extended with P (no He or node_ yet)
-
+    edge.P_ = [CP(edge, yx, axis, root__) for yx, axis in select_max(edge.dert_)]  # max = (yx, axis)
     return edge
 
-def select_max(yx_, dert_):
+def select_max(dert_):
     max_ = []
-    for (y, x), (i, gy, gx, g) in zip(yx_, dert_):
+    for (y, x), (i, gy, gx, g) in dert_.items():
         # sin_angle, cos_angle:
         sa, ca = gy/g, gx/g
         # get neighbor direction
         dy = 1 if sa > octant else -1 if sa < -octant else 0
         dx = 1 if ca > octant else -1 if ca < -octant else 0
-        # ?g[y,x] > blob max:
         new_max = True
         for _y, _x in [(y-dy, x-dx), (y+dy, x+dx)]:
-            if (_y, _x) not in yx_: continue  # skip if pixel not in edge blob
-            _i, _gy, _gx, _g = dert_[yx_.index((_y, _x))]  # get g of neighbor
+            if (_y, _x) not in dert_: continue  # skip if pixel not in edge blob
+            _i, _gy, _gx, _g = dert_[_y, _x]  # get g of neighbor
             if g < _g:
                 new_max = False
                 break
@@ -137,12 +112,9 @@ class CP(CBase):
     def __repr__(self):
         return f"P({', '.join(map(str, self.latuple))})"  # or return f"P(id={self.id})" ?
 
-
 def interpolate2dert(edge, y, x):
-    root, sign, I, Dy, Dx, G, yx_, dert_, link_ = edge
-
-    if (y, x) in yx_:   # if edge has (y, x) in it
-        return dert_[yx_.index((y, x))]
+    if (y, x) in edge.dert_:   # if edge has (y, x) in it
+        return edge.dert_[y, x]
 
     # get nearby coords:
     y_ = [fy] = [floor(y)]; x_ = [fx] = [floor(x)]
@@ -151,12 +123,11 @@ def interpolate2dert(edge, y, x):
     n, I, Dy, Dx, G = 0, 0, 0, 0, 0
     for _y in y_:
         for _x in x_:
-            if (_y, _x) in yx_:
-                _i, _dy, _dx, _g = dert_[yx_.index((_y, _x))]
+            if (_y, _x) in edge.dert_:
+                _i, _dy, _dx, _g = edge.dert_[_y, _x]
                 I += _i; Dy += _dy; Dx += _dx; G += _g; n += 1
 
     if n >= 2: return I/n, Dy/n, Dx/n, G/n
-
 
 def comp_angle(_A, A):  # rn doesn't matter for angles
 
@@ -171,21 +142,14 @@ def comp_angle(_A, A):  # rn doesn't matter for angles
 
     return [mangle, dangle]
 
-
 if __name__ == "__main__":
-    import sys
-    sys.path.append("..")
     from utils import imread
-    from frame_blobs import frame_blobs_root
-    from intra_blob import intra_blob_root
 
     image_file = '../images/raccoon_eye.jpeg'
     image = imread(image_file)
 
-    frame = frame_blobs_root(image)
-    intra_blob_root(frame)
-    edge_ = slice_edge_root(frame)
+    frame = CSliceEdgeFrame(image).evaluate()
     # verification:
-    for edge in edge_:
-        for P in edge[-1]:
+    for edge in frame.edge_:
+        for P in edge.P_:
             print(P)

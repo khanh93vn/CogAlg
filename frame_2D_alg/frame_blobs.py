@@ -67,7 +67,7 @@ class CBase:
 class CFrame(CBase):
     def __init__(self, i__):
         super().__init__()
-        self.i__, self.latuple, self.blob_ = i__, [0, 0, 0, 0], []
+        self.i__, self.vetuple, self.blob_ = i__, [0, 0, 0, 0], []
 
     def evaluate(self):
         dert__ = self.comp()
@@ -146,11 +146,11 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
     def __repr__(self): return f"blob(id={self.id})"
 
 class CBlob(CG):
-    def __init__(self, root, rng=1):
-        super().__init__(rng)
+    def __init__(self, root):
+        super().__init__()
         self.root = root
         self.sign = None
-        self.latuple = [0, 0, 0, 0, 0, 0]  # Y, X, I, Dy, Dx, G
+        self.vetuple = [0, 0, 0, 0, 0, 0]  # Y, X, I, Dy, Dx, G: vertical tuple
         self.dert_ = {}  # keys: (y, x). values: (i, dy, dx, g)
         self.adj_ = []  # adjacent blobs
 
@@ -168,9 +168,9 @@ class CBlob(CG):
         fill_yx_.remove((y, x))
         root__[y, x] = self  # assign root, for link forming
         self.n += 1
-        Y, X, I, Dy, Dx, G = self.latuple
+        Y, X, I, Dy, Dx, G = self.vetuple
         Y += y; X += x; I += i; Dy += dy; Dx += dx; G += g  # update params
-        self.latuple = Y, X, I, Dy, Dx, G
+        self.vetuple = Y, X, I, Dy, Dx, G
         self.dert_[y, x] = i, dy, dx, g  # update elements
 
         perimeter_ += [(y-1,x), (y,x+1), (y+1,x), (y,x-1)]  # extend perimeter
@@ -178,10 +178,10 @@ class CBlob(CG):
 
     def term(self):
         frame = self.root
-        *_, I, Dy, Dx, G = frame.latuple
-        *_, i, dy, dx, g = self.latuple
+        *_, I, Dy, Dx, G = frame.vetuple
+        *_, i, dy, dx, g = self.vetuple
         I += i; Dy += dy; Dx += dx; G += g
-        frame.latuple[-4:] = I, Dy, Dx, G
+        frame.vetuple[-4:] = I, Dy, Dx, G
         frame.blob_ += [self]
 
     @property
@@ -222,7 +222,7 @@ if __name__ == "__main__":
 
     # verification/visualization:
     import matplotlib.pyplot as plt
-    I, Dy, Dx, G = frame.latuple
+    I, Dy, Dx, G = frame.vetuple
 
     i__ = np.zeros_like(image, dtype=np.float32)
     dy__ = np.zeros_like(image, dtype=np.float32)
