@@ -1,7 +1,7 @@
 from math import atan2, cos, floor, pi
 import sys
 sys.path.append("..")
-from frame_blobs import CBase
+from frame_blobs import CBase   # for CP
 from intra_blob import CIntraBlobFrame
 
 '''
@@ -23,51 +23,49 @@ ave_g = 30  # change to Ave from the root intra_blob?
 ave_dangle = .2  # vertical difference between angles: -1->1, abs dangle: 0->1, ave_dangle = (min abs(dangle) + max abs(dangle))/2,
 
 class CSliceEdgeFrame(CIntraBlobFrame):
-    def evaluate(self):    # root routine
-        super().evaluate()  # frame_blobs and rng+
-        self.rdn = 1
-        self.edge_ = [slice_edge(blob) for blob in self.flatten_blob_()]
 
-        return self
-
-    def flatten_blob_(self):
-        edge_ = []
-        edgeQue = list(self.blob_)
+    def evaluate(frame):
+        super().evaluate()
+        frame.edge_ = []
+        edgeQue = list(frame.blob_)
         while edgeQue:
             blob = edgeQue.pop(0)
-            *_, G = blob.vetuple
-            if hasattr(blob, "lay"):    # flatten blob
-                edgeQue += blob.lay.blob_
-            elif not blob.sign and G > aveG * blob.root.rdn:
-                edge_ += [blob]     # filter edge
-        return edge_
+            G = blob.latuple[-1]
+            try: rdn = blob.root.rdn
+            except AttributeError: rdn = 1
 
-def slice_edge(edge):   # edge-blob
-    root__ = {}  # map max yx to P, like in frame_blobs
-    edge.P_ = [CP(edge, yx, axis, root__) for yx, axis in select_max(edge.dert_)]  # max = (yx, axis)
-    return edge
+            if not blob.sign and G > aveG * rdn:  frame.edge_ += [blob.slice_edge()]    # slice edge
+            elif hasattr(blob, "lay"):            edgeQue += blob.lay.blob_             # flatten/unpack deeper blobs
+        return frame
 
-def select_max(dert_):
-    max_ = []
-    for (y, x), (i, gy, gx, g) in dert_.items():
-        # sin_angle, cos_angle:
-        sa, ca = gy/g, gx/g
-        # get neighbor direction
-        dy = 1 if sa > octant else -1 if sa < -octant else 0
-        dx = 1 if ca > octant else -1 if ca < -octant else 0
-        new_max = True
-        for _y, _x in [(y-dy, x-dx), (y+dy, x+dx)]:
-            if (_y, _x) not in dert_: continue  # skip if pixel not in edge blob
-            _i, _gy, _gx, _g = dert_[_y, _x]  # get g of neighbor
-            if g < _g:
-                new_max = False
-                break
-        if new_max: max_ += [((y, x), (sa, ca))]
+    class CEdge(CIntraBlobFrame.CBlob):
+        def slice_edge(edge):
+            root__ = {}  # map max yx to P, like in frame_blobs
+            edge.P_ = [CP(edge, yx, axis, root__) for yx, axis in edge.select_max()]  # max = (yx, axis)
+            return edge
 
-    return max_
+        def select_max(edge):
+            max_ = []
+            for (y, x), (i, gy, gx, g) in edge.dert_.items():
+                # sin_angle, cos_angle:
+                sa, ca = gy/g, gx/g
+                # get neighbor direction
+                dy = 1 if sa > octant else -1 if sa < -octant else 0
+                dx = 1 if ca > octant else -1 if ca < -octant else 0
+                new_max = True
+                for _y, _x in [(y-dy, x-dx), (y+dy, x+dx)]:
+                    if (_y, _x) not in edge.dert_: continue  # skip if pixel not in edge blob
+                    _i, _gy, _gx, _g = edge.dert_[_y, _x]  # get g of neighbor
+                    if g < _g:
+                        new_max = False
+                        break
+                if new_max: max_ += [((y, x), (sa, ca))]
+            return max_
+
+    CBlob = CEdge   # Replace CBlob with CEdge
 
 class CP(CBase):
-    def __init__(self, edge, yx, axis, root__):  # form_P:
+    def __init__(P, edge, yx, axis, root__):  # form_P:
 
         super().__init__()
         y, x = yx
@@ -77,11 +75,11 @@ class CP(CBase):
         pivot += ma, m   # pack extra ders
 
         I, G, M, Ma, L, Dy, Dx = i, g, m, ma, 1, gy, gx
-        self.axis = ay, ax = axis
-        self.yx_, self.dert_, self.link_ = [yx], [pivot], []
+        P.axis = ay, ax = axis
+        P.yx_, P.dert_, P.link_ = [yx], [pivot], []
 
         for dy, dx in [(-ay, -ax), (ay, ax)]: # scan in 2 opposite directions to add derts to P
-            self.yx_.reverse(); self.dert_.reverse()
+            P.yx_.reverse(); P.dert_.reverse()
             (_y, _x), (_, _gy, _gx, *_) = yx, pivot  # start from pivot
             y, x = _y+dy, _x+dx  # 1st extension
             while True:
@@ -94,7 +92,7 @@ class CP(CBase):
                 # update P:
                 m = ave_g - g
                 I += i; Dy += dy; Dx += dx; G += g; Ma += ma; M += m; L += 1
-                self.yx_ += [(y, x)]; self.dert_ += [(i, gy, gx, g, ma, m)]
+                P.yx_ += [(y, x)]; P.dert_ += [(i, gy, gx, g, ma, m)]
                 # for next loop:
                 y += dy; x += dx
                 _y, _x, _gy, _gx = y, x, gy, gx
@@ -103,14 +101,14 @@ class CP(CBase):
         y, x = yx   # pivot
         for _y, _x in [(y-1,x-1), (y-1,x), (y-1,x+1), (y,x-1), (y,x+1), (y+1,x-1), (y+1,x), (y+1,x+1)]:
             if (_y, _x) in root__:  # neighbor has P
-                self.link_ += [root__[_y, _x]]
-        root__[y, x] = self    # update root__
+                P.link_ += [root__[_y, _x]]
+        root__[y, x] = P    # update root__
 
-        self.yx = self.yx_[L // 2]  # center
-        self.latuple = I, G, M, Ma, L, (Dy, Dx)
+        P.yx = P.yx_[L // 2]  # center
+        P.latuple = I, G, M, Ma, L, (Dy, Dx)
 
-    def __repr__(self):
-        return f"P({', '.join(map(str, self.latuple))})"  # or return f"P(id={self.id})" ?
+    def __repr__(P):
+        return f"P({', '.join(map(str, P.latuple))})"  # or return f"P(id={P.id})" ?
 
 def interpolate2dert(edge, y, x):
     if (y, x) in edge.dert_:   # if edge has (y, x) in it
@@ -150,6 +148,31 @@ if __name__ == "__main__":
 
     frame = CSliceEdgeFrame(image).evaluate()
     # verification:
-    for edge in frame.edge_:
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+    # show first largest n edges
+    num_to_show = 5
+    sorted_edge_ = sorted(frame.edge_, key=lambda edge: len(edge.yx_), reverse=True)
+    for edge in sorted_edge_[:num_to_show]:
+        yx_ = np.array(edge.yx_)
+        yx0 = yx_.min(axis=0) - 1
+        shape = yx_.max(axis=0) - yx0 + 2
+        mask_nonzero = tuple(zip(*(yx_ - yx0)))
+        mask = np.zeros(shape, bool)
+        mask[mask_nonzero] = True
+        plt.imshow(mask, cmap='gray', alpha=0.5)
+        plt.title(f"area = {len(yx_)}")
+
         for P in edge.P_:
-            print(P)
+            yx1, yx2 = P.yx_[0], P.yx_[-1]
+            y_, x_ = zip(yx1 - yx0, yx2 - yx0)
+            yp, xp = P.yx - yx0
+            plt.plot(x_, y_, "b-", linewidth=2)
+            for _P in P.link_:
+                _yp, _xp = _P.yx - yx0
+                plt.plot([_xp, xp], [_yp, yp], "ko-")
+
+        ax = plt.gca()
+        ax.set_aspect('equal', adjustable='box')
+        plt.show()

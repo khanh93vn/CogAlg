@@ -22,63 +22,67 @@ aveR = 10  # for range+, fixed overhead per blob
 # classes: CIntraBlobFrame (root routine), CIntraBlobLayer (recursive routine)
 
 class CIntraBlobFrame(CFrame):
-    def evaluate(self):    # root routine
-        super().evaluate()   # run plain frame-blobs once
-        for blob in self.blob_:  # init rng+ recursion
-            CIntraBlobLayer(blob).evaluate()
-        return self
 
-class CIntraBlobLayer(CFrame):
-    def __init__(self, blob, rdn=1, rng=1):
-        super().__init__(blob.root.i__)  # init params, extra params init below:
-        self.root = blob
-        self.rdn = rdn
-        self.rng = rng
+    def __init__(frame, i__):
+        super().__init__(i__)
+        frame.rdn = 1
+        frame.rng = 1
 
-    def evaluate(self):  # recursive evaluation of cross-comp rng+ per blob
-        root_blob = self.root
-        Y, X, I, Dy, Dx, G = root_blob.vetuple  # unpack vetuple
+    class CBlob(CFrame.CBlob):
+        def term(blob):
+            super().term()
+            if blob.sign and blob.latuple[-1] < ave*blob.n + aveR*blob.root.rdn:  # sign and G < ave*L + aveR*rdn
+                lay = blob.CIntraBlobLayer(blob)    # recursive eval cross-comp per blob
+                if lay: blob.lay = lay
 
-        if not root_blob.sign: return  # only for below-average G
-        if G >= ave*root_blob.n + aveR*self.rdn: return  # eval for comp_r
+        class CIntraBlobLayer(CFrame):
+            def __init__(lay, blob):
+                super().__init__(blob.root.i__)  # init params, extra params init below:
+                lay.CBlob = blob.__class__
+                lay.root = blob
+                lay.rdn = blob.root.rdn + 1.5
+                lay.rng = blob.root.rng + 1
 
-        root_blob.lay = self
-        self.rdn += 1.5; self.rng += 1  # update rdn, rng
-        dert__ = self.comp()  # return None if blob is too small
-        if not dert__: return   # terminate if blob is too small
-        self.flood_fill(dert__)  # else proceed
-        del dert__  # to save memory
+            def evaluate(lay):  # recursive evaluation of cross-comp rng+ per blob
+                Y, X, I, Dy, Dx, G = lay.root.latuple  # unpack latuple
 
-        for blob in self.blob_:  # recursive eval cross-comp per blob
-            CIntraBlobLayer(blob, self.rdn, self.rng).evaluate()
-        return self
+                if not lay.root.sign: return  # only for below-average G
+                if G >= ave*lay.root.n + aveR*lay.rdn: return  # eval for comp_r
 
-    def comp(self):   # rng+ comp
-        root_blob = self.root
-        Y, X = self.i__.shape
+                lay.rdn += 1.5; lay.rng += 1  # update rdn, rng
+                dert__ = lay.comp()  # return None if blob is too small
+                if not dert__: return   # terminate if blob is too small
 
-        # compute kernel
-        ky__, kx__ = compute_kernel(self.rng)
+                lay.flood_fill(dert__)  # else proceed
+                del dert__  # to save memory
 
-        # loop through root_blob's pixels
-        dert__ = {}     # mapping from y, x to dert
-        for (y, x), (p, dy, dx, g) in root_blob.dert_.items():
-            if y-self.rng < 0 or y+self.rng >= Y or x-self.rng < 0 or x+self.rng >= X: continue # boundary check
+                return lay
 
-            # comparison. i,j: relative coord within kernel 0 -> rng*2+1
-            for i, j in zip(*ky__.nonzero()):
-                dy += ky__[i, j] * self.i__[y+i-self.rng, x+j-self.rng]    # -rng to get i__ coord
-            for i, j in zip(*kx__.nonzero()):
-                dx += kx__[i, j] * self.i__[y+i-self.rng, x+j-self.rng]
+            def comp(lay):   # rng+ comp
+                Y, X = lay.i__.shape
 
-            g = np.hypot(dy, dx)
-            s = ave*(self.rdn + 1) - g > 0
+                # compute kernel
+                ky__, kx__ = compute_kernel(lay.rng)
 
-            dert__[y, x] = p, dy, dx, g, s
+                # loop through root_blob's pixels
+                dert__ = {}     # mapping from y, x to dert
+                for (y, x), (p, dy, dx, g) in lay.root.dert_.items():
+                    if y-lay.rng < 0 or y+lay.rng >= Y or x-lay.rng < 0 or x+lay.rng >= X: continue # boundary check
 
-        return dert__
+                    # comparison. i,j: relative coord within kernel 0 -> rng*2+1
+                    for i, j in zip(*ky__.nonzero()):
+                        dy += ky__[i, j] * lay.i__[y+i-lay.rng, x+j-lay.rng]    # -rng to get i__ coord
+                    for i, j in zip(*kx__.nonzero()):
+                        dx += kx__[i, j] * lay.i__[y+i-lay.rng, x+j-lay.rng]
 
-    def __repr__(self): return f"intra_blob_layer(id={self.id}, root={self.root})"
+                    g = np.hypot(dy, dx)
+                    s = ave*(lay.rdn + 1) - g > 0
+
+                    dert__[y, x] = p, dy, dx, g, s
+
+                return dert__
+
+            def __repr__(lay): return f"intra_blob_layer(id={lay.id}, root={lay.root})"
 
 def compute_kernel(rng):
     # kernel_coefficient = projection_coefficient / distance
