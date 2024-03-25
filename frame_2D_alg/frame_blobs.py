@@ -65,11 +65,9 @@ class CBase:
             return inst
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
-
-    def __init__(G, rng=1, fd=0):
-
+    def __init__(G, root=None, rng=1, fd=0):
         super().__init__()
-
+        G.root = root
         G.rng = rng
         G.fd = fd  # fork if flat layers?
         G.n = 0  # external n (last layer n)
@@ -89,11 +87,21 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.rim_H = []  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
         G.extH = CH()  # G-external daggH( dsubH( dderH, summed from rim links
         G.alt_graph_ = []  # adjacent gap+overlap graphs, vs. contour in frame_graphs
+        # dynamic attrs:
+        G.Rim_H = []  # links to the most mediated nodes
+        G.fback_ = []  # feedback [[aggH,valt,rdnt,dect]] per node layer, maps to node_H
+        G.compared_ = []
 
-    def __bool__(G):  # to test empty
-        if G.n: return True
-        else: return False
-    def __repr__(G): return f"blob(id={G.id})"
+        # Rdn: int = 0  # for accumulation or separate recursion count?
+        # it: list = z([None,None])  # graph indices in root node_s, implicitly nested
+        # depth: int = 0  # n sub_G levels over base node_, max across forks
+        # nval: int = 0  # of open links: base alt rep
+        # id_H: list = z([[]])  # indices in the list of all possible layers | forks, not used with fback merging
+        # top aggLay: derH from links, lower aggH from nodes, only top Lay in derG:
+        # top Lay from links, lower Lays from nodes, hence nested tuple?
+
+    def __bool__(G): return G.n != 0  # to test empty
+    def __repr__(G): return f"G(id={G.id})"
 
 class CFrame(CBase):
     def __init__(frame, i__):
@@ -105,7 +113,7 @@ class CFrame(CBase):
         frame.flood_fill(dert__)
         return frame
 
-    def comp_pixel(frame): # compare all in parallel -> i__, dy__, dx__, g__, s__
+    def comp(frame): # compare all in parallel -> i__, dy__, dx__, g__, s__
         # compute directional derivatives:
         dy__ = (
                 (frame.i__[2:, :-2] - frame.i__[:-2, 2:]) * 0.25 +
@@ -137,16 +145,14 @@ class CFrame(CBase):
         while fill_yx_:  # fill_yx_ is popped per filled pixel, in form_blob
             if not perimeter_:  # init blob
                 blob = frame.CBlob(frame); perimeter_ += [fill_yx_[0]]
-
             blob.form(fill_yx_, perimeter_, root__, dert__)  # https://en.wikipedia.org/wiki/Flood_fill
+            if not perimeter_: blob.term()
 
-            if not perimeter_:  # term blob
-                blob.term()
+    def __repr__(frame): return f"frame(id={frame.id})"
 
     class CBlob(CG):
         def __init__(blob, root):
-            super().__init__()
-            blob.root = root
+            super().__init__(root)
             blob.sign = None
             blob.latuple = [0, 0, 0, 0, 0, 0]  # Y, X, I, Dy, Dx, G: vertical tuple
             blob.dert_ = {}  # keys: (y, x). values: (i, dy, dx, g)
@@ -165,7 +171,7 @@ class CFrame(CBase):
 
             fill_yx_.remove((y, x))
             root__[y, x] = blob  # assign root, for link forming
-            blob.n += 1
+            blob.area += 1
             Y, X, I, Dy, Dx, G = blob.latuple
             Y += y; X += x; I += i; Dy += dy; Dx += dx; G += g  # update params
             blob.latuple = Y, X, I, Dy, Dx, G
@@ -183,25 +189,21 @@ class CFrame(CBase):
             frame.blob_ += [blob]
 
         @property
-        def yx_(blob):
-            return list(blob.dert_.keys())
-
+        def G(blob): return blob.latuple[-1]
         @property
-        def yx(blob):  # as float
-            return map(np.mean, zip(*blob.yx_))
+        def yx_(blob): return list(blob.dert_.keys())
+        @property
+        def yx(blob): return map(np.mean, zip(*blob.yx_))
+        def __repr__(blob): return f"blob(id={blob.id})"
 
 class CH:  # generic derivation hierarchy of variable nesting
+    def __init__(H):
+        H.nest = 0  # nesting depth: -1/ ext, 0/ md_, 1/ derH, 2/ subH, 3/ aggH
+        H.n = 0  # total number of params compared to form derH, summed in comp_G and then from nodes in sum2graph
+        H.Et = []  # evaluation tuple: valt, rdnt, normt
+        H.H = []  # hierarchy of der layers or md_
 
-    def __init__(H, nest=0, n=0, Et=None, HH=None):
-
-        H.nest = nest  # nesting depth: -1/ ext, 0/ md_, 1/ derH, 2/ subH, 3/ aggH
-        H.n = n  # total number of params compared to form derH, summed in comp_G and then from nodes in sum2graph
-        H.Et = Et if Et is not None else []  # evaluation tuple: valt, rdnt, normt
-        H.H = HH if HH is not None else []  # hierarchy of der layers or md_
-
-    def __bool__(H):  # to test empty
-        if H.n: return True
-        else: return False
+    def __bool__(self): return self.n != 0
     '''
     len layer +extt: 2, 3, 6, 12, 24,
     or without extt: 1, 1, 2, 4, 8..: max n of tuples per der layer = summed n of tuples in all lower layers:

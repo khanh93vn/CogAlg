@@ -3,9 +3,12 @@ from collections import deque, defaultdict
 from copy import deepcopy, copy
 from itertools import zip_longest, combinations
 from math import inf
-from class_cluster import CBase, init_param as z
-from .filters import ave, ave_dI, aves, P_aves, PP_aves
-from .slice_edge import comp_angle, CP
+
+import sys
+sys.path.append("..")
+from frame_blobs import CBase, CH   # for CLink
+from slice_edge import CSliceEdgeFrame, comp_angle
+
 '''
 Vectorize is a terminal fork of intra_blob.
 
@@ -32,8 +35,23 @@ These low-M high-Ma blobs are vectorized into outlines of adjacent flat (high in
 Connectivity in P_ is traced through root_s of derts adjacent to P.dert_, possibly forking. 
 len prior root_ sorted by G is root.rdn, to eval for inclusion in PP or start new P by ave*rdn
 '''
+ave = 5  # ave direct m, change to Ave_min from the root intra_blob?
+ave_dI = ave_inv = 20  # ave inverse m, change to Ave from the root intra_blob?
+aves = ave_mI, ave_mG, ave_mM, ave_mMa, ave_mA, ave_mL = [ave, 10, 2, .1, .2, 2]
+P_aves = ave_Pm, ave_Pd = 10, 10
+PP_aves = ave_PPm, ave_PPd = 10, 10
+G_aves = ave_Gm, ave_Gd = 50, 50
 
-  # root function:
+class CCompSliceFrame(CSliceEdgeFrame):
+    def evaluate(frame):
+        super().evaluate()
+        for edge in frame.edge_:
+            if edge.G * (len(edge.P_) - 1) > ave_Gm:  # rdn=1
+                ider_recursion(None, edge)  # vertical, lateral-overlap P cross-comp -> PP clustering
+        return frame
+
+
+# root function:
 def ider_recursion(root, PP, fd=0):  # node-mediated correlation clustering: keep same Ps and links, increment link derH, then P derH in sum2PP
 
     rng_recursion(PP, rng=1, fd=fd)  # extend PP.link_, derHs by same-der rng+ comp
@@ -233,26 +251,6 @@ def comp_latuple(_latuple, latuple, rn, fagg=0):  # 0der params
         ret = [mval, dval, mrdn, drdn, mdec, ddec], ret
     return ret
 
-
-class CH(CBase):  # generic derivation hierarchy of variable nesting
-
-    nest: int = 0  # nesting depth: -1 ext, 0 md_, 1 derH, 2 subH, 3 aggH; root.nest = sub.nest+1, max|same: no skipping?
-    Et: list = z([])  # evaluation tuple: valt, rdnt, normt
-    H: list = z([])  # hierarchy of der layers or md_
-    n: int = 0  # total number of params compared to form derH, summed in comp_G and then from nodes in sum2graph
-    # root: object = None  # higher-order CH
-    def __bool__(self):  # to test empty
-        if self.n: return True
-        else: return False
-    '''
-    len layer +extt: 2, 3, 6, 12, 24,
-    or without extt: 1, 1, 2, 4, 8..: max n of tuples per der layer = summed n of tuples in all lower layers:
-    lay1: par     # derH per param in vertuple, layer is derivatives of all lower layers:
-    lay2: [m,d]   # implicit nesting, brackets for clarity:
-    lay3: [[m,d], [md,dd]]: 2 sLays,
-    lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays
-    '''
-
 def add_(HE, He, irdnt=[]):  # HE, He can't be empty, down to numericals and sum them
 
     if HE:
@@ -356,63 +354,15 @@ class CP(CBase):  # horizontal blob slice P, with vertical derivatives per param
         else: return False
 '''
 
-class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
-
-    Et: list = z([])  # external eval tuple, summed from rng++ before forming new graph and appending G.extH
-    n: int = 0  # external n (last layer n)
-
-    latuple: list = z([])   # summed from Ps: lateral I,G,M,Ma,L,[Dy,Dx]
-    iderH: object = z(CH())  # summed from PPs
-    derH: object = z(CH())  # nested derH in Gs: [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
-    node_: list = z([])  # node_t after sub_recursion
-    link_: list = z([])  # links per comp layer, nest in rng+)der+
-    roott: list = z([])  # Gm,Gd that contain this G, single-layer
-    area: int = 0
-    box: list = z([inf, inf, -inf, -inf])  # y,x,y0,x0,yn,xn
-    rng: int = 1
-    fd: int = 0  # fork if flat layers?
-    n: int = 0  # non-derH accumulation?
-    # graph-external, +level per root sub+:
-    rim_H: list = z([])  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
-    # iextH: object = z(CH())  # not needed?
-    extH: object = z(CH())  # G-external daggH( dsubH( dderH, summed from rim links
-    S: float = 0.0  # sparsity: distance between node centers
-    A: list = z([0,0])  # angle: summed dy,dx in links
-    # tentative:
-    alt_graph_: list = z([])  # adjacent gap+overlap graphs, vs. contour in frame_graphs
-    # dynamic attrs:
-    P_: list = z([])  # in PPs
-    mask__: object = None
-    root: list = z([]) # for feedback
-    fback_: list = z([])  # feedback [[aggH,valt,rdnt,dect]] per node layer, maps to node_H
-    compared_: list = z([])
-    Rim_H: list = z([])  # links to the most mediated nodes
-
-    # Rdn: int = 0  # for accumulation or separate recursion count?
-    # it: list = z([None,None])  # graph indices in root node_s, implicitly nested
-    # depth: int = 0  # n sub_G levels over base node_, max across forks
-    # nval: int = 0  # of open links: base alt rep
-    # id_H: list = z([[]])  # indices in the list of all possible layers | forks, not used with fback merging
-    # top aggLay: derH from links, lower aggH from nodes, only top Lay in derG:
-    # top Lay from links, lower Lays from nodes, hence nested tuple?
-
-    def __bool__(self):  # to test empty
-        if self.n: return True
-        else: return False
-
-
 class Clink(CBase):  # the product of comparison between two nodes
-
-    _node: object = None  # prior comparand
-    node:  object = None
-    dderH: object = z(CH())  # derivatives produced by comp, nesting dertv -> aggH
-    roott: list = z([None, None])  # clusters that contain this link
-    distance: float = 0.0  # distance between node centers
-    angle: list = z([0,0])  # dy,dx between node centers
-    # dir: bool  # direction of comparison if not G0,G1, only needed for comp link?
-    def __bool__(self):  # to test empty
-        if self.dderH.H: return True
-        else: return False
+    def __init__(link, _node, node):
+        link._node, link.node = _node, node  # comparands
+        link.dderH = CH()  # derivatives produced by comp, nesting dertv -> aggH
+        link.roott = [None, None]  # clusters that contain this link
+        link.distance = 0.0  # distance between node centers
+        link.angle = (0, 0)  # dy,dx between node centers
+        # link.dir = False  # direction of comparison if not G0,G1, only needed for comp link?
+    def __bool__(self):  return bool(self.dderH.H)
 
 
 def get_match(_par, par):
@@ -436,3 +386,9 @@ def accum_box(box, y, x):
     """Box coordinate accumulation."""
     y0, x0, yn, xn = box
     return min(y0, y), min(x0, x), max(yn, y+1), max(xn, x+1)
+
+if __name__ == "__main__":
+    from utils import imread
+    image_file = '../images//raccoon_eye.jpeg'
+    image = imread(image_file)
+    frame = CCompSliceFrame(image).evaluate()

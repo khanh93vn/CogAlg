@@ -30,11 +30,10 @@ class CSliceEdgeFrame(CIntraBlobFrame):
         edgeQue = list(frame.blob_)
         while edgeQue:
             blob = edgeQue.pop(0)
-            G = blob.latuple[-1]
             try: rdn = blob.root.rdn
             except AttributeError: rdn = 1
 
-            if not blob.sign and G > aveG * rdn:  frame.edge_ += [blob.slice_edge()]    # slice edge
+            if not blob.sign and blob.G > aveG * rdn:  frame.edge_ += [blob.slice_edge()]    # slice edge
             elif hasattr(blob, "lay"):            edgeQue += blob.lay.blob_             # flatten/unpack deeper blobs
         return frame
 
@@ -162,7 +161,7 @@ if __name__ == "__main__":
         mask = np.zeros(shape, bool)
         mask[mask_nonzero] = True
         plt.imshow(mask, cmap='gray', alpha=0.5)
-        plt.title(f"area = {len(yx_)}")
+        plt.title(f"area = {edge.area}")
 
         for P in edge.P_:
             yx1, yx2 = P.yx_[0], P.yx_[-1]
