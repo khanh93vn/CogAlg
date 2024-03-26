@@ -4,7 +4,7 @@
     - vectorize_root: forms roughly edge-orthogonal Ps, evaluated for rotation, comp_slice, etc.
 '''
 import numpy as np
-from frame_blobs import CFrame
+from frame_blobs import CFrame, imread
 '''
     Conventions:
     postfix 't' denotes tuple, multiple ts is a nested tuple
@@ -22,6 +22,7 @@ aveR = 10  # for range+, fixed overhead per blob
 # classes: CIntraBlobFrame (root routine), CIntraBlobLayer (recursive routine)
 
 class CIntraBlobFrame(CFrame):
+
     def __init__(frame, i__):
         super().__init__(i__)
         frame.rdn = 1
@@ -88,7 +89,6 @@ def compute_kernel(rng):
     return coeff
 
 if __name__ == "__main__":
-    from utils import imread
 
     image_file = './images//raccoon_eye.jpeg'
     image = imread(image_file)

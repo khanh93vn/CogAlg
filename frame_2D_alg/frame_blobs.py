@@ -28,15 +28,26 @@
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/frame_blobs.png
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/frame_blobs_intra_blob.drawio
 '''
-from itertools import product
+from copy import deepcopy, copy
+from itertools import zip_longest, combinations
 import weakref
 import numpy as np
 # hyper-parameters, set as a guess, latter adjusted by feedback:
 ave = 30  # base filter, directly used for comp_r fork
+ave_inv = 20  # ave inverse m, change to Ave from the root intra_blob?
 ave_a = 1.5  # coef filter for comp_a fork
 aveB = 50
 aveBa = 1.5
 ave_mP = 100
+# comp_param coefs:
+ave_dI = ave_inv
+ave_mI = ave # replace the rest with coefs:
+ave_mG = 10
+ave_mM = 2
+ave_mMa = .1
+ave_mA = .2
+ave_mL = 2
+aves = [ave_mI, ave_mG, ave_mM, ave_mMa, ave_mA, ave_mL]
 '''
     Conventions:
     postfix 't' denotes tuple, multiple ts is a nested tuple
@@ -79,7 +90,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.latuple = []  # lateral I,G,M,Ma,L,[Dy,Dx]
         G.iderH = CH()  # summed from PPs
         G.derH = CH()  # nested derH in Gs: [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
-        G.node_ = []  # node_t after sub_recursion
+        G.node_ = []  # convert to node_t in sub_recursion
         G.link_ = []  # links per comp layer, nest in rng+)der+
         G.roott = []  # Gm,Gd that contain this G, single-layer
         G.box = [np.inf, np.inf, -np.inf, -np.inf]  # y,x,y0,x0,yn,xn
@@ -113,7 +124,7 @@ class CFrame(CBase):
         frame.flood_fill(dert__)
         return frame
 
-    def comp(frame): # compare all in parallel -> i__, dy__, dx__, g__, s__
+    def comp_pixel(frame): # compare all in parallel -> i__, dy__, dx__, g__, s__
         # compute directional derivatives:
         dy__ = (
                 (frame.i__[2:, :-2] - frame.i__[:-2, 2:]) * 0.25 +
@@ -134,8 +145,8 @@ class CFrame(CBase):
             zip(y__[1:-1, 1:-1].flatten(), x__[1:-1, 1:-1].flatten()),
             zip(frame.i__[1:-1, 1:-1].flatten(), dy__.flatten(), dx__.flatten(), g__.flatten(), s__.flatten()),
         ))
-
         return dert__
+
 
     def flood_fill(frame, dert__):
         # Flood-fill 1 pixel at a time
@@ -213,9 +224,98 @@ class CH:  # generic derivation hierarchy of variable nesting
     lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays
     '''
 
+    def add_(self, HE, He, irdnt=[]):  # HE, He can't be empty, down to numericals and sum them
+
+        if HE:
+            ddepth = abs(HE.nest-He.nest)  # compare nesting depth, nest lesser He: md_-> derH-> subH-> aggH:
+            if ddepth:
+                nHe = [HE,He][HE.nest > He.nest]  # He to be nested
+                while ddepth > 0:
+                    nHe.nest += 1; nHe.H = [nHe.H]; ddepth -= 1
+            if isinstance(HE.H[0], CH):
+                for Lay, lay in zip_longest(HE.H, He.H, fillvalue=None):
+                    if lay:  # to be summed
+                        if Lay is None: HE.H += [lay]  # append nested
+                        else:           self.add_(Lay,lay, irdnt)  # recursive unpack to sum md_s
+            else:
+                HE.H = [V+v for V,v in zip_longest(HE.H, He.H, fillvalue=0)]  # both Hs are md_s
+            # default:
+            Et, et = HE.Et, He.Et
+            HE.Et[:] = [E+e for E,e in zip_longest(Et,et, fillvalue=0)]
+            if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
+            HE.n += He.n  # combined param accumulation span
+            HE.nest = max(HE.nest, He.nest)
+        else:
+            HE = CH(H=copy(He.H), Et=copy(He.Et), nest=He.nest)  # initialization
+
+    def append_(self, HE,He, irdnt=[], flat=0):
+
+        if flat: HE.H += He.H  # append flat
+        else:  HE.H += [He]  # append nested
+
+        Et, et = HE.Et, He.Et
+        HE.Et[:] = [E+e for E,e in zip_longest(Et,et, fillvalue=0)]
+        if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
+        HE.n += He.n  # combined param accumulation span
+        HE.nest = max(HE.nest, He.nest)
+
+    def comp_(self, _He,He, dderH, rn=1, fagg=0, flat=1):  # unpack tuples (formally lists) down to numericals and compare them
+
+        ddepth = abs(_He.nest - He.nest)
+        n = 0
+        if ddepth:  # unpack the deeper He: md_<-derH <-subH <-aggH:
+            uHe = [He,_He][_He.nest>He.nest]
+            while ddepth > 0:
+                uHe = uHe.H[0]; ddepth -= 1  # comp 1st layer of deeper He:
+            _cHe,cHe = [uHe,He] if _He.nest>He.nest else [_He,uHe]
+        else: _cHe,cHe = _He,He
+
+        if isinstance(_cHe.H[0], CH):  # _lay is He_, same for lay: they are aligned above
+            Et = [0,0,0,0,0,0]  # Vm,Vd, Rm,Rd, Dm,Dd
+            dH = []
+            for _lay,lay in zip(_cHe.H,cHe.H):  # md_| ext| derH| subH| aggH, eval nesting, unpack,comp ds in shared lower layers:
+                if _lay and lay:  # ext is empty in single-node Gs
+                    dlay = self.comp_(_lay,lay, CH(), rn, fagg=fagg, flat=1)  # dlay is dderH
+                    Et[:] = [E+e for E,e in zip(Et,dlay.Et)]
+                    dH += [dlay]; n += dlay.n
+                else:
+                    dH += [CH()]  # empty?
+        else:  # H is md_, numerical comp:
+            vm,vd,rm,rd, decm,decd = 0,0,0,0, 0,0
+            dH = []
+            for i, (_d,d) in enumerate(zip(_cHe.H[1::2], cHe.H[1::2])):  # compare ds in md_ or ext
+                d *= rn  # normalize by comparand accum span
+                diff = _d-d
+                match = min(abs(_d),abs(d))
+                if (_d<0) != (d<0): match = -match  # if only one comparand is negative
+                if fagg:
+                    maxm = max(abs(_d), abs(d))
+                    decm += abs(match) / maxm if maxm else 1  # match / max possible match
+                    maxd = abs(_d) + abs(d)
+                    decd += abs(diff) / maxd if maxd else 1  # diff / max possible diff
+                vm += match - aves[i]  # fixed param set?
+                vd += diff
+                dH += [match,diff]  # flat
+            Et = [vm,vd,rm,rd]
+            if fagg: Et += [decm, decd]
+            n = len(_cHe.H)/12  # unit n = 6 params, = 12 in md_
+
+        self.append_(dderH, CH(nest=min(_He.nest,He.nest), Et=Et, H=dH, n=n), flat=flat)  # currently flat=1
+        return dderH
+
+def imread(filename, raise_if_not_read=True):
+    "Read an image in grayscale, return array."
+    try:
+        return np.mean(plt.imread(filename), axis=2).astype(float)
+    except AttributeError:
+        if raise_if_not_read:
+            raise SystemError('image is not read')
+        else:
+            print('Warning: image is not read')
+            return None
+
 if __name__ == "__main__":
 
-    from utils import imread
     image_file = './images//raccoon_eye.jpeg'
     image = imread(image_file)
     frame = CFrame(image).evaluate()

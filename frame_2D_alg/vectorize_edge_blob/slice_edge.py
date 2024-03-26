@@ -1,7 +1,7 @@
 from math import atan2, cos, floor, pi
 import sys
 sys.path.append("..")
-from frame_blobs import CBase   # for CP
+from frame_blobs import CBase, imread   # for CP
 from intra_blob import CIntraBlobFrame
 
 '''
@@ -140,7 +140,6 @@ def comp_angle(_A, A):  # rn doesn't matter for angles
     return [mangle, dangle]
 
 if __name__ == "__main__":
-    from utils import imread
 
     image_file = '../images/raccoon_eye.jpeg'
     image = imread(image_file)
