@@ -24,24 +24,19 @@ ave_dangle = .2  # vertical difference between angles: -1->1, abs dangle: 0->1, 
 
 class CSliceEdgeFrame(CIntraBlobFrame):
 
-    def evaluate(frame):
-        super().evaluate()
-        frame.edge_ = []
-        edgeQue = list(frame.blob_)
-        while edgeQue:
-            blob = edgeQue.pop(0)
-            try: rdn = blob.root.rdn
-            except AttributeError: rdn = 1
+    class CEdge(CIntraBlobFrame.CBlob):     # replaces CBlob after definition
 
-            if not blob.sign and blob.G > aveG * rdn:  frame.edge_ += [blob.slice_edge()]    # slice edge
-            elif hasattr(blob, "lay"):            edgeQue += blob.lay.blob_             # flatten/unpack deeper blobs
-        return frame
+        def term(blob):     # an extension to CIntraBlobFrame.CBlob.term(), evaluate for vectorization right after rng+ in intra_blob
+            super().term()
+            if not blob.sign and blob.G > aveG * blob.root.rdn:
+                blob.vectorize()
 
-    class CEdge(CIntraBlobFrame.CBlob):
+        def vectorize(blob):        # to be overridden in higher modules (comp_slice, agg_recursion)
+            blob.slice_edge()
+
         def slice_edge(edge):
             root__ = {}  # map max yx to P, like in frame_blobs
-            edge.P_ = [CP(edge, yx, axis, root__) for yx, axis in edge.select_max()]  # max = (yx, axis)
-            return edge
+            edge.P_ = [CP(edge, yx, axis, root__) for yx, axis in edge.select_max()]  # P_ is added dynamically, only edge-blobs have P_
 
         def select_max(edge):
             max_ = []
@@ -59,6 +54,7 @@ class CSliceEdgeFrame(CIntraBlobFrame):
                         new_max = False
                         break
                 if new_max: max_ += [((y, x), (sa, ca))]
+            max_.sort(key=lambda itm: itm[0])   # sort by yx
             return max_
 
     CBlob = CEdge   # Replace CBlob with CEdge
@@ -106,12 +102,10 @@ class CP(CBase):
         P.yx = P.yx_[L // 2]  # center
         P.latuple = I, G, M, Ma, L, (Dy, Dx)
 
-    def __repr__(P):
-        return f"P({', '.join(map(str, P.latuple))})"  # or return f"P(id={P.id})" ?
+    def __repr__(P): return f"P({', '.join(map(str, P.latuple))})"  # or return f"P(id={P.id})" ?
 
 def interpolate2dert(edge, y, x):
-    if (y, x) in edge.dert_:   # if edge has (y, x) in it
-        return edge.dert_[y, x]
+    if (y, x) in edge.dert_: return edge.dert_[y, x]  # if edge has (y, x) in it
 
     # get nearby coords:
     y_ = [fy] = [floor(y)]; x_ = [fx] = [floor(x)]
@@ -144,14 +138,20 @@ if __name__ == "__main__":
     image_file = '../images/raccoon_eye.jpeg'
     image = imread(image_file)
 
-    frame = CSliceEdgeFrame(image).evaluate()
+    frame = CSliceEdgeFrame(image).segment()
     # verification:
     import numpy as np
     import matplotlib.pyplot as plt
 
     # show first largest n edges
+    edge_, edgeQue = [], list(frame.blob_)
+    while edgeQue:
+        blob = edgeQue.pop(0)
+        if hasattr(blob, "P_"): edge_ += [blob]
+        elif hasattr(blob, "rlay"): edgeQue += blob.rlay.blob_
+
     num_to_show = 5
-    sorted_edge_ = sorted(frame.edge_, key=lambda edge: len(edge.yx_), reverse=True)
+    sorted_edge_ = sorted(edge_, key=lambda edge: len(edge.yx_), reverse=True)
     for edge in sorted_edge_[:num_to_show]:
         yx_ = np.array(edge.yx_)
         yx0 = yx_.min(axis=0) - 1

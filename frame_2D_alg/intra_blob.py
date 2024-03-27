@@ -1,7 +1,7 @@
 '''
-    Intra_blob recursively evaluates each blob for two forks of extended internal cross-comparison and sub-clustering:
+    Intra_blob recursively segments each blob for two forks of extended internal cross-comparison and sub-clustering:
     - comp_range: incremental range cross-comp in low-variation flat areas of +v--vg: the trigger is positive deviation of negated -vg,
-    - vectorize_root: forms roughly edge-orthogonal Ps, evaluated for rotation, comp_slice, etc.
+    - vectorize_root: forms roughly edge-orthogonal Ps, segmented for rotation, comp_slice, etc.
 '''
 import numpy as np
 from frame_blobs import CFrame, imread
@@ -29,46 +29,46 @@ class CIntraBlobFrame(CFrame):
         frame.rng = 1
 
     class CBlob(CFrame.CBlob):
-        def term(blob):
+        def term(blob):     # an extension to CFrame.CBlob.term()
             super().term()
             if blob.sign and blob.G < ave*blob.area + aveR*blob.root.rdn:  # sign and G < ave*L + aveR*rdn
-                lay = blob.CLayer(blob).evaluate()    # recursive eval cross-comp per blob
-                if lay: blob.lay = lay
+                rlay = blob.CRLayer(blob).segment()    # recursive eval cross-comp per blob
+                if rlay: blob.rlay = rlay  # rlay is added dynamically, only positive blobs may have rlay
 
-        class CLayer(CFrame):
-            def __init__(lay, blob):
+        class CRLayer(CFrame):
+            def __init__(rlay, blob):
                 super().__init__(blob.root.i__)  # init params, extra params init below:
-                lay.CBlob = blob.__class__
-                lay.root = blob
-                lay.rdn = blob.root.rdn + 1.5
-                lay.rng = blob.root.rng + 1
+                rlay.CBlob = blob.__class__
+                rlay.root = blob
+                rlay.rdn = blob.root.rdn + 1.5
+                rlay.rng = blob.root.rng + 1
 
-            def evaluate(lay):  # recursive evaluation of cross-comp rng+ per blob
-                lay.rdn += 1.5; lay.rng += 1  # update rdn, rng
-                dert__ = lay.comp()  # return None if blob is too small
+            def segment(rlay):  # recursive evaluation of cross-comp rng+ per blob
+                rlay.rdn += 1.5; rlay.rng += 1  # update rdn, rng
+                dert__ = rlay.comp_r()  # return None if blob is too small
                 if not dert__: return   # terminate if blob is too small
-                lay.flood_fill(dert__)  # recursive call is per blob in blob.term in flood_fill
-                return lay
+                rlay.flood_fill(dert__)  # recursive call is per blob in blob.term in flood_fill
+                return rlay
 
-            def comp(lay):   # rng+ comp
+            def comp_r(rlay):   # rng+ comp
                 # compute kernel
-                ky__, kx__ = compute_kernel(lay.rng)
+                ky__, kx__ = compute_kernel(rlay.rng)
                 # loop through root_blob's pixels
                 dert__ = {}     # mapping from y, x to dert
-                for (y, x), (p, dy, dx, g) in lay.root.dert_.items():
+                for (y, x), (p, dy, dx, g) in rlay.root.dert_.items():
                     try:
                         # comparison. i,j: relative coord within kernel 0 -> rng*2+1
                         for i, j in zip(*ky__.nonzero()):
-                            dy += ky__[i, j] * lay.i__[y+i-lay.rng, x+j-lay.rng]    # -rng to get i__ coord
+                            dy += ky__[i, j] * rlay.i__[y+i-rlay.rng, x+j-rlay.rng]    # -rng to get i__ coord
                         for i, j in zip(*kx__.nonzero()):
-                            dx += kx__[i, j] * lay.i__[y+i-lay.rng, x+j-lay.rng]
+                            dx += kx__[i, j] * rlay.i__[y+i-rlay.rng, x+j-rlay.rng]
                     except IndexError: continue     # out of bound
                     g = np.hypot(dy, dx)
-                    s = ave*(lay.rdn + 1) - g > 0
+                    s = ave*(rlay.rdn + 1) - g > 0
                     dert__[y, x] = p, dy, dx, g, s
                 return dert__
 
-            def __repr__(lay): return f"intra_blob_layer(id={lay.id}, root={lay.root})"
+            def __repr__(rlay): return f"rlayer(id={rlay.id}, root={rlay.root})"
 
 def compute_kernel(rng):
     # kernel_coefficient = projection_coefficient / distance
@@ -93,14 +93,14 @@ if __name__ == "__main__":
     image_file = './images//raccoon_eye.jpeg'
     image = imread(image_file)
 
-    frame = CIntraBlobFrame(image).evaluate()
+    frame = CIntraBlobFrame(image).segment()
     # Verification:
     blobQue = frame.blob_
     while blobQue:
         blob = blobQue.pop(0)
         print(f"{blob}'s parent is {blob.root}", end="")
-        if hasattr(blob, "lay") and blob.lay.blob_:  # if blob is extended with lay
-            blob_ = blob.lay.blob_
+        if hasattr(blob, "rlay") and blob.rlay.blob_:  # if blob is extended with rlay
+            blob_ = blob.rlay.blob_
             print(f", has {len(blob_)} sub-blob{'' if len(blob_) == 1 else 's'}")
             if blob_: blobQue += blob_
         else: print()
