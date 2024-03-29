@@ -1,8 +1,8 @@
 from math import atan2, cos, floor, pi
 import sys
 sys.path.append("..")
-from frame_blobs import CBase, imread   # for CP
-from intra_blob import CIntraBlobFrame
+from frame_blobs import CBase, CH, imread   # for CP
+from intra_blob import CsubFrame
 
 '''
 In natural images, objects look very fuzzy and frequently interrupted, only vaguely suggested by initial blobs and contours.
@@ -22,11 +22,11 @@ aveG = 10  # for vectorize
 ave_g = 30  # change to Ave from the root intra_blob?
 ave_dangle = .2  # vertical difference between angles: -1->1, abs dangle: 0->1, ave_dangle = (min abs(dangle) + max abs(dangle))/2,
 
-class CSliceEdgeFrame(CIntraBlobFrame):
+class CsliceEdge(CsubFrame):
 
-    class CEdge(CIntraBlobFrame.CBlob):     # replaces CBlob after definition
+    class CEdge(CsubFrame.CBlob):     # replaces CBlob after definition
 
-        def term(blob):     # an extension to CIntraBlobFrame.CBlob.term(), evaluate for vectorization right after rng+ in intra_blob
+        def term(blob):     # an extension to CsubFrame.CBlob.term(), evaluate for vectorization right after rng+ in intra_blob
             super().term()
             if not blob.sign and blob.G > aveG * blob.root.rdn:
                 blob.vectorize()
@@ -54,10 +54,37 @@ class CSliceEdgeFrame(CIntraBlobFrame):
                         new_max = False
                         break
                 if new_max: max_ += [((y, x), (sa, ca))]
-            max_.sort(key=lambda itm: itm[0])   # sort by yx
+            max_.sort(key=lambda itm: itm[0])  # sort by yx
             return max_
 
-    CBlob = CEdge   # Replace CBlob with CEdge
+    CBlob = CEdge
+
+'''
+to get links between adjacent / overlapping Ps in sorted P_:
+
+Dy = abs(P.yx_[0][0] - P.yx_[-1][0]
+Dx = abs(P.yx_[0][1] - P.yx_[-1][1]
+# gap -= P extension from P center, overlap = negative gap:
+ygap = _P.yx[0] - P.yx[0] - (Dy+_Dy)/2
+xgap = abs(_P.yx[1]-P.yx[1]) - (Dx+_Dx)/2
+'''
+
+class Clink(CBase):  # the product of comparison between two nodes
+
+    def __init__(l,_node=None, node=None, dderH = None, roott=None, distance=0.0, angle=None):
+        super().__init__()
+
+        l._node = _node  # prior comparand
+        l.node = node
+        l.med_node_ = []  # intermediate nodes, as in hypergraph edges
+        l.dderH = CH() if dderH is None else dderH  # derivatives produced by comp, nesting dertv -> aggH
+        l.roott = [None, None] if roott is None else roott  # clusters that contain this link
+        l.distance = distance  # distance between node centers
+        l.angle = [0,0] if angle is None else angle  # dy,dx between node centers
+        # dir: bool  # direction of comparison if not G0,G1, only needed for comp link?
+
+    def __bool__(l):  return bool(l.dderH.H)
+
 
 class CP(CBase):
     def __init__(P, edge, yx, axis, root__):  # form_P:
@@ -71,7 +98,7 @@ class CP(CBase):
 
         I, G, M, Ma, L, Dy, Dx = i, g, m, ma, 1, gy, gx
         P.axis = ay, ax = axis
-        P.yx_, P.dert_, P.link_ = [yx], [pivot], []
+        P.yx_, P.dert_, P.link_ = [yx], [pivot], [[]]
 
         for dy, dx in [(-ay, -ax), (ay, ax)]: # scan in 2 opposite directions to add derts to P
             P.yx_.reverse(); P.dert_.reverse()
@@ -93,10 +120,11 @@ class CP(CBase):
                 _y, _x, _gy, _gx = y, x, gy, gx
 
         # scan for neighbor P pivots, update link_:
-        y, x = yx   # pivot
+        y, x = yx   # pivot, change to P center
         for _y, _x in [(y-1,x-1), (y-1,x), (y-1,x+1), (y,x-1), (y,x+1), (y+1,x-1), (y+1,x), (y+1,x+1)]:
             if (_y, _x) in root__:  # neighbor has P
-                P.link_ += [root__[_y, _x]]
+                angle = np.subtract((y,x),(_y,_x))
+                P.link_[0] += [Clink(node=P, _node=_P, distance=np.hypot(*angle), angle=angle)]  # prelinks
         root__[y, x] = P    # update root__
 
         P.yx = P.yx_[L // 2]  # center
@@ -138,7 +166,7 @@ if __name__ == "__main__":
     image_file = '../images/raccoon_eye.jpeg'
     image = imread(image_file)
 
-    frame = CSliceEdgeFrame(image).segment()
+    frame = CsliceEdge(image).segment()
     # verification:
     import numpy as np
     import matplotlib.pyplot as plt
