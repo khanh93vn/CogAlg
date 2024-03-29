@@ -41,12 +41,12 @@ class CsliceEdge(CsubFrame):
         def select_max(edge):
             max_ = []
             for (y, x), (i, gy, gx, g) in edge.dert_.items():
+                new_max = True
                 # sin_angle, cos_angle:
                 sa, ca = gy/g, gx/g
                 # get neighbor direction
                 dy = 1 if sa > octant else -1 if sa < -octant else 0
                 dx = 1 if ca > octant else -1 if ca < -octant else 0
-                new_max = True
                 for _y, _x in [(y-dy, x-dx), (y+dy, x+dx)]:
                     if (_y, _x) not in edge.dert_: continue  # skip if pixel not in edge blob
                     _i, _gy, _gx, _g = edge.dert_[_y, _x]  # get g of neighbor
@@ -54,7 +54,6 @@ class CsliceEdge(CsubFrame):
                         new_max = False
                         break
                 if new_max: max_ += [((y, x), (sa, ca))]
-            max_.sort(key=lambda itm: itm[0])  # sort by yx
             return max_
 
     CBlob = CEdge
@@ -123,6 +122,7 @@ class CP(CBase):
         y, x = yx   # pivot, change to P center
         for _y, _x in [(y-1,x-1), (y-1,x), (y-1,x+1), (y,x-1), (y,x+1), (y+1,x-1), (y+1,x), (y+1,x+1)]:
             if (_y, _x) in root__:  # neighbor has P
+                _P = root__[_y, _x]
                 angle = np.subtract((y,x),(_y,_x))
                 P.link_[0] += [Clink(node=P, _node=_P, distance=np.hypot(*angle), angle=angle)]  # prelinks
         root__[y, x] = P    # update root__
@@ -195,8 +195,8 @@ if __name__ == "__main__":
             y_, x_ = zip(yx1 - yx0, yx2 - yx0)
             yp, xp = P.yx - yx0
             plt.plot(x_, y_, "b-", linewidth=2)
-            for _P in P.link_:
-                _yp, _xp = _P.yx - yx0
+            for link in P.link_[-1]:
+                _yp, _xp = link._node.yx - yx0
                 plt.plot([_xp, xp], [_yp, yp], "ko-")
 
         ax = plt.gca()
