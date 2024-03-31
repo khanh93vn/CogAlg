@@ -1,3 +1,4 @@
+import numpy as np
 from math import atan2, cos, floor, pi
 import sys
 sys.path.append("..")
@@ -37,16 +38,33 @@ class CsliceEdge(CsubFrame):
         def slice_edge(edge):
             root__ = {}  # map max yx to P, like in frame_blobs
             edge.P_ = [CP(edge, yx, axis, root__) for yx, axis in edge.select_max()]  # P_ is added dynamically, only edge-blobs have P_
+            edge.P_ = sorted(edge.P_, key=lambda P: P.yx[0], reverse=True)  # sort Ps in descending order (bottom up)
+            # scan to update link_:
+            for i, P in enumerate(edge.P_):
+                y, x = P.yx  # pivot, change to P center
+                for _P in edge.P_[i+1:]:  # scan all higher Ps to get links to adjacent / overlapping Ps in P_ sorted by y
+                    _y, _x = _P.yx
+                    # get max possible y,x extension from P centers:
+                    Dy = abs(P.yx_[0][0] - P.yx_[-1][0])/2; _Dy = abs(_P.yx_[0][0] - _P.yx_[-1][0])/2
+                    Dx = abs(P.yx_[0][1] - P.yx_[-1][1])/2; _Dx = abs(_P.yx_[0][1] - _P.yx_[-1][1])/2
+                    # min gap = distance between centers - combined extension,
+                    # max overlap is negative min gap:
+                    ygap = (_P.yx[0] - P.yx[0]) - (Dy+_Dy)
+                    xgap = abs(_P.yx[1]-P.yx[1]) - (Dx+_Dx)
+                    # overlapping | adjacent Ps:
+                    if ygap <= 0 and xgap <= 0:
+                        angle = np.subtract((y,x),(_y,_x))
+                        P.link_[0] += [Clink(node=P, _node=_P, distance=np.hypot(*angle), angle=angle)]  # prelinks
 
         def select_max(edge):
             max_ = []
             for (y, x), (i, gy, gx, g) in edge.dert_.items():
-                new_max = True
                 # sin_angle, cos_angle:
                 sa, ca = gy/g, gx/g
                 # get neighbor direction
                 dy = 1 if sa > octant else -1 if sa < -octant else 0
                 dx = 1 if ca > octant else -1 if ca < -octant else 0
+                new_max = True
                 for _y, _x in [(y-dy, x-dx), (y+dy, x+dx)]:
                     if (_y, _x) not in edge.dert_: continue  # skip if pixel not in edge blob
                     _i, _gy, _gx, _g = edge.dert_[_y, _x]  # get g of neighbor
@@ -54,35 +72,27 @@ class CsliceEdge(CsubFrame):
                         new_max = False
                         break
                 if new_max: max_ += [((y, x), (sa, ca))]
+            max_.sort(key=lambda itm: itm[0])  # sort by yx
             return max_
 
     CBlob = CEdge
 
-'''
-to get links between adjacent / overlapping Ps in sorted P_:
-
-Dy = abs(P.yx_[0][0] - P.yx_[-1][0]
-Dx = abs(P.yx_[0][1] - P.yx_[-1][1]
-# gap -= P extension from P center, overlap = negative gap:
-ygap = _P.yx[0] - P.yx[0] - (Dy+_Dy)/2
-xgap = abs(_P.yx[1]-P.yx[1]) - (Dx+_Dx)/2
-'''
 
 class Clink(CBase):  # the product of comparison between two nodes
 
-    def __init__(l,_node=None, node=None, dderH = None, roott=None, distance=0.0, angle=None):
+    def __init__(l,_node=None, node=None, dderH= None, roott=None, distance=0.0, angle=None):
         super().__init__()
 
         l._node = _node  # prior comparand
         l.node = node
-        l.med_node_ = []  # intermediate nodes, as in hypergraph edges
-        l.dderH = CH() if dderH is None else dderH  # derivatives produced by comp, nesting dertv -> aggH
+        l.med_node_ = []  # intermediate nodes and links in roughly the same direction, as in hypergraph edges
+        l.dderH = CH() if dderH is None else dderH
         l.roott = [None, None] if roott is None else roott  # clusters that contain this link
         l.distance = distance  # distance between node centers
         l.angle = [0,0] if angle is None else angle  # dy,dx between node centers
         # dir: bool  # direction of comparison if not G0,G1, only needed for comp link?
 
-    def __bool__(l):  return bool(l.dderH.H)
+    def __bool__(l):  return bool(l.dderH_[-1].H) if l.dderH is None else bool(l.dderH.H)
 
 
 class CP(CBase):
@@ -118,17 +128,10 @@ class CP(CBase):
                 y += dy; x += dx
                 _y, _x, _gy, _gx = y, x, gy, gx
 
-        # scan for neighbor P pivots, update link_:
-        y, x = yx   # pivot, change to P center
-        for _y, _x in [(y-1,x-1), (y-1,x), (y-1,x+1), (y,x-1), (y,x+1), (y+1,x-1), (y+1,x), (y+1,x+1)]:
-            if (_y, _x) in root__:  # neighbor has P
-                _P = root__[_y, _x]
-                angle = np.subtract((y,x),(_y,_x))
-                P.link_[0] += [Clink(node=P, _node=_P, distance=np.hypot(*angle), angle=angle)]  # prelinks
-        root__[y, x] = P    # update root__
-
-        P.yx = P.yx_[L // 2]  # center
+        P.yx = P.yx_[L // 2]
+        root__[yx[0], yx[1]] = P    # update root__
         P.latuple = I, G, M, Ma, L, (Dy, Dx)
+        P.derH = CH()
 
     def __repr__(P): return f"P({', '.join(map(str, P.latuple))})"  # or return f"P(id={P.id})" ?
 
@@ -195,8 +198,8 @@ if __name__ == "__main__":
             y_, x_ = zip(yx1 - yx0, yx2 - yx0)
             yp, xp = P.yx - yx0
             plt.plot(x_, y_, "b-", linewidth=2)
-            for link in P.link_[-1]:
-                _yp, _xp = link._node.yx - yx0
+            for _P in P.link_:
+                _yp, _xp = _P.yx - yx0
                 plt.plot([_xp, xp], [_yp, yp], "ko-")
 
         ax = plt.gca()
