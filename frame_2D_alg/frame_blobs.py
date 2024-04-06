@@ -201,6 +201,7 @@ class CFrame(CBase):
             *_, i, dy, dx, g = blob.latuple
             I += i; Dy += dy; Dx += dx; G += g
             frame.latuple[-4:] = I, Dy, Dx, G
+            blob.dert_ = {(y, x):blob.dert_[y, x] for y, x in sorted(blob.dert_)}
             frame.blob_ += [blob]
 
         @property

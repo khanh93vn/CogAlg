@@ -1,5 +1,6 @@
 import numpy as np
-from math import atan2, cos, floor, pi
+from collections import defaultdict
+from math import atan2, cos, floor, pi, sin
 import sys
 sys.path.append("..")
 from frame_blobs import CBase, CH, imread   # for CP
@@ -21,7 +22,7 @@ A stable combination of a core flat blob with adjacent edge blobs is a potential
 octant = 0.3826834323650898  # radians per octant
 aveG = 10  # for vectorize
 ave_g = 30  # change to Ave from the root intra_blob?
-ave_dangle = .2  # vertical difference between angles: -1->1, abs dangle: 0->1, ave_dangle = (min abs(dangle) + max abs(dangle))/2,
+ave_dangle = .8  # vertical difference between angles: -1->1, abs dangle: 0->1, ave_dangle = (min abs(dangle) + max abs(dangle))/2,
 
 class CsliceEdge(CsubFrame):
 
@@ -33,15 +34,203 @@ class CsliceEdge(CsubFrame):
                 blob.vectorize()
 
         def vectorize(blob):        # to be overridden in higher modules (comp_slice, agg_recursion)
-            blob.slice_edge()
+            blob.slice_edge_hough()
+
+        def slice_edge_hough(edge):
+            # DEBUG:
+            ratan = 18
+            athr = 6
+            rata = ratan/pi
+            ratr = 8
+            rthr = 4
+
+            from copy import copy
+            import matplotlib.pyplot as plt
+            yx_ = np.array(edge.yx_)
+            y0, x0 = yx0 = yx_.min(axis=0) - 1
+
+            # show edge-blob
+            shape = yx_.max(axis=0) - yx0 + 2
+            mask_nonzero = tuple(zip(*(yx_ - yx0)))
+            mask = np.zeros(shape, bool)
+            mask[mask_nonzero] = True
+            plt.cla()
+            plt.imshow(mask, cmap='gray', alpha=0.5)
+            plt.title(f"area = {edge.area}")
+
+            # find carrying lines
+            lined = defaultdict(list)
+            vald = {}
+            for (y, x), (i, gy, gx, g) in edge.dert_.items():
+                c, s = gx/g, gy/g
+                a = atan2(-c, s) if c < 0 else atan2(c, -s)
+                assert 0 <= a <= pi
+
+                ab = round(a*rata)
+                for _ab in range(ab - athr, ab + athr + 1):
+                    if _ab < 0: _ab += ratan
+                    if _ab >= ratan: _ab -= ratan
+                    a = _ab / rata
+                    _s, _c = sin(a), cos(a)
+                    r = y*_s + x*_c
+                    rb = round(r*ratr)
+                    for _rb in range(rb - rthr, rb + rthr + 1):
+                        lined[_ab, _rb] += [(y, x)]
+                        vald[(_ab, _rb), (y, x)] = 5*abs(c*_s - s*_c) - abs(r - _rb/ratr)
+                plt.quiver(x-x0, y-y0, c, -s, scale=100, headwidth=1, headlength=2)
+
+            # segment lines into segments
+            segplotd = {}
+            segd = defaultdict(list)
+            rootd = defaultdict(list)
+            endd = {}
+            for (ab, rb), yx_ in lined.items():
+                a, r = ab/rata, rb/ratr
+                s, c = sin(a), cos(a)
+
+                i = 0
+                while yx_:
+                    fill_ = [yx_[0]]
+                    while fill_:
+                        y, x = fill_.pop()
+                        if (y, x) not in yx_: continue
+                        segd[ab, rb, i] += [(y, x)]
+                        yx_.remove((y, x))
+                        fill_ += [(y-1,x-1),(y-1,x),(y-1,x+1),(y,x+1),(y+1,x+1),(y+1,x),(y+1,x-1),(y,x-1)]
+
+                    # draw segment
+                    pmin, pmax = np.inf, -np.inf
+                    for y, x in segd[ab, rb, i]:
+                        p = y*c - x*s
+                        if p < pmin:
+                            pmin = p
+                            yxmin = y, x
+                        if p > pmax:
+                            pmax = p
+                            yxmax = y, x
+
+                    y1, x1 = project(*yxmin, s, c, r) - yx0
+                    y2, x2 = project(*yxmax, s, c, r) - yx0
+                    endd[ab, rb, i] = ((y1, x1), (y2, x2))
+                    u, v = -s*0.5, c*0.5
+                    y1, x1, y2, x2 = y1-v, x1-u, y2+v, x2+u
+                    segplotd[ab, rb, i], = plt.plot([x1, x2], [y1, y2], 'b-')
+
+                    for y, x in segd[ab, rb, i]:
+                        vald[(ab, rb), (y, x)] += 1/(1 + abs(pmax - pmin))
+                        rootd[y, x] += [(ab, rb, i)]
+
+                    i += 1
+
+            plt.ion()
+            plt.show()
+            plt.pause(0.001)
+
+            del lined
+            pruned_rootd = {yx:copy(root_) for yx, root_ in rootd.items()}
+
+            thres_dec = 0.95
+            min_thres = 0.0
+            thres = 1.0
+            # prune segments
+            while True:
+                rdn = 0
+                segvoted = defaultdict(int)
+                for y, x in pruned_rootd:  # compete for yx?
+                #     if not pruned_rootd[y, x]:
+                #         pruned_rootd[y, x] = copy(rootd[y, x])
+                #         for ab, rb, i in pruned_rootd[y, x]:
+                #             segplotd[ab, rb, i].set_alpha(1.0)
+                    if len(pruned_rootd[y, x]) <= 1: continue
+
+                    if len(pruned_rootd[y, x]) < 10:
+                        root_ = list(pruned_rootd[y, x])
+                        olp_ = set()
+                        while root_:
+                            ab, rb, i = root_.pop()
+                            (y1, x1), (y2, x2) = endd[ab, rb, i]
+                            a, r = ab/rata, rb/ratr
+                            s, c = sin(a), cos(a)
+                            for _ab, _rb, _i in root_:
+                                (_y1, _x1), (_y2, _x2) = endd[_ab, _rb, _i]
+                                _a, _r = _ab/rata, _rb/ratr
+                                _s, _c = sin(_a), cos(_a)
+                                d1 = y1*_s + x1*_c - _r
+                                d2 = y2*_s + x2*_c - _r
+                                _d1 = _y1*s + _x1*c - r
+                                _d2 = _y2*s + _x2*c - r
+                                if d1*d2 >= 0 and abs(d1)+abs(d2) > 2.0: continue
+                                if _d1*_d2 >= 0 and abs(_d1)+abs(_d2) > 2.0: continue
+                                if vald[(ab, rb), (y, x)] <= vald[(_ab, _rb), (y, x)]:
+                                    olp_.add((ab, rb, i))
+                                if vald[(ab, rb), (y, x)] >= vald[(_ab, _rb), (y, x)]:
+                                    olp_.add((_ab, _rb, _i))
+                    else: olp_ = pruned_rootd[y, x]
+
+                    sorted_olp_ = sorted(olp_, key=lambda root: vald[root[:2], (y, x)], reverse=True)
+                    nkeep = int(len(sorted_olp_)/2)
+                    for ab, rb, i in sorted_olp_[nkeep:]:
+                        segvoted[ab, rb, i] -= 1/len(segd[ab, rb, i])
+                    rdn += max(0, len(olp_) - 1)
+
+                if rdn == 0:
+                    print("done")
+                    break
+                else: print(rdn)
+
+                # prune
+                prune_ = sorted(segvoted, key=lambda k: segvoted[k])
+                for ab, rb, i in prune_:
+                    if segvoted[ab, rb, i] >= -thres: break
+                    for y, x in segd[ab, rb, i]:
+                        if (ab, rb, i) in pruned_rootd[y, x]:
+                            pruned_rootd[y, x].remove((ab, rb, i))
+                    segplotd[ab, rb, i].set_alpha(0.0)
+
+                plt.draw()
+                plt.pause(0.001)
+
+                if thres > min_thres: thres *= thres_dec
+
+            pruned_segd = defaultdict(list)
+            for y, x in pruned_rootd:
+                # if not pruned_rootd[y, x]:  # if all roots is lost: re-init
+                #     candidates = sorted(
+                #         [(ab, rb, i) for ab, rb, i in rootd[y, x]
+                #          if not sum([len(pruned_rootd[_y, _x]) for _y, _x in segd[ab, rb, i]])],
+                #         key=lambda root: vald[root[:2], (y, x)],
+                #         reverse=True,
+                #     )
+                #     if candidates:
+                #         ab, rb, i = candidates[0]
+                #         segplotd[ab, rb, i].set_alpha(1.0)
+                #         for _y, _x in segd[ab, rb, i]:
+                #             pruned_rootd[_y, _x] = [(ab, rb, i)]
+                for ab, rb, i in pruned_rootd[y, x]:
+                    pruned_segd[ab, rb, i] += [(y, x)]
+
+            plt.draw()
+            plt.pause(0.001)
+
+            while input() != 'q':
+                plt.draw()
+                plt.pause(0.001)
+
+            # form Ps
+            edge.P_ = []
+            for (ab, rb, i), yx_ in pruned_segd.items():
+                a, r = ab/rata, rb/ratr
+                s, c = sin(a), cos(a)
+                _y, _x = np.array(yx_).mean(axis=0)
+                y, x = project(_y, _x, s, c, r)     # project _y, _x onto the line cx + sy = r
+
+                axis = c, -s  # axis of the line
+                dert = interpolate2dert(edge, y, x)  # center
+                if dert is not None:
+                    edge.P_ += [CP(edge, (y, x), axis, dert)]
 
         def slice_edge(edge):
-            root__ = {}  # map max yx to P, like in frame_blobs
-            dert__ = {}
-            for yx, axis in edge.select_max():
-                P = CP(edge, yx, axis, root__, dert__)
-                if P.yx_:
-                    edge.P_ += [P]  # P_ is added dynamically, only edge-blobs have P_
+            edge.P_ = [CP(edge, yx, axis) for yx, axis in edge.select_max()]  # P_ is added dynamically, only edge-blobs have P_
             edge.P_ = sorted(edge.P_, key=lambda P: P.yx[0], reverse=True)  # sort Ps in descending order (bottom up)
             # scan to update link_:
             for i, P in enumerate(edge.P_):
@@ -76,7 +265,6 @@ class CsliceEdge(CsubFrame):
                         new_max = False
                         break
                 if new_max: max_ += [((y, x), (sa, ca))]
-            max_.sort(key=lambda itm: itm[0])  # sort by yx
             return max_
 
     CBlob = CEdge
@@ -100,11 +288,11 @@ class Clink(CBase):  # the product of comparison between two nodes
 
 
 class CP(CBase):
-    def __init__(P, edge, yx, axis, root__, dert__):  # form_P:
+    def __init__(P, edge, yx, axis, dert):  # form_P:
 
         super().__init__()
         y, x = yx
-        pivot = i, gy, gx, g = interpolate2dert(edge, y, x)  # pivot dert
+        pivot = i, gy, gx, g = dert
         ma = ave_dangle  # max value because P direction is the same as dert gradient direction
         m = ave_g - g
         pivot += ma, m   # pack extra ders
@@ -112,7 +300,6 @@ class CP(CBase):
         I, G, M, Ma, L, Dy, Dx = i, g, m, ma, 1, gy, gx
         P.axis = ay, ax = axis
         P.yx_, P.dert_, P.link_ = [yx], [pivot], [[]]
-        f_overlap = 0  # to determine if there's overlap
 
         for dy, dx in [(-ay, -ax), (ay, ax)]: # scan in 2 opposite directions to add derts to P
             P.yx_.reverse(); P.dert_.reverse()
@@ -124,29 +311,18 @@ class CP(CBase):
                 except TypeError: break  # out of bound (TypeError: cannot unpack None)
 
                 mangle,dangle = comp_angle((_gy,_gx), (gy, gx))
-                if mangle < ave_dangle: break  # terminate P if angle miss
+                if abs(mangle*2-1) < ave_dangle: break  # terminate P if angle miss
                 # update P:
                 m = ave_g - g
                 I += i; Dy += dy; Dx += dx; G += g; Ma += ma; M += m; L += 1
-                # not sure about round
-                if (round(y),round(x)) in dert__:   # stop forming P if any overlapping dert
-                    f_overlap = 1
-                    P.yx_= []
-                    break
                 P.yx_ += [(y, x)]; P.dert_ += [(i, gy, gx, g, ma, m)]
                 # for next loop:
                 y += dy; x += dx
                 _y, _x, _gy, _gx = y, x, gy, gx
-            if f_overlap: break
 
-        if not f_overlap:
-            for yx in P.yx_:
-                dert__[round(yx[0]), round(yx[1])] = P  # update dert__
-
-            P.yx = P.yx_[L // 2]
-            root__[yx[0], yx[1]] = P    # update root__
-            P.latuple = I, G, M, Ma, L, (Dy, Dx)
-            P.derH = CH()
+        P.yx = P.yx_[L // 2]
+        P.latuple = I, G, M, Ma, L, (Dy, Dx)
+        P.derH = CH()
 
     def __repr__(P): return f"P({', '.join(map(str, P.latuple))})"  # or return f"P(id={P.id})" ?
 
@@ -157,15 +333,16 @@ def interpolate2dert(edge, y, x):
     y_ = [fy] = [floor(y)]; x_ = [fx] = [floor(x)]
     if y != fy: y_ += [fy+1]    # y is non-integer
     if x != fx: x_ += [fx+1]    # x is non-integer
-    n, I, Dy, Dx, G = 0, 0, 0, 0, 0
+
+    I, Dy, Dx, G = 0, 0, 0, 0
     for _y in y_:
         for _x in x_:
-            if (_y, _x) in edge.dert_:
-                _i, _dy, _dx, _g = edge.dert_[_y, _x]
-                I += _i; Dy += _dy; Dx += _dx; G += _g; n += 1
+            if (_y, _x) not in edge.dert_: return
+            i, dy, dx, g = edge.dert_[_y, _x]
+            k = (1 - abs(_y-y)) * (1 - abs(_x-x))
+            I += i*k; Dy += dy*k; Dx += dx*k; G += g*k
 
-    if n >= 2: return I/n, Dy/n, Dx/n, G/n
-
+    return I, Dy, Dx, G
 
 def comp_angle(_A, A):  # rn doesn't matter for angles
 
@@ -180,6 +357,15 @@ def comp_angle(_A, A):  # rn doesn't matter for angles
 
     return [mangle, dangle]
 
+def project(y, x, s, c, r):
+    dist = s*y + c*x - r
+    # Subtract left and right side by dist:
+    # 0 = s*y + c*x - r - dist
+    # 0 = s*y + c*x - r - dist*(s*s + c*c)
+    # 0 = s*(y - dist*s) + c*(x - dist*c) - r
+    # therefore, projection of y, x onto the line is:
+    return y - dist*s, x - dist*c
+
 if __name__ == "__main__":
 
     image_file = '../images/raccoon_eye.jpeg'
@@ -187,37 +373,52 @@ if __name__ == "__main__":
 
     frame = CsliceEdge(image).segment()
     # verification:
-    import numpy as np
-    import matplotlib.pyplot as plt
-
-    # show first largest n edges
-    edge_, edgeQue = [], list(frame.blob_)
-    while edgeQue:
-        blob = edgeQue.pop(0)
-        if hasattr(blob, "P_"): edge_ += [blob]
-        elif hasattr(blob, "rlay"): edgeQue += blob.rlay.blob_
-
-    num_to_show = 5
-    sorted_edge_ = sorted(edge_, key=lambda edge: len(edge.yx_), reverse=True)
-    for edge in sorted_edge_[:num_to_show]:
-        yx_ = np.array(edge.yx_)
-        yx0 = yx_.min(axis=0) - 1
-        shape = yx_.max(axis=0) - yx0 + 2
-        mask_nonzero = tuple(zip(*(yx_ - yx0)))
-        mask = np.zeros(shape, bool)
-        mask[mask_nonzero] = True
-        plt.imshow(mask, cmap='gray', alpha=0.5)
-        plt.title(f"area = {edge.area}")
-
-        for P in edge.P_:
-            yx1, yx2 = P.yx_[0], P.yx_[-1]
-            y_, x_ = zip(yx1 - yx0, yx2 - yx0)
-            yp, xp = P.yx - yx0
-            plt.plot(x_, y_, "b-", linewidth=2)
-            for _P in P.link_:
-                _yp, _xp = _P.yx - yx0
-                plt.plot([_xp, xp], [_yp, yp], "ko-")
-
-        ax = plt.gca()
-        ax.set_aspect('equal', adjustable='box')
-        plt.show()
+    # import numpy as np
+    # import matplotlib.pyplot as plt
+    #
+    # # show first largest n edges
+    # edge_, edgeQue = [], list(frame.blob_)
+    # while edgeQue:
+    #     blob = edgeQue.pop(0)
+    #     if hasattr(blob, "P_"): edge_ += [blob]
+    #     elif hasattr(blob, "rlay"): edgeQue += blob.rlay.blob_
+    #
+    # num_to_show = 5
+    # sorted_edge_ = sorted(edge_, key=lambda edge: len(edge.yx_), reverse=True)
+    # for edge in sorted_edge_[:num_to_show]:
+    #     yx_ = np.array(edge.yx_)
+    #     yx0 = yx_.min(axis=0) - 1
+    #
+    #     # show edge-blob
+    #     shape = yx_.max(axis=0) - yx0 + 2
+    #     mask_nonzero = tuple(zip(*(yx_ - yx0)))
+    #     mask = np.zeros(shape, bool)
+    #     mask[mask_nonzero] = True
+    #     plt.imshow(mask, cmap='gray', alpha=0.5)
+    #     plt.title(f"area = {edge.area}")
+    #
+    #     # show gradient
+    #     vu_ = [(-gy/g, gx/g) for i, gy, gx, g in edge.dert_.values()]
+    #     y_, x_ = zip(*(yx_ - yx0))
+    #     v_, u_ = zip(*vu_)
+    #     plt.quiver(x_, y_, u_, v_)
+    #
+    #     # show slices
+    #     edge.P_.sort(key=lambda P: len(P.yx_), reverse=True)
+    #     for P in edge.P_:
+    #         yx1, yx2 = P.yx_[0], P.yx_[-1]
+    #         y_, x_ = zip(*(P.yx_ - yx0))
+    #         yp, xp = P.yx - yx0
+    #         plt.plot(x_, y_, "g-", linewidth=2)
+    #         for link in P.link_[-1]:
+    #             _yp, _xp = link._node.yx - yx0
+    #             plt.plot([_xp, xp], [_yp, yp], "ko-")
+    #
+    #         # # show slice axis
+    #         # s, c = P.axis
+    #         # vu_ = [(gy / g, gx / g) for i, gy, gx, g in edge.dert_.values()]
+    #         # plt.quiver(xp, yp, s, c, color='b')
+    #
+    #     ax = plt.gca()
+    #     ax.set_aspect('equal', adjustable='box')
+    #     plt.show()
