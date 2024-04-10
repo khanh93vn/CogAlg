@@ -5,7 +5,8 @@ import sys
 sys.path.append("..")
 from frame_blobs import CBase, CH, imread   # for CP
 from intra_blob import CsubFrame
-
+from utils import box2center
+from .filters import  ave_mL, ave_dangle, ave_dist, max_dist
 '''
 In natural images, objects look very fuzzy and frequently interrupted, only vaguely suggested by initial blobs and contours.
 Potential object is proximate low-gradient (flat) blobs, with rough / thick boundary of adjacent high-gradient (edge) blobs.
@@ -100,11 +101,26 @@ class Clink(CBase):  # the product of comparison between two nodes
     # draft:
     def comp_link(_link, link, dderH, rn=1, fagg=0, flat=1):  # use in der+ and comp_kernel
 
-        dderH = comp_(_link.dderH, link.dderH, dderH, rn=1, fagg=0, flat=1)
+        _link.dderH.comp_( link.dderH, dderH, rn=1, fagg=0, flat=1)
         mA,dA = comp_angle(_link.angle, link.angle)
+        _y1,_x1 = box2center(_link.node_[0].box)
+        _y2,_x2 = box2center(_link.node_[1].box)
+        y1,x1 = box2center(link.node_[0].box)
+        y2,x2 = box2center(link.node_[1].box)
+        dy = (y1+y2)/2 - (_y1+_y2)/2
+        dx = (x1+x2)/2 - (_x1+_x2)/2
+        dist = np.hypot(dy, dx)  # distance between node centers
+        comp_ext(_link.node,link.node, dist, rn, dderH)
+
+        # add mA, dA to der of ext
+        dderH.H[-1].Et[0] += mA; dderH.H[-1].Et[1] += dA;
+
         # draft:
+        ddderH = CH()
         for _med_link,med_link in zip(_link.link_,link.link_):
-            comp_link(_med_link, med_link)
+            _med_link.comp_link(med_link, ddderH)
+        dderH.append_(ddderH, flat=0)  # not sure on this, their der will be additional He after comp links and ext above?
+
 
 
 class CP(CBase):
@@ -164,6 +180,27 @@ def interpolate2dert(edge, y, x):
             I += i*k; Dy += dy*k; Dx += dx*k; G += g*k
 
     return I, Dy, Dx, G
+
+
+def comp_ext(_G,G, dist, rn, dderH):  # compare non-derivatives: dist, node_' L,S,A:
+
+    prox = ave_dist - dist  # proximity = inverted distance (position difference), no prior accum to n
+    _L = len(_G.node_); L = len(G.node_); L/=rn
+    _S, S = _G.S, G.S; S/=rn
+
+    dL = _L - L;      mL = min(_L,L) - ave_mL  # direct match
+    dS = _S/_L - S/L; mS = min(_S,S) - ave_mL  # sparsity is accumulated over L
+    mA, dA = comp_angle(_G.A, G.A)  # angle is not normalized
+
+    M = prox + mL + mS + mA
+    D = dist + abs(dL) + abs(dS) + abs(dA)  # signed dA?
+    mrdn = M > D; drdn = D<= M
+
+    mdec = prox / max_dist + mL/ max(L,_L) + mS/ max(S,_S) if S or _S else 1 + mA  # Amax = 1
+    ddec = dist / max_dist + mL/ (L+_L) + dS/ (S+_S) if S or _S else 1 + dA
+
+    dderH.append_(CH(Et=[M,D,mrdn,drdn,mdec,ddec], H=[prox,dist, mL,dL, mS,dS, mA,dA], n=2/3), flat=0)  # 2/3 of 6-param unit
+
 
 def comp_angle(_A, A):  # rn doesn't matter for angles
 
