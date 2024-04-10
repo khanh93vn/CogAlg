@@ -6,7 +6,6 @@ sys.path.append("..")
 from frame_blobs import CBase, CH, imread   # for CP
 from intra_blob import CsubFrame
 from utils import box2center
-from .filters import  ave_mL, ave_dangle, ave_dist, max_dist
 '''
 In natural images, objects look very fuzzy and frequently interrupted, only vaguely suggested by initial blobs and contours.
 Potential object is proximate low-gradient (flat) blobs, with rough / thick boundary of adjacent high-gradient (edge) blobs.
@@ -23,6 +22,9 @@ A stable combination of a core flat blob with adjacent edge blobs is a potential
 octant = 0.3826834323650898  # radians per octant
 aveG = 10  # for vectorize
 ave_g = 30  # change to Ave from the root intra_blob?
+ave_mL = 2
+ave_dist = 3
+max_dist = 15
 ave_dangle = .8  # vertical difference between angles: -1->1, abs dangle: 0->1, ave_dangle = (min abs(dangle) + max abs(dangle))/2,
 
 class CsliceEdge(CsubFrame):
@@ -38,46 +40,94 @@ class CsliceEdge(CsubFrame):
             blob.slice_edge()
 
         def slice_edge(edge):
-            edge.rootd = defaultdict(list)
-            edge.P_ = sorted([CP(edge, yx, axis) for yx, axis in edge.select_max()], key=lambda P: P.yx, reverse=True)
-            # scan to update link_:
-            for P in edge.P_:
-                fill_ = [yx for yx in edge.rootd if P in edge.rootd[yx]]
-                yx_ = list(edge.rootd.keys())
-                while fill_:
-                    y, x = fill_.pop(0)
-                    if (y, x) not in yx_: continue
-                    yx_.remove((y, x))
-                    term = False
-                    for _P in edge.rootd[y, x]:
-                        if _P is not P:
-                            term = True
-                            if _P not in P.link_[0]: P.link_[0] += [_P]
-                    if not term: fill_ += [(y-1,x-1),(y-1,x),(y-1,x+1),(y,x+1),(y+1,x+1),(y+1,x),(y+1,x-1),(y,x-1)]
+            hord = edge.scan()  # horizontal map
+            edge.trace(hord)  # vertical map
 
-                P.link_[0] = [Clink(node=P, _node=_P) for _P in P.link_[0]]
-
-            del edge.rootd
-
-        def select_max(edge):
-            max_ = []
+        def scan(edge):  # scan along direction of gradient
+            hord = defaultdict(list)
             for (y, x), (i, gy, gx, g) in edge.dert_.items():
-                # sin_angle, cos_angle:
-                sa, ca = gy/g, gx/g
+                sa, ca = gy/g, gx/g     # sin_angle, cos_angle
                 # get neighbor direction
                 dy = 1 if sa > octant else -1 if sa < -octant else 0
                 dx = 1 if ca > octant else -1 if ca < -octant else 0
-                new_max = True
                 for _y, _x in [(y-dy, x-dx), (y+dy, x+dx)]:
                     if (_y, _x) not in edge.dert_: continue  # skip if pixel not in edge blob
-                    _i, _gy, _gx, _g = edge.dert_[_y, _x]  # get g of neighbor
-                    if g < _g:
-                        new_max = False
-                        break
-                if new_max: max_ += [((y, x), (sa, ca))]
-            return max_
+                    if (y, x) not in hord[_y, _x]: hord[_y, _x] += [(y, x)]
+                    if (_y, _x) not in hord[y, x]: hord[y, x] += [(_y, _x)]
+            return hord
+
+        def trace(edge, hord):  # fill and trace across slices
+            edge.P_ = []
+            fill_yx_ = list(hord.keys())  # set of pixel coordinates to be filled (fill_yx_)
+            rootd = defaultdict(list)  # map pixel to blob
+            perimeter_ = []  # perimeter pixels
+            while fill_yx_:  # fill_yx_ is popped per filled pixel, in form_blob
+                if not perimeter_:  # init blob
+                    P = CP(); perimeter_ += [fill_yx_[0]]
+                P.form(edge, fill_yx_, perimeter_, rootd, hord)
+                if not perimeter_:  # scan P
+                    P.term(edge)
+                    edge.P_ += [P]
 
     CBlob = CEdge
+
+
+class CP(CBase):
+    def __init__(P):
+        super().__init__()
+        P.dert_ = {}
+        P.link_ = [[]]
+
+    def form(P, edge, fill_yx_, perimeter_, rootd, hord):
+        y, x = perimeter_.pop()
+        if (y, x) not in fill_yx_: return
+        fill_yx_.remove((y, x))
+        P.dert_[y, x] = edge.dert_[y, x]
+        rootd[y, x] += [P]
+        for _y, _x in [(y-1,x-1),(y-1,x),(y-1,x+1),(y,x+1),(y+1,x+1),(y+1,x),(y+1,x-1),(y,x-1)]:
+            if (_y, _x) in hord[y, x]: perimeter_ += [(_y, _x)]
+            else:   # else, register as adjacent
+                for _P in rootd[_y, _x]:
+                    if _P not in P.link_[0]:
+                        P.link_[0] += [_P]
+
+    def term(P, edge):
+        y, x = P.yx = map(sum, zip(*P.dert_.keys()))
+        ay, ax = P.axis = map(sum, zip(*((gy/g, gx/g) for i, gy, gx, g in P.dert_.values())))
+
+        pivot = i, gy, gx, g = interpolate2dert(edge, y, x)
+        ma = ave_dangle  # max value because P direction is the same as dert gradient direction
+        m = ave_g - g
+        pivot += ma, m   # pack extra ders
+
+        I, G, M, Ma, L, Dy, Dx = i, g, m, ma, 1, gy, gx
+        dert_ = P.dert_  # DEBUG
+        P.yx_, P.dert_, P.link_ = [P.yx], [pivot], [[]]
+
+        for dy, dx in [(-ay, -ax), (ay, ax)]: # scan in 2 opposite directions to add derts to P
+            P.yx_.reverse(); P.dert_.reverse()
+            (_y, _x), (_, _gy, _gx, *_) = P.yx, pivot  # start from pivot
+            y, x = _y+dy, _x+dx  # 1st extension
+            while True:
+                # scan to blob boundary or angle miss:
+                try: i, gy, gx, g = interpolate2dert(edge, y, x)
+                except TypeError: break  # out of bound (TypeError: cannot unpack None)
+
+                mangle,dangle = comp_angle((_gy,_gx), (gy, gx))
+                if mangle < ave_dangle: break  # terminate P if angle miss
+                # update P:
+                m = ave_g - g
+                I += i; Dy += dy; Dx += dx; G += g; Ma += ma; M += m; L += 1
+                P.yx_ += [(y, x)]; P.dert_ += [(i, gy, gx, g, ma, m)]
+                # for next loop:
+                y += dy; x += dx
+                _y, _x, _gy, _gx = y, x, gy, gx
+
+        P.yx = P.yx_[L // 2]
+        P.latuple = I, G, M, Ma, L, (Dy, Dx)
+        P.derH = CH()
+
+    def __repr__(P): return f"P({', '.join(map(str, P.latuple))})"  # or return f"P(id={P.id})" ?
 
 
 class Clink(CBase):  # the product of comparison between two nodes
@@ -120,48 +170,6 @@ class Clink(CBase):  # the product of comparison between two nodes
         for _med_link,med_link in zip(_link.link_,link.link_):
             _med_link.comp_link(med_link, ddderH)
         dderH.append_(ddderH, flat=0)  # not sure on this, their der will be additional He after comp links and ext above?
-
-
-
-class CP(CBase):
-    def __init__(P, edge, yx, axis):  # form_P:
-
-        super().__init__()
-        y, x = yx
-        pivot = i, gy, gx, g = edge.dert_[y, x]
-        ma = ave_dangle  # max value because P direction is the same as dert gradient direction
-        m = ave_g - g
-        pivot += ma, m   # pack extra ders
-
-        I, G, M, Ma, L, Dy, Dx = i, g, m, ma, 1, gy, gx
-        P.axis = ay, ax = axis
-        P.yx_, P.dert_, P.link_ = [yx], [pivot], [[]]
-
-        for dy, dx in [(-ay, -ax), (ay, ax)]: # scan in 2 opposite directions to add derts to P
-            P.yx_.reverse(); P.dert_.reverse()
-            (_y, _x), (_, _gy, _gx, *_) = yx, pivot  # start from pivot
-            y, x = _y+dy, _x+dx  # 1st extension
-            while True:
-                # scan to blob boundary or angle miss:
-                try: i, gy, gx, g = interpolate2dert(edge, y, x)
-                except TypeError: break  # out of bound (TypeError: cannot unpack None)
-
-                mangle,dangle = comp_angle((_gy,_gx), (gy, gx))
-                if abs(mangle*2-1) < ave_dangle: break  # terminate P if angle miss
-                # update P:
-                if P not in edge.rootd[round(y), round(x)]: edge.rootd[round(y), round(x)] += [P]
-                m = ave_g - g
-                I += i; Dy += dy; Dx += dx; G += g; Ma += ma; M += m; L += 1
-                P.yx_ += [(y, x)]; P.dert_ += [(i, gy, gx, g, ma, m)]
-                # for next loop:
-                y += dy; x += dx
-                _y, _x, _gy, _gx = y, x, gy, gx
-
-        P.yx = P.yx_[L // 2]
-        P.latuple = I, G, M, Ma, L, (Dy, Dx)
-        P.derH = CH()
-
-    def __repr__(P): return f"P({', '.join(map(str, P.latuple))})"  # or return f"P(id={P.id})" ?
 
 def interpolate2dert(edge, y, x):
     if (y, x) in edge.dert_: return edge.dert_[y, x]  # if edge has (y, x) in it
@@ -231,7 +239,6 @@ if __name__ == "__main__":
 
     frame = CsliceEdge(image).segment()
     # verification:
-    import numpy as np
     import matplotlib.pyplot as plt
 
     # show first largest n edges
@@ -242,7 +249,8 @@ if __name__ == "__main__":
         elif hasattr(blob, "rlay"): edgeQue += blob.rlay.blob_
 
     num_to_show = 5
-    show_gradient = False
+    show_gradient = True
+    show_slices = True
     sorted_edge_ = sorted(edge_, key=lambda edge: len(edge.yx_), reverse=True)
     for edge in sorted_edge_[:num_to_show]:
         yx_ = np.array(edge.yx_)
@@ -264,15 +272,16 @@ if __name__ == "__main__":
             plt.quiver(x_, y_, u_, v_)
 
         # show slices
-        edge.P_.sort(key=lambda P: len(P.yx_), reverse=True)
-        for P in edge.P_:
-            yx1, yx2 = P.yx_[0], P.yx_[-1]
-            y_, x_ = zip(*(P.yx_ - yx0))
-            yp, xp = P.yx - yx0
-            plt.plot(x_, y_, "g-", linewidth=2)
-            for link in P.link_[-1]:
-                _yp, _xp = link._node.yx - yx0
-                plt.plot([_xp, xp], [_yp, yp], "ko-")
+        if show_slices:
+            edge.P_.sort(key=lambda P: len(P.yx_), reverse=True)
+            for P in edge.P_:
+                yx1, yx2 = P.yx_[0], P.yx_[-1]
+                y_, x_ = zip(*(P.yx_ - yx0))
+                yp, xp = P.yx - yx0
+                plt.plot(x_, y_, "g-", linewidth=2)
+                for link in P.link_[-1]:
+                    _yp, _xp = link._node.yx - yx0
+                    plt.plot([_xp, xp], [_yp, yp], "ko-")
 
         ax = plt.gca()
         ax.set_aspect('equal', adjustable='box')
