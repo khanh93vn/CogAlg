@@ -154,10 +154,11 @@ class Clink(CBase):  # the product of comparison between two nodes
         l.derH = CH() if derH is None else derH
         l.extH = CH() if extH is None else extH  # for der+
         l.roott = [None, None] if roott is None else roott  # clusters that contain this link
+        l.compared_ = []
         # dir: bool  # direction of comparison if not G0,G1, only needed for comp link?
         # n: always min(node_.n)?
 
-    def __bool__(l): return bool(l.dderH.H)
+    def __bool__(l): return bool(l.derH.H)
 
 
 def interpolate2dert(edge, y, x):
