@@ -41,26 +41,35 @@ class CsliceEdge(CsubFrame):
             blob.slice_edge()
 
         def slice_edge(edge):
-            edge.rootd = {}
-            edge.P_ = [CP(edge, yx, axis) for yx, axis in edge.select_max()]
+            axisd = edge.select_max()   # select max
+            yx_ = sorted(axisd.keys(), key=lambda yx: edge.dert_[yx][-1])  # sort by g
+
+            # form P per non-overlapped max yx
+            edge.P_ = []; edge.rootd = {}
+            while yx_:
+                yx = yx_.pop(); axis = axisd[yx]    # get max of maxes (highest g)
+                edge.P_ += [CP(edge, yx, axis)]     # form P
+                yx_ = [yx for yx in yx_ if yx not in edge.rootd]    # remove merged maxes if any
+
             edge.P_.sort(key=lambda P: P.yx, reverse=True)
             edge.trace()
             # del edge.rootd
 
         def select_max(edge):
-            max_ = []
+            axisd = {}  # map yx to axis
             for (y, x), (i, gy, gx, g) in edge.dert_.items():
+                sa, ca = gy/g, gx/g
                 # check neighbors
                 new_max = True
-                for dy, dx in [(-1,-1),(-1,0),(-1,1),(0,1)]:
-                    for _y, _x in [(y-dy, x-dx), (y+dy, x+dx)]:
-                        if (_y, _x) not in edge.dert_: continue  # skip if pixel not in edge blob
-                        _i, _gy, _gx, _g = edge.dert_[_y, _x]  # get g of neighbor
-                        if g < _g:
-                            new_max = False
-                            break
-                if new_max: max_ += [((y, x), (gy/g, gx/g))]
-            return max_
+                for dy, dx in [(-sa, -ca), (sa, ca)]:
+                    _y, _x = round(y+dy), round(x+dx)
+                    if (_y, _x) not in edge.dert_: continue  # skip if pixel not in edge blob
+                    _i, _gy, _gx, _g = edge.dert_[_y, _x]  # get g of neighbor
+                    if g < _g:
+                        new_max = False
+                        break
+                if new_max: axisd[y, x] = sa, ca
+            return axisd
 
         def trace(edge):  # fill and trace across slices
             adjacent_ = [(P, y, x) for P in edge.P_ for y, x in edge.rootd if edge.rootd[y, x] is P]
@@ -221,11 +230,12 @@ if __name__ == "__main__":
                 yp, xp = P.yx - yx0
                 for link in P.link_[0]:
                     _yp, _xp = link.node_[0].yx - yx0
-                    print(link.node_)
                     plt.plot([_xp, xp], [_yp, yp], "ko--", alpha=0.5)
 
-                y_, x_ = zip(*([yx for yx in edge.rootd if edge.rootd[yx] is P] - yx0))
-                plt.plot(x_, y_, 'o', alpha=0.5)
+                yx_ = [yx for yx in edge.rootd if edge.rootd[yx] is P]
+                if yx_:
+                    y_, x_ = zip(*(yx_ - yx0))
+                    plt.plot(x_, y_, 'o', alpha=0.5)
 
 
         ax = plt.gca()

@@ -95,7 +95,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.derH = CH()  # nested derH in Gs: [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
         G.node_ = [] if node_ is None else node_  # convert to node_t in sub_recursion
         G.link_ = [] if link_ is None else link_  # links per comp layer, nest in rng+)der+
-        G.root = []  # mgraphs that contain this G, single-layer
+        G.root = [] if root is None else root # mgraphs that contain this G, single-layer
         G.box = [np.inf, np.inf, -np.inf, -np.inf]  # y,x,y0,x0,yn,xn
         # graph-external, +level per root sub+:
         G.rim = []  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
