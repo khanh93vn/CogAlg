@@ -76,7 +76,7 @@ class CsliceEdge(CsubFrame):
             while adjacent_:
                 _P, _y, _x = adjacent_.pop(0)
                 for y, x in [(_y-1,_x),(_y,_x+1),(_y+1,_x),(_y,_x-1)]:
-                    try:    # if yx has _P, try to form link
+                    try:  # if yx has _P, try to form link
                         P = edge.rootd[y, x]
                         if _P is not P and _P not in P.link_[0]:
                             P.link_[0] += [_P]
@@ -95,17 +95,14 @@ class CP(CBase):
         super().__init__()
         y, x = yx
         P.axis = ay, ax = axis
-
         pivot = i,gy,gx,g = edge.dert_[y,x]  # dert is None if (_y, _x) not in edge.dert_: return` in `interpolate2dert`
         ma = ave_dangle  # ? max value because P direction is the same as dert gradient direction
         m = ave_g - g
         pivot += ma,m
-
         edge.rootd[y, x] = P
         I,G,M,Ma,L,Dy,Dx = i,g,m,ma,1,gy,gx
         P.yx_, P.dert_, P.link_ = [yx], [pivot], [[]]
 
-        # this rotation should be recursive, use P.latuple Dy,Dx to get secondary direction, no need for axis?
         for dy,dx in [(-ay,-ax),(ay,ax)]:  # scan in 2 opposite directions to add derts to P
             P.yx_.reverse(); P.dert_.reverse()
             (_y,_x), (_,_gy,_gx,*_) = yx, pivot  # start from pivot
@@ -116,7 +113,6 @@ class CP(CBase):
                 if (round(y),round(x)) not in edge.dert_: break
                 try: i,gy,gx,g = interpolate2dert(edge, y, x)
                 except TypeError: break  # out of bound (TypeError: cannot unpack None)
-
                 mangle, dangle = comp_angle((_gy,_gx), (gy, gx))
                 if mangle < ave_dangle: break  # terminate P if angle miss
                 # update P:
