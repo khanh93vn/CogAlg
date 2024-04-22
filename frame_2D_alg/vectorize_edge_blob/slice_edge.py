@@ -53,6 +53,7 @@ class CsliceEdge(CsubFrame):
             edge.P_.sort(key=lambda P: P.yx, reverse=True)
             edge.trace()
             # del edge.rootd
+            return edge
 
         def select_max(edge):
             axisd = {}  # map yx to axis

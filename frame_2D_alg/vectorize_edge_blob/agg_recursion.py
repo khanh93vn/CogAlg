@@ -2,7 +2,7 @@ import numpy as np
 from copy import deepcopy, copy
 from itertools import combinations, product, zip_longest
 from .slice_edge import comp_angle, CsliceEdge, Clink
-from .comp_slice import ider_recursion, comp_latuple, get_match
+from .comp_slice import ider_recursion, comp_latuple, get_match, CcompSliceFrame
 from .filters import aves, ave_mL, ave_dangle, ave, G_aves, ave_Gm, ave_Gd, ave_dist, ave_mA, max_dist
 from utils import box2center, extend_box
 import sys
@@ -40,27 +40,30 @@ https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/generi
 https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/agg_recursion_unfolded.drawio.png
 '''
 
-def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cluster:
+class CaggRecursionFrame(CcompSliceFrame):
 
-    frame = CsliceEdge(image).segment()
+    class CEdge(CcompSliceFrame.CEdge): # replaces CBlob
 
-    for edge in frame.blob_:
-        if edge.latuple[-1] * (len(edge.P_)-1) > G_aves[0]:  # eval G, rdn=1
-            ider_recursion(None, edge)  # vertical, lateral-overlap P cross-comp -> PP clustering
+        def vectorize(edge):  # vectorization in 3 composition levels of xcomp, cluster:
+            edge.slice_edge()
+            if edge.latuple[-1] * (len(edge.P_)-1) > G_aves[0]:  # eval G, rdn=1
+                ider_recursion(None, edge)  # vertical, lateral-overlap P cross-comp -> PP clustering
 
-            for fd, node_ in enumerate(edge.node_):  # always node_t
-                if edge.iderH and any(edge.iderH.Et):  # any for np array
-                    if edge.iderH.Et[fd] * (len(node_)-1)*(edge.rng+1) > G_aves[fd] * edge.iderH.Et[2+fd]:
-                        pruned_node_ = []
-                        for PP in node_:  # PP -> G
-                            if PP.iderH and PP.iderH.Et[fd] > G_aves[fd] * PP.iderH.Et[2+fd]:
-                                PP.root = None  # no feedback to edge?
-                                PP.node_ = PP.P_  # revert base node_
-                                PP.Et = [0,0,0,0]  # [] in comp_slice
-                                pruned_node_ += [PP]
-                        if len(pruned_node_) > 10:  # discontinuous PP rng+ cross-comp, cluster -> G_t:
-                            edge.node_ = pruned_node_  # agg+ of PP nodes:
-                            agg_recursion(None, edge, fagg=1)
+                for fd, node_ in enumerate(edge.node_):  # always node_t
+                    if edge.iderH and any(edge.iderH.Et):  # any for np array
+                        if edge.iderH.Et[fd] * (len(node_)-1)*(edge.rng+1) > G_aves[fd] * edge.iderH.Et[2+fd]:
+                            pruned_node_ = []
+                            for PP in node_:  # PP -> G
+                                if PP.iderH and PP.iderH.Et[fd] > G_aves[fd] * PP.iderH.Et[2+fd]:
+                                    PP.root = None  # no feedback to edge?
+                                    PP.node_ = PP.P_  # revert base node_
+                                    PP.Et = [0,0,0,0]  # [] in comp_slice
+                                    pruned_node_ += [PP]
+                            if len(pruned_node_) > 10:  # discontinuous PP rng+ cross-comp, cluster -> G_t:
+                                edge.node_ = pruned_node_  # agg+ of PP nodes:
+                                agg_recursion(None, edge, fagg=1)
+        
+    CBlob = CEdge
 
 
 def agg_recursion(rroot, root, fagg=0):
@@ -398,3 +401,10 @@ def feedback(root):  # called from form_graph_, append new der layers to root
             fback_ = rroot.fback_  # always node_t if feedback
             if fback_ and len(fback_) == len(rroot.node_[1]):  # after all nodes' sub+
                 feedback(rroot)  # sum2graph adds higher aggH, feedback adds deeper aggH layers
+
+if __name__ == "__main__":
+
+    image_file = '../images/raccoon_eye.jpeg'
+    image = imread(image_file)
+
+    frame = CaggRecursionFrame(image).segment()

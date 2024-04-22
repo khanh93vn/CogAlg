@@ -4,10 +4,10 @@ from copy import deepcopy, copy
 from itertools import zip_longest, combinations
 from math import inf
 from .filters import ave, ave_dI, ave_Gm, aves, P_aves, PP_aves
-from .slice_edge import comp_angle, CP, Clink
 import sys
 sys.path.append("..")
-from frame_blobs import CH, CBase, CG
+from frame_blobs import CH, CBase, CG, imread
+from slice_edge import comp_angle, CP, Clink, CsliceEdge
 
 '''
 Vectorize is a terminal fork of intra_blob.
@@ -36,13 +36,16 @@ Connectivity in P_ is traced through root_s of derts adjacent to P.dert_, possib
 len prior root_ sorted by G is root.rdn, to eval for inclusion in PP or start new P by ave*rdn
 '''
 
-def comp_slice_root(root, PP, fd=0):  # node-mediated correlation clustering: keep same Ps and links, increment link derH, then P derH in sum2PP
+class CcompSliceFrame(CsliceEdge):
 
-    rng_recursion(PP, rng=1, fd=fd)  # extend PP.link_, derHs by same-der rng+ comp
-    # calls der+:
-    form_PP_t(PP, PP.P_, iRt=PP.iderH.Et[2:4] if PP.iderH else [0,0])
-    # feedback per PPd:
-    if root is not None and PP.iderH: root.fback_ += [PP.iderH]
+    class CEdge(CsliceEdge.CEdge): # replaces CBlob
+
+        def vectorize(edge):  # overrides in CsliceEdge.CEdge.vectorize
+            edge.slice_edge()
+            if edge.latuple[-1] * (len(edge.P_)-1) > PP_aves[0]:  # eval PP, rdn=1
+                ider_recursion(None, edge)  # vertical, lateral-overlap P cross-comp -> PP clustering
+        
+    CBlob = CEdge
 
 
 def ider_recursion(root, PP, fd=0):  # node-mediated correlation clustering: keep same Ps and links, increment link derH, then P derH in sum2PP
@@ -271,3 +274,10 @@ def accum_box(box, y, x):
     """Box coordinate accumulation."""
     y0, x0, yn, xn = box
     return min(y0, y), min(x0, x), max(yn, y+1), max(xn, x+1)
+
+if __name__ == "__main__":
+
+    image_file = '../images/raccoon_eye.jpeg'
+    image = imread(image_file)
+
+    frame = CcompSliceFrame(image).segment()
