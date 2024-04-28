@@ -104,7 +104,6 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.Rim = []  # links to the most mediated nodes
         G.fback_ = []  # feedback [[aggH,valt,rdnt,dect]] per node layer, maps to node_H
         G.compared_ = []
-
         # Rdn: int = 0  # for accumulation or separate recursion count?
         # it: list = z([None,None])  # graph indices in root node_s, implicitly nested
         # depth: int = 0  # n sub_G levels over base node_, max across forks
@@ -116,6 +115,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
     def __bool__(G): return G.n != 0  # to test empty
     def __repr__(G): return f"G(id={G.id})"
 
+
 class Clink(CBase):  # the product of comparison between two nodes
 
     def __init__(l, node_=None,rim=None, derH=None, extH=None, root=None, distance=0, angle=None, box=None ):
@@ -125,17 +125,16 @@ class Clink(CBase):  # the product of comparison between two nodes
         l.distance = distance  # distance between node centers
         l.Et = [0,0,0,0]  # graph-specific, accumulated from surrounding nodes in node_connect
         l.relt = [0,0]
-        l.rim_t = [[],[]]  # der+ link rim_t is hyperlinks: lists of mediating links in opposite directions from link
+        l.rimT = []  # dual tree of _links, each may have its own node-mediated links
         l.derH = CH() if derH is None else derH
         l.extH = CH() if extH is None else extH  # for der+
         l.root = None if root is None else root  # dgraphs that contain this link
         l.compared_ = []
-        # l.nest = 0  for rng+:
-        l.n = 1  # default n
+        l.n = 1  # default n, or always min(node_.n)?
         l.area = 0
         l.box = [np.inf, np.inf, -np.inf, -np.inf] if box is None else box  # y,x,y0,x0,yn,xn
-        # dir: bool  # direction of comparison if not G0,G1, only needed for comp link?
-        # n: always min(node_.n)?
+        l.dir = bool  # direction of comparison if not G0,G1, only needed for comp link?
+
 
     def __bool__(l): return bool(l.derH.H)
 

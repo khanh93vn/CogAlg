@@ -305,7 +305,26 @@ def comp_G(link, iEt, nrng=None):  # add dderH to link and link to the rims of c
             _G.Et[i] += Val; G.Et[i] += Val
             _G.Et[2+i] += Rdn; G.Et[2+i] += Rdn  # per fork link in both Gs
             # if select fork links: iEt[i::2] = [V+v for V,v in zip(iEt[i::2], dderH.Et[i::2])]
-
+'''
+        # comp G.link_ if fd else G.node_:
+        for i in 0,1:  # comp co-mediating links between hyperlink nodes, while prior match per direction:
+            new_rim = []
+            for _mlink_,mlink_ in product(_G.rim_t[i],G.rim_t[i]):
+                for _mlink, mlink in product(_mlink_,mlink_):  # use product here and above to get all possible pairs between 2 rims?
+                    if _mlink in mlink.compared_: continue
+                    (_y,_x),(y,x) = box2center(_mlink.box),box2center(mlink.box)
+                    dy=_y-y; dx=_x-x; dist = np.hypot(dy,dx)  # distance between link centers, not evaluated?
+                    mA,dA = comp_angle(_mlink.angle,mlink.angle)  # node-mediated, distance eval in agg+ only
+                    if mA > ave_mA:
+                        _mlink.compared_ += [mlink]; mlink.compared_ += [_mlink]
+                        _derH = _mlink.derH; et = _derH.Et
+                        mLink = Clink(node_=[_mlink,mlink],distance=dist,angle=(dy,dx),box=extend_box(mlink.box,_mlink.box),
+                                      derH=CH(H=deepcopy(_derH.H), Et=[et[0]+mA, et[1]+dA, et[2]+mA<dA, et[3]+dA<=mA]))
+                        comp_G(mLink, Et, fd=1, ri=i)
+                        if et[0] > ave * et[2]: new_rim += [mLink]  # combined hyperlink, not in mlinks
+                        else: break  # comp next mediated link if mediating match
+            link.rim_t[i] += [new_rim]  # nest per rng+?
+'''
 
 def comp_ext(_L,L,_S,S,_A,A, dist,direction=None):  # compare non-derivatives: node_ L,S,A, dist,direction:
 
@@ -444,5 +463,62 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
             if attr != '_id' and attr in _H.__dict__.keys():  # copy only the available attributes and skip id
                 setattr(_H, attr, deepcopy(value))
 
+
+def rng_recursion(root, Et, fagg):  # comp Gs in agg+, links in sub+
+    nrng = 1
+
+    if fagg:  # distance eval, else fd: mangle eval
+        while True:
+            for link in list(combinations(root.node_,r=2)):
+                _G, G = link
+                if _G in G.compared_: continue
+                cy, cx = box2center(G.box); _cy, _cx = box2center(_G.box)
+                dy = cy-_cy; dx = cx-_cx;  dist = np.hypot(dy,dx)
+                # eval distance between node centers:
+                if nrng==1: fcomp = dist <= ave_dist
+                else:
+                    M = (G.Et[0]+_G.Et[0])/2; R = (G.Et[2]+_G.Et[2])/2  # local
+                    fcomp = M / (dist/ave_dist) > ave * R
+                if fcomp:
+                    G.compared_ += [_G]; _G.compared_ += [G]
+                    Link = Clink(node_=[_G, G], distance=dist, angle=[dy, dx], box=extend_box(G.box, _G.box))
+                    if comp_G(Link, Et, fd=0):
+                        for G in link: G.rim += [Link]
+            # reuse combinations
+            if Et[0] > ave_Gm * Et[2] * nrng: nrng += 1
+            else: break
+    else:
+        _links = root.link_  # der+'rng+: directional and node-mediated comp link
+        while True:
+            links = []
+            for link in _links:
+                # revise:
+                # link.rimt__ is a link-centered graph, that would overlap other connected-link - centered graphs.
+                # Where link is an exemplar, select max connected exemplars per rng to reduce resolution of rng+
+
+                for rim__ in link.rim_t:  # compare equimediated Clink nodes in hyperlink rims, if mediating links angle match?
+                    if len(rim__[-1]) > nrng-1:  # rim is a hyperlink, nested by mediation / nrng
+                        rim = rim__[-1][-1]  # link.rim is nested per der+( rng+
+                        _link_ = []  # mA links in new rim layer
+                    else: break  # med rng exhausted
+                    for _link in rim:
+                        if _link in link.compared_: continue
+                        (_y,_x),(y,x) = box2center(link.box),box2center(_link.box)
+                        dy=_y-y; dx=_x-x; dist = np.hypot(dy,dx)  # distance between link centers
+                        mA,dA = comp_angle(_link.angle,link.angle)
+                        if mA > ave_mA:
+                            _link.compared_+=[link]; link.compared_+=[_link]
+                            _derH = _link.derH; et = _derH.Et
+                            Link = Clink(node_=[_link,link],distance=dist,angle=(dy,dx),box=extend_box(_link.box,link.box),
+                                         derH=CH(H=deepcopy(_derH.H), Et=[et[0]+mA, et[1]+dA, et[2]+mA<dA, et[3]+dA<=mA]))
+                            if comp_G(Link, Et, fd=1):
+                                _link_ += [Link]  # append link.rim
+                                links += [Link]  # for next layer
+                    rim__[-1] += [_link_]
+            if Et[0] > ave_Gm * Et[2] * nrng:  # rng+ eval per arg cluster because comp is bilateral, 2nd test per new pair
+                nrng += 1; _links = links
+            else: break
+
+    return nrng, Et
 
 
