@@ -2,8 +2,7 @@ import numpy as np
 from collections import deque, defaultdict
 from copy import deepcopy, copy
 from itertools import zip_longest, combinations
-from math import inf
-from .filters import ave, ave_dI, ave_Gm, aves, P_aves, PP_aves
+# from .filters import ave, ave_dI, ave_Gm, aves, P_aves, PP_aves
 import sys
 sys.path.append("..")
 from frame_blobs import CH, CBase, CG, imread
@@ -35,6 +34,15 @@ These low-M high-Ma blobs are vectorized into outlines of adjacent flat (high in
 Connectivity in P_ is traced through root_s of derts adjacent to P.dert_, possibly forking. 
 len prior root_ sorted by G is root.rdn, to eval for inclusion in PP or start new P by ave*rdn
 '''
+
+# ave, ave_dI, ave_Gm, aves, P_aves, PP_aves = []
+ave = 5  # ave direct m, change to Ave_min from the root intra_blob?
+ave_dI = ave_inv = 20  # ave inverse m, change to Ave from the root intra_blob?
+ave_Gm = 50
+aves = ave_mI, ave_mG, ave_mM, ave_mMa, ave_mA, ave_mL = ave, 10, 2, .1, .2, 2
+P_aves = ave_Pm, ave_Pd = 10, 10
+PP_aves = ave_PPm, ave_PPd = 30, 30
+
 
 class CcompSliceFrame(CsliceEdge):
 
