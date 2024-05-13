@@ -2,7 +2,7 @@ import numpy as np
 from copy import deepcopy, copy
 from itertools import combinations, product, zip_longest
 from .slice_edge import comp_angle, CsliceEdge, Clink
-from .comp_slice import ider_recursion, comp_latuple, get_match
+from .comp_slice import ider_recursion, comp_latuple, get_match, CcompSliceFrame
 from .filters import aves, ave_mL, ave_dangle, ave, G_aves, ave_Gm, ave_Gd, ave_dist, ave_mA, max_dist
 from utils import box2center, extend_box
 import sys
@@ -40,9 +40,9 @@ https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/generi
 https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/agg_recursion_unfolded.drawio.png
 '''
 
-def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cluster:
+class CaggRecursionFrame(CcompSliceFrame):
 
-    frame = CsliceEdge(image).segment()
+    class CEdge(CcompSliceFrame.CEdge): # replaces CBlob
 
     for edge in frame.blob_:
         if hasattr(edge, 'P_') and edge.latuple[-1] * (len(edge.P_)-1) > G_aves[0]:  # eval G, rdn=1
