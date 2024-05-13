@@ -2,7 +2,6 @@ import numpy as np
 from collections import deque, defaultdict
 from copy import deepcopy, copy
 from itertools import zip_longest, combinations
-# from .filters import ave, ave_dI, ave_Gm, aves, P_aves, PP_aves
 import sys
 sys.path.append("..")
 from frame_blobs import CH, CBase, CG, imread
@@ -35,14 +34,12 @@ Connectivity in P_ is traced through root_s of derts adjacent to P.dert_, possib
 len prior root_ sorted by G is root.rdn, to eval for inclusion in PP or start new P by ave*rdn
 '''
 
-# ave, ave_dI, ave_Gm, aves, P_aves, PP_aves = []
 ave = 5  # ave direct m, change to Ave_min from the root intra_blob?
 ave_dI = ave_inv = 20  # ave inverse m, change to Ave from the root intra_blob?
 ave_Gm = 50
 aves = ave_mI, ave_mG, ave_mM, ave_mMa, ave_mA, ave_mL = ave, 10, 2, .1, .2, 2
 P_aves = ave_Pm, ave_Pd = 10, 10
 PP_aves = ave_PPm, ave_PPd = 30, 30
-
 
 class CcompSliceFrame(CsliceEdge):
 
@@ -52,23 +49,24 @@ class CcompSliceFrame(CsliceEdge):
             edge.slice_edge()
             if edge.latuple[-1] * (len(edge.P_)-1) > PP_aves[0]:  # eval PP, rdn=1
                 ider_recursion(None, edge)  # vertical, lateral-overlap P cross-comp -> PP clustering
-        
+
     CBlob = CEdge
 
 
 def ider_recursion(root, PP, fd=0):  # node-mediated correlation clustering: keep same Ps and links, increment link derH, then P derH in sum2PP
 
     # no der+'rng+, or directional, within node-mediated hyper-links only?
-    rng_recursion(PP, rng=1, fd=fd)  # extend PP.link_, derHs by same-der rng+ comp
+    P_ = rng_recursion(PP, rng=1, fd=fd)  # extend PP.link_, derHs by same-der rng+ comp
     # calls der+:
-    form_PP_t(PP, PP.P_, iRt=PP.iderH.Et[2:4] if PP.iderH else [0,0])
+    form_PP_t(PP, P_, iRt=PP.iderH.Et[2:4] if PP.iderH else [0,0])
     # feedback per PPd:
     if root is not None and PP.iderH: root.fback_ += [PP.iderH]
 
 
 def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
 
-    iP_ = PP.P_
+    iP_, nP_  = PP.P_, []  # nP = new P with added links
+    rrdn = 2  # cost of links added per rng+
     while True:
         P_ = []; V = 0
         for P in iP_:
@@ -82,6 +80,7 @@ def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but loopin
                     if fd and not (P.derH and _P.derH): continue  # nothing to compare
                     mlink = comp_P(link, fd)
                     if mlink:  # return if match
+                        if P not in nP_: nP_ += [P]
                         V += mlink.derH.Et[0]
                         if rng > 1:  # test to add nesting to P.link_:
                             if rng == 2 and not isinstance(P.link_[0], list): P.link_[:] = [P.link_[:]]  # link_ -> link_H
@@ -93,15 +92,17 @@ def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but loopin
             P.link_ += [prelink_]  # temporary pre-links, may be empty
             if prelink_: P_ += [P]
         rng += 1
-        if V > ave * len(P_) * 6:  #  implied val of all __P_s, 6: len mtuple
+        if V > ave * rrdn * len(P_) * 6:  #  implied val of all __P_s, 6: len mtuple
             iP_ = P_; fd = 0
+            rrdn += 1
         else:
             for P in PP.P_:
                 if P.link_: P.link_.pop()  # remove prelinks in rng+
             break
     # der++ in PPds from rng++, no der++ inside rng++: high diff @ rng++ termination only?
-    PP.rng=rng
+    PP.rng=rng  # represents rrdn
 
+    return nP_
 
 def comp_P(link, fd):
     _P, P, distance, angle = link.node_[0], link.node_[1], link.distance, link.angle
@@ -277,6 +278,9 @@ def unpack_last_link_(link_):  # unpack last link layer
 
     while link_ and isinstance(link_[-1], list): link_ = link_[-1]
     return link_
+    # change to use nested link_, or
+    # get higher-P mediated link_s while recursion_count < rng?
+
 
 def accum_box(box, y, x):
     """Box coordinate accumulation."""
