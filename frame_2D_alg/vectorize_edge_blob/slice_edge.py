@@ -4,9 +4,8 @@ from math import atan2, cos, floor, pi
 from weakref import ref
 import sys
 sys.path.append("..")
-from frame_blobs import CBase, CH, imread   # for CP
+from frame_blobs import CBase, CH, Clink, imread   # for CP
 from intra_blob import CsubFrame
-from utils import box2center
 '''
 In natural images, objects look very fuzzy and frequently interrupted, only vaguely suggested by initial blobs and contours.
 Potential object is proximate low-gradient (flat) blobs, with rough / thick boundary of adjacent high-gradient (edge) blobs.
@@ -26,7 +25,7 @@ ave_g = 30  # change to Ave from the root intra_blob?
 ave_mL = 2
 ave_dist = 3
 max_dist = 15
-ave_dangle = .8  # vertical difference between angles: -1->1, abs dangle: 0->1, ave_dangle = (min abs(dangle) + max abs(dangle))/2,
+ave_dangle = .95  # vertical difference between angles: -1->1, abs dangle: 0->1, ave_dangle = (min abs(dangle) + max abs(dangle))/2,
 
 class CsliceEdge(CsubFrame):
 
@@ -41,36 +40,47 @@ class CsliceEdge(CsubFrame):
             blob.slice_edge()
 
         def slice_edge(edge):
-            edge.rootd = {}
-            edge.P_ = [CP(edge, yx, axis) for yx, axis in edge.select_max()]
+            axisd = edge.select_max()   # select max
+            yx_ = sorted(axisd.keys(), key=lambda yx: edge.dert_[yx][-1])  # sort by g
+
+            # form P per non-overlapped max yx
+            edge.P_ = []; edge.rootd = {}
+            while yx_:
+                yx = yx_.pop(); axis = axisd[yx]    # get max of maxes (highest g)
+                edge.P_ += [CP(edge, yx, axis)]     # form P
+                yx_ = [yx for yx in yx_ if yx not in edge.rootd]    # remove merged maxes if any
+
             edge.P_.sort(key=lambda P: P.yx, reverse=True)
             edge.trace()
             # del edge.rootd
+            return edge
 
         def select_max(edge):
-            max_ = []
+            axisd = {}  # map yx to axis
             for (y, x), (i, gy, gx, g) in edge.dert_.items():
+                sa, ca = gy/g, gx/g
                 # check neighbors
                 new_max = True
-                for dy, dx in [(-1,-1),(-1,0),(-1,1),(0,1)]:
-                    for _y, _x in [(y-dy, x-dx), (y+dy, x+dx)]:
-                        if (_y, _x) not in edge.dert_: continue  # skip if pixel not in edge blob
-                        _i, _gy, _gx, _g = edge.dert_[_y, _x]  # get g of neighbor
-                        if g < _g:
-                            new_max = False
-                            break
-                if new_max: max_ += [((y, x), (gy/g, gx/g))]
-            return max_
+                for dy, dx in [(-sa, -ca), (sa, ca)]:
+                    _y, _x = round(y+dy), round(x+dx)
+                    if (_y, _x) not in edge.dert_: continue  # skip if pixel not in edge blob
+                    _i, _gy, _gx, _g = edge.dert_[_y, _x]  # get g of neighbor
+                    if g < _g:
+                        new_max = False
+                        break
+                if new_max: axisd[y, x] = sa, ca
+            return axisd
 
         def trace(edge):  # fill and trace across slices
             adjacent_ = [(P, y, x) for P in edge.P_ for y, x in edge.rootd if edge.rootd[y, x] is P]
             while adjacent_:
                 _P, _y, _x = adjacent_.pop(0)
                 for y, x in [(_y-1,_x),(_y,_x+1),(_y+1,_x),(_y,_x-1)]:
-                    try:    # if yx has _P, try to form link
+                    try:  # if yx has _P, try to form link
                         P = edge.rootd[y, x]
-                        if _P is not P and _P not in P.link_[0]:
-                            P.link_[0] += [_P]
+                        if _P is not P and _P not in P.link_[0] and P not in _P.link_[0]:
+                            if _P.yx < P.yx: P.link_[0] += [_P]
+                            else:            _P.link_[0] += [P]
                     except KeyError:    # if yx empty, keep tracing
                         if (y, x) not in edge.dert_: continue
                         edge.rootd[y, x] = _P
@@ -86,17 +96,14 @@ class CP(CBase):
         super().__init__()
         y, x = yx
         P.axis = ay, ax = axis
-
         pivot = i,gy,gx,g = edge.dert_[y,x]  # dert is None if (_y, _x) not in edge.dert_: return` in `interpolate2dert`
         ma = ave_dangle  # ? max value because P direction is the same as dert gradient direction
         m = ave_g - g
         pivot += ma,m
-
         edge.rootd[y, x] = P
         I,G,M,Ma,L,Dy,Dx = i,g,m,ma,1,gy,gx
         P.yx_, P.dert_, P.link_ = [yx], [pivot], [[]]
 
-        # this rotation should be recursive, use P.latuple Dy,Dx to get secondary direction, no need for axis?
         for dy,dx in [(-ay,-ax),(ay,ax)]:  # scan in 2 opposite directions to add derts to P
             P.yx_.reverse(); P.dert_.reverse()
             (_y,_x), (_,_gy,_gx,*_) = yx, pivot  # start from pivot
@@ -107,7 +114,6 @@ class CP(CBase):
                 if (round(y),round(x)) not in edge.dert_: break
                 try: i,gy,gx,g = interpolate2dert(edge, y, x)
                 except TypeError: break  # out of bound (TypeError: cannot unpack None)
-
                 mangle, dangle = comp_angle((_gy,_gx), (gy, gx))
                 if mangle < ave_dangle: break  # terminate P if angle miss
                 # update P:
@@ -124,31 +130,6 @@ class CP(CBase):
         P.derH = CH()
 
     def __repr__(P): return f"P(id={P.id})"
-
-
-class Clink(CBase):  # the product of comparison between two nodes
-
-    def __init__(l, node_=None,rim=None, derH=None, extH=None, roott=None, distance=0, angle=None, box=None ):
-        super().__init__()
-        l.node_ = [] if node_ is None else node_  # e_ in kernels, else replaces _node,node: not used in kernels?
-        l.angle = [0,0] if angle is None else angle  # dy,dx between node centers
-        l.distance = distance  # distance between node centers
-        l.Et = [0,0,0,0]  # graph-specific, accumulated from surrounding nodes in node_connect
-        l.relt = [0,0]
-        l.rim = []  # for der+, list of mediating Clinks in hyperlink in roughly the same direction, as in hypergraph
-        l.derH = CH() if derH is None else derH
-        l.extH = CH() if extH is None else extH  # for der+
-        l.roott = [None, None] if roott is None else roott  # clusters that contain this link
-        l.compared_ = []
-        # for rng+
-        l.nest = 0
-        l.n = 1  # default n
-        l.area = 0
-        l.box = [np.inf, np.inf, -np.inf, -np.inf] if box is None else box  # y,x,y0,x0,yn,xn
-        # dir: bool  # direction of comparison if not G0,G1, only needed for comp link?
-        # n: always min(node_.n)?
-
-    def __bool__(l): return bool(l.derH.H)
 
 
 def interpolate2dert(edge, y, x):
@@ -245,13 +226,15 @@ if __name__ == "__main__":
                 plt.plot(x_, y_, "k-", linewidth=3)
                 yp, xp = P.yx - yx0
                 for link in P.link_[0]:
-                    _yp, _xp = link.node_[0].yx - yx0
-                    print(link.node_)
+                    _P = link.node_[0]
+                    assert _P.yx < P.yx
+                    _yp, _xp = _P.yx - yx0
                     plt.plot([_xp, xp], [_yp, yp], "ko--", alpha=0.5)
 
-                y_, x_ = zip(*([yx for yx in edge.rootd if edge.rootd[yx] is P] - yx0))
-                plt.plot(x_, y_, 'o', alpha=0.5)
-
+                yx_ = [yx for yx in edge.rootd if edge.rootd[yx] is P]
+                if yx_:
+                    y_, x_ = zip(*(yx_ - yx0))
+                    plt.plot(x_, y_, 'o', alpha=0.5)
 
         ax = plt.gca()
         ax.set_aspect('equal', adjustable='box')
