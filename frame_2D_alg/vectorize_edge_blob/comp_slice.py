@@ -64,25 +64,21 @@ def ider_recursion(root, PP, fd=0):  # node-mediated correlation clustering: kee
 
 def rng_recursion(PP, fd=0):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
 
+    iP_ = PP.P_
     if fd:
-        iP_ = PP.link_
         for link in PP.link_:
             if link.node_[0].link_: # empty in top row
-                link.link_ += [copy(link.node_[0].link_[-1])] # add upper node uplinks as prelinks
-    else: iP_ = PP.P_
-    rng = 0  # cost of links added per rng+
+                link.node_[0].link_ += [copy(link.node_[0].link_[-1])]  # add upper node uplinks as prelinks
+    rng = 1  # cost of links added per rng+
     while True:
         P_ = []; V = 0
-        rng += 1
         for P in iP_:
-            if P.link_:
-                if len(P.link_) < rng: continue  # no _rnglink_
-            else: continue  # top row
+            if len(P.link_) < rng: continue  # no _rnglink_ or top row (also has len < rng)
             _prelink_ = P.link_.pop()
             rnglink_, prelink_ = [],[]  # both per rng+
             for link in _prelink_:
                 if fd:
-                    if link.node_[0].link_: _P_ = link.node_[0].link_[-1]  # rng uplinks in _P
+                    if link.node_[0].link_: _P_ = [l.node_[0] for l in link.node_[0].link_[-1]]  # rng uplinks in _P
                     else: continue
                 elif link.distance <= rng:  # | rng * ((P.val+_P.val)/ ave_rval)?
                     _P_ = [link.node_[0]]
@@ -102,8 +98,9 @@ def rng_recursion(PP, fd=0):  # similar to agg+ rng_recursion, but looping and c
         if V <= ave * rng * len(P_) * 6:  # implied val of all __P_s, 6: len mtuple
             for P in P_: P.link_.pop()  # remove prelinks
             break
+        rng += 1
     # der++ in PPds from rng++, no der++ inside rng++: high diff @ rng++ termination only?
-    PP.rng=rng  # represents rrdn
+    PP.rng = rng  # represents rrdn
 
     return iP_
 
@@ -129,11 +126,11 @@ def comp_P(link, fd):
         _y,_x = _P.yx; y,x = P.yx
         angle = np.subtract([y,x], [_y,_x]) # dy,dx between node centers
         distance = np.hypot(*angle)      # distance between node centers
-        link = Clink(node_=[_P, P], derH = CH(Et=[vm,vd,rm,rd],H=H,n=n),angle=angle,distance=distance)
+        link = Clink(node_=[_P, P], derH=CH(Et=[vm,vd,rm,rd],H=H,n=n),angle=angle,distance=distance)
 
-    for cP in _P, P:  # to sum in PP
-        link.latuple = [P+p for P,p in zip(link.latuple[:-1],cP.latuple[:-1])] + [[A+a for A,a in zip(link.latuple[-1],cP.latuple[-1])]]
-        link.yx_ += cP.yx_
+    # for cP in _P, P:  # to sum in PP
+    #     link.latuple = [P+p for P,p in zip(link.latuple[:-1],cP.latuple[:-1])] + [[A+a for A,a in zip(link.latuple[-1],cP.latuple[-1])]]
+    #     link.yx_ += cP.yx_
     if vm > aveP * rm:  # always rng+?
         return link
 
@@ -290,3 +287,4 @@ if __name__ == "__main__":
     image = imread(image_file)
 
     frame = CcompSliceFrame(image).segment()
+    # verification:
