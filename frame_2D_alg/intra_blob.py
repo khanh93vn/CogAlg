@@ -68,7 +68,7 @@ class CsubFrame(CFrame):
                     dert__[y, x] = p, dy, dx, g, s
                 return dert__
 
-            def __repr__(rnode_): return f"rnode_er(id={rnode_.id}, root={rnode_.root})"
+            def __repr__(rnode_): return f"rnode_(id={rnode_.id}, root={rnode_.root})"
 
 def compute_kernel(rng):
     # kernel_coefficient = projection_coefficient / distance

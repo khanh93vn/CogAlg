@@ -4,7 +4,7 @@ from math import atan2, cos, floor, pi
 from weakref import ref
 import sys
 sys.path.append("..")
-from frame_blobs import CBase, CH, Clink, imread   # for CP
+from frame_blobs import CBase, imread   # for CP
 from intra_blob import CsubFrame
 '''
 In natural images, objects look very fuzzy and frequently interrupted, only vaguely suggested by initial blobs and contours.
@@ -52,7 +52,7 @@ class CsliceEdge(CsubFrame):
 
             edge.P_.sort(key=lambda P: P.yx, reverse=True)
             edge.trace()
-            # del edge.rootd
+            # del edge.rootd    # still being used for visual verification
             return edge
 
         def select_max(edge):
@@ -78,15 +78,13 @@ class CsliceEdge(CsubFrame):
                 for y, x in [(_y-1,_x),(_y,_x+1),(_y+1,_x),(_y,_x-1)]:
                     try:  # if yx has _P, try to form link
                         P = edge.rootd[y, x]
-                        if _P is not P and _P not in P.link_[0] and P not in _P.link_[0]:
-                            if _P.yx < P.yx: P.link_[0] += [_P]
-                            else:            _P.link_[0] += [P]
+                        if _P is not P and _P not in P.link_ and P not in _P.link_:
+                            if _P.yx < P.yx: P.link_ += [_P]
+                            else:            _P.link_ += [P]
                     except KeyError:    # if yx empty, keep tracing
                         if (y, x) not in edge.dert_: continue   # stop if yx outside the edge
                         edge.rootd[y, x] = _P
                         adjacent_ += [(_P, y, x)]
-            for P in edge.P_:
-                P.link_[0] = [Clink([_P, P]) for _P in P.link_[0]]  # prelinks for comp_slice
 
     CBlob = CEdge
 
@@ -102,7 +100,7 @@ class CP(CBase):
         pivot += ma,m
         edge.rootd[y, x] = P
         I,G,M,Ma,L,Dy,Dx = i,g,m,ma,1,gy,gx
-        P.yx_, P.dert_, P.link_ = [yx], [pivot], [[]]
+        P.yx_, P.dert_, P.link_ = [yx], [pivot], []
 
         for dy,dx in [(-ay,-ax),(ay,ax)]:  # scan in 2 opposite directions to add derts to P
             P.yx_.reverse(); P.dert_.reverse()
@@ -127,9 +125,6 @@ class CP(CBase):
 
         P.yx = tuple(np.mean([P.yx_[0], P.yx_[-1]], axis=0))
         P.latuple = I, G, M, Ma, L, (Dy, Dx)
-        P.derH = CH()
-
-    def __repr__(P): return f"P(id={P.id})"
 
 
 def interpolate2dert(edge, y, x):
@@ -225,8 +220,7 @@ if __name__ == "__main__":
                     x_ = x_[0]-u/2, x_[0]+u/2
                 plt.plot(x_, y_, "k-", linewidth=3)
                 yp, xp = P.yx - yx0
-                for link in P.link_[0]:
-                    _P = link.node_[0]
+                for _P in P.link_:
                     assert _P.yx < P.yx
                     _yp, _xp = _P.yx - yx0
                     plt.plot([_xp, xp], [_yp, yp], "ko--", alpha=0.5)

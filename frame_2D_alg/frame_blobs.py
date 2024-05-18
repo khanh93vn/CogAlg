@@ -76,80 +76,11 @@ class CBase:
         inst = cls.refs[_id]()
         if inst is not None and inst.id == _id:
             return inst
-
-class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
-
-    def __init__(G, root=None, rng=1, fd=0, node_=None, link_=None, Et=None, n=0):  # we need P_ to init PP, Et in init graph
-        super().__init__()
-        # PP:
-        G.root = [] if root is None else root  # mgraphs that contain this G, single-layer
-        G.rng = rng
-        G.fd = fd  # fork if flat layers?
-        G.n = n  # external n (last layer n)
-        G.area = 0
-        G.S = 0  # sparsity: distance between node centers
-        G.A = 0, 0  # angle: summed dy,dx in links
-        G.Et = [0,0,0,0] if Et is None else Et  # external eval tuple, summed from rng++ before forming new graph and appending G.extH
-        G.latuple = [0,0,0,0,0,[0,0]]  # lateral I,G,M,Ma,L,[Dy,Dx]
-        G.iderH = CH()  # summed from PPs
-        G.derH = CH()  # nested derH in Gs: [[subH,valt,rdnt,dect]], subH: [[derH,valt,rdnt,dect]]: 2-fork composition layers
-        G.DerH = CH()  # summed kernel rims
-        G.node_ = [] if node_ is None else node_  # convert to node_t in sub_recursion
-        G.link_ = [] if link_ is None else link_  # links per comp layer, nest in rng+)der+
-        G.box = [np.inf, np.inf, -np.inf, -np.inf]  # y,x,y0,x0,yn,xn
-        G.kH = []
-        # graph-external, +level per root sub+:
-        G.rim = []  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
-        G.extH = CH()  # G-external daggH( dsubH( dderH, summed from rim links
-        G.ExtH = CH()  # summed link.DerH
-        G.alt_graph_ = []  # adjacent gap+overlap graphs, vs. contour in frame_graphs
-        # dynamic attrs:
-        G.Rim = []  # links to the most mediated nodes
-        G.fback_ = []  # feedback [[aggH,valt,rdnt,dect]] per node layer, maps to node_H
-        G.compared_ = []
-        # Rdn: int = 0  # for accumulation or separate recursion count?
-        # it: list = z([None,None])  # graph indices in root node_s, implicitly nested
-        # depth: int = 0  # n sub_G levels over base node_, max across forks
-        # nval: int = 0  # of open links: base alt rep
-        # id_H: list = z([[]])  # indices in the list of all possible layers | forks, not used with fback merging
-        # top aggLay: derH from links, lower aggH from nodes, only top Lay in derG:
-        # top Lay from links, lower Lays from nodes, hence nested tuple?
-
-    def __bool__(G): return G.n != 0  # to test empty
-    def __repr__(G): return f"G(id={G.id})"
-
-
-class Clink(CBase):  # the product of comparison between two nodes
-
-    def __init__(l, node_=None,rim=None, derH=None, extH=None, root=None, distance=0, angle=None, box=None ):
-        super().__init__()
-        l.node_ = [] if node_ is None else node_  # e_ in kernels, else replaces _node,node: not used in kernels?
-        l.angle = [0,0] if angle is None else angle  # dy,dx between node centers
-        l.distance = distance  # distance between node centers
-        l.S = 0  # initially summed from node_
-        l.Et = [0,0,0,0]  # graph-specific, accumulated from surrounding nodes in node_connect
-        l.relt = [0,0]
-        l.rim_t = []  # dual tree of _links, each may have its own node-mediated links
-        # reciprocal rim_t of connecting links?
-        l.derH = CH() if derH is None else derH
-        l.DerH = CH()  # ders from G.DerH
-        l.extH = CH() if extH is None else extH  # for der+
-        l.ExtH = CH()  # summed from kernels in der+
-        l.root = None if root is None else root  # dgraphs that contain this link
-        l.compared_ = []
-        l.rim = []
-        l.n = 1  # default n, or always min(node_.n)?
-        l.area = 0
-        l.box = [np.inf, np.inf, -np.inf, -np.inf] if box is None else box  # y,x,y0,x0,yn,xn
-        l.dir = bool  # direction of comparison if not G0,G1, only needed for comp link?
-        # for der++ in comp_slice:
-        l.latuple = [0,0,0,0,0,[0,0]]  # lateral I,G,M,Ma,L,[Dy,Dx]
-        l.yx_ = []
-
-    def __bool__(l): return bool(l.derH.H)
+    def __repr__(obj): return f"{obj.__class__.__name__}(id={obj.id})"
 
 
 class CFrame(CBase):
+
     def __init__(frame, i__):
         super().__init__()
         frame.i__, frame.latuple, frame.blob_ = i__, [0, 0, 0, 0], []
@@ -195,12 +126,14 @@ class CFrame(CBase):
 
     def __repr__(frame): return f"frame(id={frame.id})"
 
-    class CBlob(CG):
+    class CBlob(CBase):
 
         def __init__(blob, root):
-            super().__init__(root)
+            super().__init__()
+            blob.root = root
             blob.sign = None
-            blob.latuple = [0, 0, 0, 0, 0, 0]  # Y, X, I, Dy, Dx, G, override CG initialization
+            blob.area = 0
+            blob.latuple = [0, 0, 0, 0, 0, 0]  # Y, X, I, Dy, Dx, G
             blob.dert_ = {}  # keys: (y, x). values: (i, dy, dx, g)
             blob.adj_ = []  # adjacent blobs
 
@@ -240,103 +173,6 @@ class CFrame(CBase):
         def yx_(blob): return list(blob.dert_.keys())
         @property
         def yx(blob): return map(np.mean, zip(*blob.yx_))
-        def __repr__(blob): return f"blob(id={blob.id})"
-
-
-class CH(CBase):  # generic derivation hierarchy with variable nesting
-    '''
-    len layer +extt: 2, 3, 6, 12, 24,
-    or without extt: 1, 1, 2, 4, 8..: max n of tuples per der layer = summed n of tuples in all lower layers:
-    lay1: par     # derH per param in vertuple, layer is derivatives of all lower layers:
-    lay2: [m,d]   # implicit nesting, brackets for clarity:
-    lay3: [[m,d], [md,dd]]: 2 sLays,
-    lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays
-    '''
-    def __init__(He, n=0, Et=None, relt=None, H=None):
-        super().__init__()
-        # He.nest = nest  # nesting depth: -1/ ext, 0/ md_, 1/ derH, 2/ subH, 3/ aggH
-        He.n = n  # total number of params compared to form derH, summed in comp_G and then from nodes in sum2graph
-        He.Et = [0,0,0,0] if Et is None else Et   # evaluation tuple: valt, rdnt
-        He.relt = [0,0] if relt is None else relt  # m,d relative to max possible m,d
-        He.H = [] if H is None else H  # hierarchy of der layers or md_
-
-    def __bool__(H): return H.n != 0
-
-    def add_(HE, He, irdnt=None):  # unpack down to numericals and sum them
-
-        if irdnt is None: irdnt = []
-        if HE:
-            if isinstance(HE.H[0], CH):
-                H = []
-                for Lay, lay in zip_longest(HE.H, He.H, fillvalue=None):
-                    if lay:  # to be summed
-                        if Lay is None: Lay = CH()
-                        Lay.add_(lay, irdnt)  # recursive unpack to sum md_s
-                    H += [Lay]
-                HE.H = H
-            else:
-                HE.H = [V+v for V,v in zip_longest(HE.H, He.H, fillvalue=0)]  # both Hs are md_s
-            # default:
-            Et, et = HE.Et, He.Et
-            HE.Et = np.add(HE.Et, He.Et); HE.relt = np.add(HE.relt, He.relt)
-            if any(irdnt): HE.Et[2:] = [E+e for E,e in zip(HE.Et[2:], irdnt)]
-            HE.n += He.n  # combined param accumulation span
-        else:
-            HE.copy(He)  # initialization
-
-
-    def append_(HE,He, irdnt=None, flat=0):
-
-        if irdnt is None: irdnt = []
-        if flat: HE.H += deepcopy(He.H)  # append flat
-        else:    HE.H += [He]  # append nested
-        Et, et = HE.Et, He.Et
-        HE.Et = np.add(HE.Et, He.Et); HE.relt = np.add(HE.relt, He.relt)
-        if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
-        HE.n += He.n  # combined param accumulation span
-
-
-    def comp_(_He, He, dderH, rn=1, fagg=0, flat=1):  # unpack tuples (formally lists) down to numericals and compare them
-
-        n = 0
-        if isinstance(_He.H[0], CH):  # _lay is He_, same for lay: they are aligned above
-            Et = [0,0,0,0]  # Vm,Vd, Rm,Rd
-            relt = [0,0]  # Dm,Dd
-            dH = []
-            for _lay,lay in zip(_He.H,He.H):  # md_| ext| derH| subH| aggH, eval nesting, unpack,comp ds in shared lower layers:
-                if _lay and lay:  # ext is empty in single-node Gs
-                    dlay = _lay.comp_(lay, CH(), rn, fagg=fagg, flat=1)  # dlay is dderH
-                    Et = np.add(Et, dlay.Et)
-                    relt = np.add(relt, dlay.relt)
-                    dH += [dlay]; n += dlay.n
-                else:
-                    dH += [CH()]  # empty?
-        else:  # H is md_, numerical comp:
-            vm,vd,rm,rd, decm,decd = 0,0,0,0,0,0
-            dH = []
-            for i, (_d,d) in enumerate(zip(_He.H[1::2], He.H[1::2])):  # compare ds in md_ or ext
-                d *= rn  # normalize by comparand accum span
-                diff = _d-d
-                match = min(abs(_d),abs(d))
-                if (_d<0) != (d<0): match = -match  # if only one comparand is negative
-                if fagg:
-                    maxm = max(abs(_d), abs(d))
-                    decm += abs(match) / maxm if maxm else 1  # match / max possible match
-                    maxd = abs(_d) + abs(d)
-                    decd += abs(diff) / maxd if maxd else 1  # diff / max possible diff
-                vm += match - aves[i]  # fixed param set?
-                vd += diff
-                dH += [match,diff]  # flat
-            Et = [vm,vd,rm,rd]; relt= [decm,decd]
-            n = len(_He.H)/12  # unit n = 6 params, = 12 in md_
-
-        dderH.append_(CH(Et=Et, relt=relt, H=dH, n=n), flat=flat)  # currently flat=1
-        return dderH
-
-    def copy(_H, H):
-        for attr, value in H.__dict__.items():
-            if attr != '_id' and attr in _H.__dict__.keys():  # copy only the available attributes and skip id
-                setattr(_H, attr, deepcopy(value))
 
 
 def imread(filename, raise_if_not_read=True):  # Read an image in grayscale, return array
