@@ -34,22 +34,6 @@ import weakref
 import numpy as np
 from matplotlib import pyplot as plt
 
-# hyper-parameters, set as a guess, latter adjusted by feedback:
-ave = 30  # base filter, directly used for comp_r fork
-ave_inv = 20  # ave inverse m, change to Ave from the root intra_blob?
-ave_a = 1.5  # coef filter for comp_a fork
-aveB = 50
-aveBa = 1.5
-ave_mP = 100
-# comp_param coefs:
-ave_dI = ave_inv
-ave_mI = ave # replace the rest with coefs:
-ave_mG = 10
-ave_mM = 2
-ave_mMa = .1
-ave_mA = .2
-ave_mL = 2
-aves = [ave_mI, ave_mG, ave_mM, ave_mMa, ave_mA, ave_mL]
 '''
     Conventions:
     postfix 't' denotes tuple, multiple ts is a nested tuple
@@ -60,8 +44,14 @@ aves = [ave_mI, ave_mG, ave_mM, ave_mMa, ave_mA, ave_mL]
     capitalized variables are normally summed small-case variables,
     longer names are normally classes
 '''
+
 # --------------------------------------------------------------------------------------------------------------
-# classes: CBase, CG, CFrame, CBlob, CH
+# hyper-parameters, set as a guess, latter adjusted by feedback:
+ave = 30  # base filter, directly used for comp_r fork
+aveR = 10  # for range+, fixed overhead per blob
+
+# --------------------------------------------------------------------------------------------------------------
+# classes
 
 class CBase:
     refs = []
@@ -84,6 +74,7 @@ class CFrame(CBase):
     def __init__(frame, i__):
         super().__init__()
         frame.i__, frame.latuple, frame.blob_ = i__, [0, 0, 0, 0], []
+        frame.rdn = frame.rng = 1
 
     def segment(frame):
         dert__ = frame.comp_pixel()
@@ -166,6 +157,9 @@ class CFrame(CBase):
             I += i; Dy += dy; Dx += dx; G += g
             frame.latuple[-4:] = I, Dy, Dx, G
             frame.blob_ += [blob]
+            if blob.sign and blob.G < ave*blob.area + aveR*blob.root.rdn:  # sign and G < ave*L + aveR*rdn
+                rnode_ = CrNode_(blob).segment()    # recursive eval cross-comp per blob
+                if rnode_: blob.rnode_ = rnode_  # rnode_ is added dynamically, only positive blobs may have rnode_
 
         @property
         def G(blob): return blob.latuple[-1]
@@ -174,6 +168,43 @@ class CFrame(CBase):
         @property
         def yx(blob): return map(np.mean, zip(*blob.yx_))
 
+class CrNode_(CFrame):
+    def __init__(rnode_, blob):
+        super().__init__(blob.root.i__)  # init params, extra params init below:
+        rnode_.CBlob = blob.__class__
+        rnode_.root = blob
+        rnode_.rdn = blob.root.rdn + 1.5
+        rnode_.rng = blob.root.rng + 1
+
+    def segment(rnode_):  # recursive evaluation of cross-comp rng+ per blob
+        rnode_.rdn += 1.5; rnode_.rng += 1  # update rdn, rng
+        dert__ = rnode_.comp_r()  # return None if blob is too small
+        if not dert__: return   # terminate if blob is too small
+        rnode_.flood_fill(dert__)  # recursive call is per blob in blob.term in flood_fill
+        return rnode_
+
+    def comp_r(rnode_):   # rng+ comp
+        # compute kernel
+        ky__, kx__ = compute_kernel(rnode_.rng)
+        # loop through root_blob's pixels
+        dert__ = {}     # mapping from y, x to dert
+        for (y, x), (p, dy, dx, g) in rnode_.root.dert_.items():
+            try:
+                # comparison. i,j: relative coord within kernel 0 -> rng*2+1
+                for i, j in zip(*ky__.nonzero()):
+                    dy += ky__[i, j] * rnode_.i__[y+i-rnode_.rng, x+j-rnode_.rng]    # -rng to get i__ coord
+                for i, j in zip(*kx__.nonzero()):
+                    dx += kx__[i, j] * rnode_.i__[y+i-rnode_.rng, x+j-rnode_.rng]
+            except IndexError: continue     # out of bound
+            g = np.hypot(dy, dx)
+            s = ave*(rnode_.rdn + 1) - g > 0
+            dert__[y, x] = p, dy, dx, g, s
+        return dert__
+
+    def __repr__(rnode_): return f"rnode_(id={rnode_.id}, root={rnode_.root})"
+
+# --------------------------------------------------------------------------------------------------------------
+# utility functions
 
 def imread(filename, raise_if_not_read=True):  # Read an image in grayscale, return array
     try: return np.mean(plt.imread(filename), axis=2).astype(float)
@@ -181,13 +212,45 @@ def imread(filename, raise_if_not_read=True):  # Read an image in grayscale, ret
         if raise_if_not_read: raise SystemError('image is not read')
         else: print('Warning: image is not read')
 
+
+def compute_kernel(rng):
+    # kernel_coefficient = projection_coefficient / distance
+    #                    = [sin(angle), cos(angle)] / distance
+    # With: distance = sqrt(x*x + y*y)
+    #       sin(angle) = y / sqrt(x*x + y*y) = y / distance
+    #       cos(angle) = x / sqrt(x*x + y*y) = x / distance
+    # Thus:
+    # kernel_coefficient = [y / sqrt(x*x + y*y), x / sqrt(x*x + y*y)] / sqrt(x*x + y*y)
+    #                    = [y, x] / (x*x + y*y)
+    ksize = rng*2+1  # kernel size
+    dy, dx = k = np.indices((ksize, ksize)) - rng  # kernel span around (0, 0)
+    sqr_dist = dx*dx + dy*dy  # squared distance
+    sqr_dist[rng, rng] = 1  # avoid division by 0
+    coeff = k / sqr_dist  # kernel coefficient
+    coeff[1:-1, 1:-1] = 0  # non-rim = 0
+
+    return coeff
+
 if __name__ == "__main__":
 
     image_file = './images//raccoon_eye.jpeg'
     image = imread(image_file)
     frame = CFrame(image).segment()
 
-    # verification/visualization:
+    # verification (intra):
+    blobQue = list(frame.blob_)
+    while blobQue:
+        blob = blobQue.pop(0)
+        print(f"{blob}'s parent is {blob.root}", end="")
+        if hasattr(blob, "rnode_") and blob.rnode_.blob_:  # if blob is extended with rnode_
+            blob_ = blob.rnode_.blob_
+            print(f", has {len(blob_)} sub-blob{'' if len(blob_) == 1 else 's'}")
+            if blob_: blobQue += blob_
+        else:
+            print()
+        # else un-extended blob, skip
+
+    # verification (frame):
     I, Dy, Dx, G = frame.latuple
 
     i__ = np.zeros_like(image, dtype=np.float32)
@@ -215,4 +278,5 @@ if __name__ == "__main__":
     plt.imshow(s__, cmap='gray')
     for line in line_:
         plt.plot(*line, "b-")
+
     plt.show()

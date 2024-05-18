@@ -42,6 +42,22 @@ aves = ave_mI, ave_mG, ave_mM, ave_mMa, ave_mA, ave_mL = ave, 10, 2, .1, .2, 2
 P_aves = ave_Pm, ave_Pd = 10, 10
 PP_aves = ave_PPm, ave_PPd = 50, 50
 
+class CcompSliceFrame(CsliceEdge):
+
+    class CEdge(CsliceEdge.CEdge): # replaces CBlob
+
+        def vectorize(edge):  # overrides in CsliceEdge.CEdge.vectorize
+            edge.slice_edge()
+            if edge.latuple[-1] * (len(edge.P_)-1) > ave_PPm:  # eval PP, rdn=1
+                edge.iderH = CH()
+                edge.fback_ = []
+                for P in edge.P_:
+                    P.derH = CH()   # create derH
+                    P.link_ = [[Clink([_P, P]) for _P in P.link_]]  # prelinks for comp_slice
+                ider_recursion(None, edge)  # vertical, lateral-overlap P cross-comp -> PP clustering
+
+    CBlob = CEdge
+
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
     def __init__(G, root=None, rng=1, fd=0, node_=None, link_=None, Et=None, n=0):  # we need P_ to init PP, Et in init graph
@@ -109,7 +125,6 @@ class Clink(CBase):  # the product of comparison between two nodes
         # for der++ in comp_slice:
         l.latuple = [0,0,0,0,0,[0,0]]  # lateral I,G,M,Ma,L,[Dy,Dx]
         l.yx_ = []
-        l.link_ = []
 
     def __bool__(l): return bool(l.derH.H)
 
@@ -210,22 +225,6 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
             if attr != '_id' and attr in _H.__dict__.keys():  # copy only the available attributes and skip id
                 setattr(_H, attr, deepcopy(value))
 
-class CcompSliceFrame(CsliceEdge):
-
-    class CEdge(CsliceEdge.CEdge): # replaces CBlob
-
-        def vectorize(edge):  # overrides in CsliceEdge.CEdge.vectorize
-            edge.slice_edge()
-            if edge.latuple[-1] * (len(edge.P_)-1) > ave_PPm:  # eval PP, rdn=1
-                edge.iderH = CH()
-                edge.fback_ = []
-                for P in edge.P_:
-                    P.derH = CH()   # create derH
-                    P.link_ = [[Clink([_P, P]) for _P in P.link_]]  # prelinks for comp_slice
-                ider_recursion(None, edge)  # vertical, lateral-overlap P cross-comp -> PP clustering
-
-    CBlob = CEdge
-
 def ider_recursion(root, PP, fd=0):  # node-mediated correlation clustering: keep same Ps and links, increment link derH, then P derH in sum2PP
 
     # no der+'rng+, or directional, within node-mediated hyper-links only?
@@ -242,13 +241,15 @@ def rng_recursion(PP, fd=0):  # similar to agg+ rng_recursion, but looping and c
         iP_ = PP.link_
         for link in PP.link_:
             if link.node_[0].link_: # empty in top row
-                link.link_ += [copy(link.node_[0].link_[-1])] # add upper node uplinks as prelinks
+                link_ = copy(link.node_[0].link_[-1])
+                assert not hasattr(link, "link_")
+                link.link_ = [link_]  # add upper node uplinks as prelinks
     else: iP_ = PP.P_
     rng = 1  # cost of links added per rng+
     while True:
         P_ = []; V = 0
         for P in iP_:
-            if len(P.link_) < rng: continue  # no _rnglink_ or top row
+            if not hasattr(P, "link_") or len(P.link_) < rng: continue  # no _rnglink_ or top row
             _prelink_ = P.link_.pop()
             rnglink_, prelink_ = [],[]  # both per rng+
             for link in _prelink_:
@@ -259,7 +260,7 @@ def rng_recursion(PP, fd=0):  # similar to agg+ rng_recursion, but looping and c
                     _P_ = [link.node_[0]]
                 else: continue
                 for _P in _P_:
-                    if len(_P.link_) < rng: continue
+                    if not hasattr(_P, "link_") or len(_P.link_) < rng: continue
                     mlink = comp_P(Clink(node_=[_P, P]) if fd else link, fd)
                     if mlink: # return if match
                         V += mlink.derH.Et[0]
@@ -318,8 +319,7 @@ def form_PP_t(root, P_, iRt):  # form PPs of derP.valt[fd] + connected Ps val
         mlink_,_mP_,dlink_,_dP_ = [],[],[],[]  # per P
         mLink_+=[mlink_]; _mP__+=[_mP_]
         dLink_+=[dlink_]; _dP__+=[_dP_]
-        if not P.link_:
-            continue
+        if not (hasattr(P, "link_") and P.link_): continue
         for link in [L for L_ in P.link_ for L in L_]:  # flatten P.link_ nested by rng
             if isinstance(link.derH.H[0],CH): m,d,mr,dr = link.derH.H[-1].Et  # last der+ layer vals
             else:                             m,d,mr,dr = link.derH.Et  # H is md_
@@ -331,7 +331,7 @@ def form_PP_t(root, P_, iRt):  # form PPs of derP.valt[fd] + connected Ps val
     for fd, (Link_,_P__) in zip((0,1),((mLink_,_mP__),(dLink_,_dP__))):
         CP_ = []  # all clustered Ps
         for P in P_:
-            if P in CP_ or not P.link_: continue  # already packed in some sub-PP
+            if P in CP_ or not (hasattr(P, "link_") and P.link_): continue  # already packed in some sub-PP
             cP_, clink_ = [P], []  # cluster per P
             if P in P_:
                 P_index = P_.index(P)
