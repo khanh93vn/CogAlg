@@ -110,7 +110,7 @@ class Clink(CBase):  # product of comparison between two nodes or links
         l.S = 0  # initially summed from node_
         l.n = 1  # or min(node_.n)?
         l.area = 0  # sum node area
-        l.latuple = []  # sum node I,G,M,Ma,L,[Dy,Dx], no need to specify here
+        l.latuple = [0,0,0,0,0,[0,0]]  # sum node I,G,M,Ma,L,[Dy,Dx], no need to specify here
         l.yx_ = []  # or box
         l.Et = [0,0,0,0]  # graph-specific, accumulated from surrounding nodes in node_connect
         l.relt = [0,0]
@@ -229,7 +229,7 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
 def ider_recursion(root, PP, fd=0):  # node-mediated correlation clustering: keep same Ps and links, increment link derH, then P derH in sum2PP
 
     # no der+'rng+, or directional, within node-mediated hyper-links only?
-    P_ = rng_recursion(PP, fd=fd)  # extend PP.link_, derHs by same-der rng+ comp
+    P_ = rng_recursion(PP, fd=fd)  # extend PP.link_, derHs by same-der rng+ comp 
     # calls der+:
     form_PP_t(PP, P_, iRt=PP.iderH.Et[2:4] if PP.iderH else [0,0])
     # feedback per PPd:
@@ -242,15 +242,13 @@ def rng_recursion(PP, fd=0):  # similar to agg+ rng_recursion, but looping and c
         iP_ = PP.link_
         for link in PP.link_:
             if link.node_[0].link_: # empty in top row
-                link_ = copy(link.node_[0].link_[-1])
-                assert not hasattr(link, "link_")  # no link_ yet
-                link.link_ = [link_]  # add upper node uplinks as prelinks
+                link.link_ += [copy(link.node_[0].link_[-1])]  # add upper node uplinks as prelinks
     else: iP_ = PP.P_
     rng = 1  # cost of links added per rng+
     while True:
         P_ = []; V = 0
         for P in iP_:
-            if not hasattr(P, "link_") or len(P.link_) < rng: continue  # no _rnglink_ or top row
+            if len(P.link_) < rng: continue  # no _rnglink_ or top row
             _prelink_ = P.link_.pop()
             rnglink_, prelink_ = [],[]  # both per rng+
             for link in _prelink_:
@@ -261,7 +259,7 @@ def rng_recursion(PP, fd=0):  # similar to agg+ rng_recursion, but looping and c
                     _P_ = [link.node_[0]]
                 else: continue
                 for _P in _P_:
-                    if not hasattr(_P, "link_") or len(_P.link_) < rng: continue
+                    if len(_P.link_) < rng: continue
                     mlink = comp_P(Clink(node_=[_P, P]) if fd else link, fd)
                     if mlink: # return if match
                         V += mlink.derH.Et[0]
@@ -320,7 +318,7 @@ def form_PP_t(root, P_, iRt):  # form PPs of derP.valt[fd] + connected Ps val
         mlink_,_mP_,dlink_,_dP_ = [],[],[],[]  # per P
         mLink_+=[mlink_]; _mP__+=[_mP_]
         dLink_+=[dlink_]; _dP__+=[_dP_]
-        if not (hasattr(P, "link_") and P.link_): continue
+        if not P.link_: continue
         for link in [L for L_ in P.link_ for L in L_]:  # flatten P.link_ nested by rng
             if isinstance(link.derH.H[0],CH): m,d,mr,dr = link.derH.H[-1].Et  # last der+ layer vals
             else:                             m,d,mr,dr = link.derH.Et  # H is md_
@@ -332,7 +330,7 @@ def form_PP_t(root, P_, iRt):  # form PPs of derP.valt[fd] + connected Ps val
     for fd, (Link_,_P__) in zip((0,1),((mLink_,_mP__),(dLink_,_dP__))):
         CP_ = []  # all clustered Ps
         for P in P_:
-            if P in CP_ or not (hasattr(P, "link_") and P.link_): continue  # already packed in some sub-PP
+            if P in CP_ or not P.link_: continue  # already packed in some sub-PP
             cP_, clink_ = [P], []  # cluster per P
             if P in P_:
                 P_index = P_.index(P)
