@@ -1,10 +1,9 @@
 import numpy as np
-from collections import defaultdict
 from math import atan2, cos, floor, pi
-from weakref import ref
 import sys
 sys.path.append("..")
-from frame_blobs import CBase, CFrame, imread   # for CP
+from frame_blobs import CBase, CFrame, imread
+
 '''
 In natural images, objects look very fuzzy and frequently interrupted, only vaguely suggested by initial blobs and contours.
 Potential object is proximate low-gradient (flat) blobs, with rough / thick boundary of adjacent high-gradient (edge) blobs.
@@ -18,9 +17,7 @@ This process is very complex, so it must be selective. Selection should be by co
 and inverse gradient deviation of flat blobs. But the latter is implicit here: high-gradient areas are usually quite sparse.
 A stable combination of a core flat blob with adjacent edge blobs is a potential object.
 '''
-# --------------------------------------------------------------------------------------------------------------
-# filters
-
+# filters:
 octant = 0.3826834323650898  # radians per octant
 aveG = 10  # for vectorize
 ave_g = 30  # change to Ave from the root intra_blob?
@@ -29,8 +26,6 @@ ave_dist = 3
 max_dist = 15
 ave_dangle = .95  # vertical difference between angles: -1->1, abs dangle: 0->1, ave_dangle = (min abs(dangle) + max abs(dangle))/2,
 
-# --------------------------------------------------------------------------------------------------------------
-# classes
 
 class CsliceEdge(CFrame):
 
@@ -90,7 +85,6 @@ class CsliceEdge(CFrame):
                         if (y, x) not in edge.dert_: continue   # stop if yx outside the edge
                         edge.rootd[y, x] = _P
                         adjacent_ += [(_P, y, x)]
-
     CBlob = CEdge
 
 class CP(CBase):

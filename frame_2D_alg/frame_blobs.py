@@ -28,12 +28,9 @@
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/frame_blobs.png
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/frame_blobs_intra_blob.drawio
 '''
-from copy import copy, deepcopy
-from itertools import zip_longest
 import weakref
 import numpy as np
 from matplotlib import pyplot as plt
-
 '''
     Conventions:
     postfix 't' denotes tuple, multiple ts is a nested tuple
@@ -44,14 +41,9 @@ from matplotlib import pyplot as plt
     capitalized variables are normally summed small-case variables,
     longer names are normally classes
 '''
-
-# --------------------------------------------------------------------------------------------------------------
 # hyper-parameters, set as a guess, latter adjusted by feedback:
 ave = 30  # base filter, directly used for comp_r fork
 aveR = 10  # for range+, fixed overhead per blob
-
-# --------------------------------------------------------------------------------------------------------------
-# classes
 
 class CBase:
     refs = []
@@ -67,7 +59,6 @@ class CBase:
         if inst is not None and inst.id == _id:
             return inst
     def __repr__(obj): return f"{obj.__class__.__name__}(id={obj.id})"
-
 
 class CFrame(CBase):
 
@@ -95,8 +86,7 @@ class CFrame(CBase):
         )
         g__ = np.hypot(dy__, dx__)  # compute gradient magnitude, -> separate G because it's not signed, dy,dx cancel out in Dy,Dx
         s__ = ave - g__ > 0  # sign is positive for below-average g
-
-        # convert into dert__:
+        # convert to dert__:
         y__, x__ = np.indices(frame.i__.shape)
         dert__ = dict(zip(
             zip(y__[1:-1, 1:-1].flatten(), x__[1:-1, 1:-1].flatten()),
@@ -131,16 +121,15 @@ class CFrame(CBase):
         def form(blob, fill_yx_, perimeter_, root__, dert__):
             y, x = perimeter_.pop()  # pixel coord
             if (y, x) not in dert__: return  # out of bound
-            i, dy, dx, g, s = dert__[y, x]
+            i,dy,dx,g,s = dert__[y,x]
             if (y, x) not in fill_yx_:  # else this is a pixel of adjacent blob
                 _blob = root__[y, x]
                 if _blob not in blob.adj_: blob.adj_ += [_blob]
                 return
             if blob.sign is None: blob.sign = s  # assign sign to new blob
             if blob.sign != s: return  # different blob.sign, stop
-
-            fill_yx_.remove((y, x))
-            root__[y, x] = blob  # assign root, for link forming
+            fill_yx_.remove((y,x))
+            root__[y,x] = blob  # assign root, for link forming
             blob.area += 1
             Y, X, I, Dy, Dx, G = blob.latuple
             Y += y; X += x; I += i; Dy += dy; Dx += dx; G += g  # update params
@@ -168,6 +157,11 @@ class CFrame(CBase):
         @property
         def yx(blob): return map(np.mean, zip(*blob.yx_))
 
+'''
+intra_blob recursively segments each blob for two forks of extended internal cross-comp and sub-clustering:
+- comp_range: incremental range cross-comp in low-variation blobs: >ave negative gradient
+- vectorize_root: slice_edge -> comp_slice -> agg_recursion
+'''
 class CrNode_(CFrame):
     def __init__(rnode_, blob):
         super().__init__(blob.root.i__)  # init params, extra params init below:
@@ -203,16 +197,6 @@ class CrNode_(CFrame):
 
     def __repr__(rnode_): return f"rnode_(id={rnode_.id}, root={rnode_.root})"
 
-# --------------------------------------------------------------------------------------------------------------
-# utility functions
-
-def imread(filename, raise_if_not_read=True):  # Read an image in grayscale, return array
-    try: return np.mean(plt.imread(filename), axis=2).astype(float)
-    except AttributeError:
-        if raise_if_not_read: raise SystemError('image is not read')
-        else: print('Warning: image is not read')
-
-
 def compute_kernel(rng):
     # kernel_coefficient = projection_coefficient / distance
     #                    = [sin(angle), cos(angle)] / distance
@@ -231,6 +215,13 @@ def compute_kernel(rng):
 
     return coeff
 
+def imread(filename, raise_if_not_read=True):  # Read an image in grayscale, return array
+    try: return np.mean(plt.imread(filename), axis=2).astype(float)
+    except AttributeError:
+        if raise_if_not_read: raise SystemError('image is not read')
+        else: print('Warning: image is not read')
+
+
 if __name__ == "__main__":
 
     image_file = './images//raccoon_eye.jpeg'
@@ -238,28 +229,25 @@ if __name__ == "__main__":
     frame = CFrame(image).segment()
 
     # verification (intra):
-    blobQue = list(frame.blob_)
-    while blobQue:
-        blob = blobQue.pop(0)
+    blob_ = list(frame.blob_)
+    while blob_:
+        blob = blob_.pop(0)
         print(f"{blob}'s parent is {blob.root}", end="")
         if hasattr(blob, "rnode_") and blob.rnode_.blob_:  # if blob is extended with rnode_
-            blob_ = blob.rnode_.blob_
+            blobs = blob.rnode_.blob_
             print(f", has {len(blob_)} sub-blob{'' if len(blob_) == 1 else 's'}")
-            if blob_: blobQue += blob_
+            if blobs: blob_ += blobs
         else:
-            print()
-        # else un-extended blob, skip
+            print()  # the blob is not extended, skip
 
-    # verification (frame):
     I, Dy, Dx, G = frame.latuple
-
+    # verification:
     i__ = np.zeros_like(image, dtype=np.float32)
     dy__ = np.zeros_like(image, dtype=np.float32)
     dx__ = np.zeros_like(image, dtype=np.float32)
     g__ = np.zeros_like(image, dtype=np.float32)
     s__ = np.zeros_like(image, dtype=np.float32)
     line_ = []
-
     for blob in frame.blob_:
         for (y, x), (i, dy, dx, g) in blob.dert_.items():
             i__[y, x] = i; dy__[y, x] = dy; dx__[y, x] = dx; g__[y, x] = g; s__[y, x] = blob.sign

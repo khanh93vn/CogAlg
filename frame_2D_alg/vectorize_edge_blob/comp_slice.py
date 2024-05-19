@@ -65,11 +65,9 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         # PP:
         G.root = [] if root is None else root  # mgraphs that contain this G, single-layer
         G.rng = rng
-        G.fd = fd  # fork if flat layers?
-        G.n = n  # external n (last layer n)
-        G.area = 0
         G.S = 0  # sparsity: distance between node centers
         G.A = 0, 0  # angle: summed dy,dx in links
+        G.area = 0
         G.Et = [0,0,0,0] if Et is None else Et  # external eval tuple, summed from rng++ before forming new graph and appending G.extH
         G.latuple = [0,0,0,0,0,[0,0]]  # lateral I,G,M,Ma,L,[Dy,Dx]
         G.iderH = CH()  # summed from PPs
@@ -80,6 +78,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.box = [np.inf, np.inf, -np.inf, -np.inf]  # y,x,y0,x0,yn,xn
         G.kH = []
         # graph-external, +level per root sub+:
+        G.n = n  # external n (last layer n)
         G.rim = []  # direct links, depth, init rim_t, link_tH in base sub+ | cpr rd+, link_tHH in cpr sub+
         G.extH = CH()  # G-external daggH( dsubH( dderH, summed from rim links
         G.ExtH = CH()  # summed link.DerH
@@ -99,32 +98,34 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
     def __bool__(G): return G.n != 0  # to test empty
 
 
-class Clink(CBase):  # the product of comparison between two nodes
+class Clink(CBase):  # product of comparison between two nodes or links
     name = "link"
+
     def __init__(l, node_=None,rim=None, derH=None, extH=None, root=None, distance=0, angle=None, box=None ):
         super().__init__()
+
         l.node_ = [] if node_ is None else node_  # e_ in kernels, else replaces _node,node: not used in kernels?
         l.angle = [0,0] if angle is None else angle  # dy,dx between node centers
         l.distance = distance  # distance between node centers
         l.S = 0  # initially summed from node_
+        l.n = 1  # or min(node_.n)?
+        l.area = 0  # sum node area
+        l.latuple = []  # sum node I,G,M,Ma,L,[Dy,Dx], no need to specify here
+        l.yx_ = []  # or box
         l.Et = [0,0,0,0]  # graph-specific, accumulated from surrounding nodes in node_connect
         l.relt = [0,0]
-        l.rim_t = []  # dual tree of _links, each may have its own node-mediated links
-        # reciprocal rim_t of connecting links?
         l.derH = CH() if derH is None else derH
         l.DerH = CH()  # ders from G.DerH
+        # add in der+:
         l.extH = CH() if extH is None else extH  # for der+
         l.ExtH = CH()  # summed from kernels in der+
-        l.root = None if root is None else root  # dgraphs that contain this link
+        l.root = None if root is None else root  # dgraphs containing link
+        l.rim_t = []  # dual tree of _links, each may have its own node-mediated links, instead of rim
         l.compared_ = []
-        l.rim = []
-        l.n = 1  # default n, or always min(node_.n)?
-        l.area = 0
         l.box = [np.inf, np.inf, -np.inf, -np.inf] if box is None else box  # y,x,y0,x0,yn,xn
-        l.dir = bool  # direction of comparison if not G0,G1, only needed for comp link?
-        # for der++ in comp_slice:
-        l.latuple = [0,0,0,0,0,[0,0]]  # lateral I,G,M,Ma,L,[Dy,Dx]
-        l.yx_ = []
+        l.dir = bool  # direction of comparison if not G0,G1, for comp link?
+        # add in sum2graph: graph is Clink?
+        l.link_ = []
 
     def __bool__(l): return bool(l.derH.H)
 
@@ -242,7 +243,7 @@ def rng_recursion(PP, fd=0):  # similar to agg+ rng_recursion, but looping and c
         for link in PP.link_:
             if link.node_[0].link_: # empty in top row
                 link_ = copy(link.node_[0].link_[-1])
-                assert not hasattr(link, "link_")
+                assert not hasattr(link, "link_")  # no link_ yet
                 link.link_ = [link_]  # add upper node uplinks as prelinks
     else: iP_ = PP.P_
     rng = 1  # cost of links added per rng+
@@ -284,7 +285,7 @@ def comp_P(link, fd):
     aveP = P_aves[fd]
     _P, P, distance, angle = link.node_[0], link.node_[1], link.distance, link.angle
 
-    if fd:  # der+, comp derPs
+    if fd:  # der+, comp derPs, no comp_latuple?
         rn = (_P.derH.n if P.derH else len(_P.dert_)) / P.derH.n
         derH = _P.derH.comp_(P.derH, CH(), rn=rn, flat=0)
         vm,vd,rm,rd = derH.Et
