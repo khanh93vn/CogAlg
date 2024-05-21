@@ -1,12 +1,13 @@
 import numpy as np
-from collections import deque, defaultdict
+from collections import deque
 from copy import deepcopy, copy
-from itertools import zip_longest, combinations
+from itertools import zip_longest
 import sys
 sys.path.append("..")
 from frame_blobs import CBase, imread
-if __name__ == "__main__": from slice_edge import comp_angle, CsliceEdge
-else: from .slice_edge import comp_angle, CsliceEdge
+if __name__ == "__main__": from slice_edge import comp_angle
+else: from .slice_edge import comp_angle
+import slice_edge
 
 '''
 Vectorize is a terminal fork of intra_blob.
@@ -42,18 +43,18 @@ aves = ave_mI, ave_mG, ave_mM, ave_mMa, ave_mA, ave_mL = ave, 10, 2, .1, .2, 2
 P_aves = ave_Pm, ave_Pd = 10, 10
 PP_aves = ave_PPm, ave_PPd = 50, 50
 
-class CcompSliceFrame(CsliceEdge):
+class CFrame(slice_edge.CFrame):
 
-    class CEdge(CsliceEdge.CEdge): # replaces CBlob
+    class CEdge(slice_edge.CFrame.CEdge): # replaces CBlob
 
-        def vectorize(edge):  # overrides in CsliceEdge.CEdge.vectorize
+        def vectorize(edge):  # overrides in CEdge.vectorize
             edge.slice_edge()
             if edge.latuple[-1] * (len(edge.P_)-1) > ave_PPm:  # eval PP, rdn=1
                 edge.iderH = CH()
                 edge.fback_ = []
                 for P in edge.P_:
                     P.derH = CH()   # create derH
-                    P.link_ = [[CdP([_P, P]) for _P in P.link_]]  # prelinks for comp_slice
+                    P.link_ = [[CdP([_P, P]) for _P in P.rim_]]  # prelinks for comp_slice
                 ider_recursion(None, edge)  # vertical, lateral-overlap P cross-comp -> PP clustering
 
     CBlob = CEdge
@@ -442,4 +443,4 @@ if __name__ == "__main__":
     image_file = '../images/raccoon_eye.jpeg'
     image = imread(image_file)
 
-    frame = CcompSliceFrame(image).segment()  # verification
+    frame = CFrame(image).segment()  # verification

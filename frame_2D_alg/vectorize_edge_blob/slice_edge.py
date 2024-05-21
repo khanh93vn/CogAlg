@@ -2,7 +2,8 @@ import numpy as np
 from math import atan2, cos, floor, pi
 import sys
 sys.path.append("..")
-from frame_blobs import CBase, CFrame, imread
+from frame_blobs import CBase, imread
+import frame_blobs
 
 '''
 In natural images, objects look very fuzzy and frequently interrupted, only vaguely suggested by initial blobs and contours.
@@ -27,9 +28,9 @@ max_dist = 15
 ave_dangle = .95  # vertical difference between angles: -1->1, abs dangle: 0->1, ave_dangle = (min abs(dangle) + max abs(dangle))/2,
 
 
-class CsliceEdge(CFrame):
+class CFrame(frame_blobs.CFrame):
 
-    class CEdge(CFrame.CBlob): # replaces CBlob
+    class CEdge(frame_blobs.CFrame.CBlob): # replaces CBlob
 
         def term(blob):  # extension of CsubFrame.CBlob.term(), evaluate for vectorization right after rng+ in intra_blob
             super().term()
@@ -170,7 +171,7 @@ if __name__ == "__main__":
     image_file = '../images/raccoon_eye.jpeg'
     image = imread(image_file)
 
-    frame = CsliceEdge(image).segment()
+    frame = CFrame(image).segment()
     # verification:
     import matplotlib.pyplot as plt
 
