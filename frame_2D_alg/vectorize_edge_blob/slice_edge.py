@@ -2,8 +2,7 @@ import numpy as np
 from math import atan2, cos, floor, pi
 import sys
 sys.path.append("..")
-from frame_blobs import CBase, imread
-import frame_blobs
+from frame_blobs import CBase, CFrame, imread, unpack_blob_
 
 '''
 In natural images, objects look very fuzzy and frequently interrupted, only vaguely suggested by initial blobs and contours.
@@ -28,9 +27,9 @@ max_dist = 15
 ave_dangle = .95  # vertical difference between angles: -1->1, abs dangle: 0->1, ave_dangle = (min abs(dangle) + max abs(dangle))/2,
 
 
-class CFrame(frame_blobs.CFrame):
+class CsliceEdge(CFrame):
 
-    class CEdge(frame_blobs.CFrame.CBlob): # replaces CBlob
+    class CEdge(CFrame.CBlob): # replaces CBlob
 
         def term(blob):  # extension of CsubFrame.CBlob.term(), evaluate for vectorization right after rng+ in intra_blob
             super().term()
@@ -165,28 +164,28 @@ def comp_angle(_A, A):  # rn doesn't matter for angles
 
     return [mangle, dangle]
 
+def unpack_edge_(frame):
+    return [blob for blob in unpack_blob_(frame) if hasattr(blob, "P_")]
 
 if __name__ == "__main__":
 
     image_file = '../images/raccoon_eye.jpeg'
     image = imread(image_file)
 
-    frame = CFrame(image).segment()
+    frame = CsliceEdge(image).segment()
     # verification:
     import matplotlib.pyplot as plt
 
-    # show first largest n edges
-    edge_, edgeQue = [], list(frame.blob_)
-    while edgeQue:
-        blob = edgeQue.pop(0)
-        if hasattr(blob, "P_"): edge_ += [blob]
-        elif hasattr(blob, "rlay"): edgeQue += blob.rlay.blob_
-
+    # settings
     num_to_show = 5
     show_gradient = True
     show_slices = True
-    sorted_edge_ = sorted(edge_, key=lambda edge: len(edge.yx_), reverse=True)
-    for edge in sorted_edge_[:num_to_show]:
+
+    # unpack and sort edges
+    edge_ = sorted(unpack_edge_(frame), key=lambda edge: len(edge.yx_), reverse=True)
+
+    # show first largest n edges
+    for edge in edge_[:num_to_show]:
         yx_ = np.array(edge.yx_)
         yx0 = yx_.min(axis=0) - 1
 

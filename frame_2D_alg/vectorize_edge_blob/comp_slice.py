@@ -256,14 +256,21 @@ def rng_recursion(PP, fd=0):  # similar to agg+ rng_recursion, but looping and c
     return iP_
 
 
-# draft
 def comp_link_(PP):
 
-    for link in PP.link_:
-        if link.node_[0].rim_:  # empty in top row
-            rim_ = copy(link.node_[0].rim_[-1])
-            assert not hasattr(link, "rim_")  # no link_ yet
-            link.rim_ = [rim_]  # add upper node uplinks as prelinks
+    dlink_ = []
+    for node in PP.node_:  # CPs in 1st der+, then CdP
+        rim = [link for rim in node.rim_ for link in rim] if isinstance(node, CP) else node.rim  # flatten P.rim_
+        for link in rim:  # dlink__ is layered by prior rng
+            _node = link.node_[0]
+            if not _node.rim_: continue # empty in top row
+            _rim = [link for rim in _node.rim_ for link in rim] if isinstance(_node,CP) else _node.rim
+            for _link in _rim:  # comp all rng rims?
+                dlink = comp_P(CdP(node_=[_link, link]), fd=1)
+                if dlink: # return if match
+                    dlink.rim += [_link]
+                    dlink_ += [dlink]
+    return dlink_
 
 
 def comp_P(link, fd):
@@ -446,3 +453,31 @@ if __name__ == "__main__":
     image = imread(image_file)
 
     frame = CcompSliceFrame(image).segment()  # verification
+    # verification:
+    import matplotlib.pyplot as plt
+    from slice_edge import unpack_edge_
+
+    # settings:
+    num_to_show = 5
+
+    # unpack and sort edges
+    edge_ = sorted(
+        filter(lambda edge: hasattr(edge, "node_") and edge.node_, unpack_edge_(frame)),
+        key=lambda edge: len(edge.yx_), reverse=True)
+
+    # per-edge
+    for edge in edge_[:num_to_show]:
+        yx_ = np.array(edge.yx_)
+        yx0 = yx_.min(axis=0) - 1
+
+        # show edge-blob
+        shape = yx_.max(axis=0) - yx0 + 2
+        mask_nonzero = tuple(zip(*(yx_ - yx0)))
+        mask = np.zeros(shape, bool)
+        mask[mask_nonzero] = True
+        plt.imshow(mask, cmap='gray', alpha=0.5)
+        plt.title(f"area = {edge.area}")
+
+        print(len(edge.node_[0]), len(edge.node_[1]))  # TODO: show PP graph and layer info (der, rng)
+
+        plt.show()
