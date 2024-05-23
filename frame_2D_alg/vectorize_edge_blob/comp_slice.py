@@ -99,14 +99,14 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
 class CdP(CBase):  # comp_slice version of Clink
     name = "dP"
-    def __init__(l, node_=None, derH=None, root=None, distance=None, angle=None):
+    def __init__(l, node_=None, derH=None, root=None, distance=None, angle=None, yx=None, latuple=None):
         super().__init__()
 
         l.node_ = [] if node_ is None else node_  # e_ in kernels, else replaces _node,node: not used in kernels?
         l.angle = [0,0] if angle is None else angle  # dy,dx between node centers
         l.distance = distance  # distance between node centers
-        l.latuple = []  # sum node_
-        l.yx = []  # sum node_
+        l.latuple = [] if latuple is None else latuple  # sum node_
+        l.yx = [] if yx is None else yx  # sum node_
         l.rim = []
         l.derH = CH() if derH is None else derH
         l.root = None if root is None else root  # PPds containing dP
@@ -228,7 +228,12 @@ def rng_recursion(PP, fd=0):  # similar to agg+ rng_recursion, but looping and c
             if len(P.rim_) < rng: continue  # no _rnglink_ or top row
             _prelink_ = P.rim_.pop()
             rnglink_, prelink_ = [],[]  # both per rng+
-            for _P in _prelink_:
+            for _prelink in _prelink_:
+                try:
+                    _P = _prelink.node_[0]
+                except AttributeError:
+                    print(_prelink_)
+                    input()
                 _y,_x = _P.yx; y,x = P.yx
                 angle = np.subtract([y,x], [_y,_x]) # dy,dx between node centers
                 distance = np.hypot(*angle)  # between node centers
@@ -239,7 +244,7 @@ def rng_recursion(PP, fd=0):  # similar to agg+ rng_recursion, but looping and c
                     if mlink:  # return if match
                         V += mlink.derH.Et[0]
                         rnglink_ += [mlink]
-                        prelink_ += [dP.node_[0] for dP in _P.rim_[-1]]  # connected __Ps
+                        prelink_ += [dP for dP in _P.rim_[-1]]  # connected __Ps
             if rnglink_:
                 P.rim_ += [rnglink_]
                 if prelink_:
@@ -262,7 +267,7 @@ def comp_link_(PP):  # node_- mediated: comp node.rim dPs
     consistent dlink_ may be double-nested, from rim_ and _rim_, too complex? 
     '''
     for dP in PP.link_:
-        rim = [link for rim in dP.rim_ for link in rim]  # flatten P.rim_ or layer dlink_ by root rng+?
+        rim = [link for rim in dP.rim for link in rim]  # flatten P.rim_ or layer dlink_ by root rng+?
         for link in rim:
             _node = link.node_[0]
             if not _node.rim_: continue # empty in top row
@@ -474,8 +479,15 @@ if __name__ == "__main__":
         mask_nonzero = tuple(zip(*(yx_ - yx0)))
         mask = np.zeros(shape, bool)
         mask[mask_nonzero] = True
-        plt.imshow(mask, cmap='gray', alpha=0.5)
-        plt.title(f"area = {edge.area}")
 
-        print(len(edge.node_[0]), len(edge.node_[1]))  # TODO: show PP graph and layer info (der, rng)
-        plt.show()
+        # TODO: show deeper layers and layer info (der, rng)
+        for fd, PP_ in enumerate(edge.node_):
+            plt.imshow(mask, cmap='gray', alpha=0.5)
+            plt.title(f"area={edge.area}, {'der+' if fd else 'rng+'}")
+            # TODO: verify that groups of elements from different PPs are separated
+            for PP in PP_:
+                for dP in PP.link_:
+                    (_y, _x), (y, x) = dP.node_[0].yx - yx0, dP.node_[1].yx - yx0
+                    plt.plot([_x, x], [_y, y], "o-k")
+
+            plt.show()
