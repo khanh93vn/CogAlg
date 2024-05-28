@@ -43,17 +43,14 @@ P_aves = ave_Pm, ave_Pd = 10, 10
 PP_aves = ave_PPm, ave_PPd = 50, 50
 
 class CcompSliceFrame(CsliceEdge):
-
     class CEdge(CsliceEdge.CEdge): # replaces CBlob
 
         def vectorize(edge):  # overrides in CsliceEdge.CEdge.vectorize
-
             edge.slice_edge()
             if edge.latuple[-1] * (len(edge.P_)-1) > ave_PPm:  # eval PP, rdn=1
                 edge.iderH = CH(); edge.fback_ = []
                 for P in edge.P_:
                     P.derH = CH()
-                    P.rim_ = [[CdP([_P, P]) for _P in P.rim_]]  # prelinks for comp_slice
                 ider_recursion(None, edge)  # vertical, lateral-overlap P cross-comp -> PP clustering
 
     CBlob = CEdge
@@ -97,7 +94,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
     def __bool__(G): return G.n != 0  # to test empty
 
-class CdP(CBase):  # comp_slice version of Clink
+class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
     name = "dP"
     def __init__(l, node_=None, derH=None, root=None, distance=None, angle=None, yx=None, latuple=None):
         super().__init__()
@@ -106,10 +103,11 @@ class CdP(CBase):  # comp_slice version of Clink
         l.angle = [0,0] if angle is None else angle  # dy,dx between node centers
         l.distance = distance  # distance between node centers
         l.latuple = [] if latuple is None else latuple  # sum node_
-        l.yx = [] if yx is None else yx  # sum node_
+        l.yx = [0,0] if yx is None else yx  # sum node_
         l.rim = []
         l.derH = CH() if derH is None else derH
         l.root = None if root is None else root  # PPds containing dP
+        l.nmed = 0  # comp rng: n of mediating Ps between node_ Ps
 
     def __bool__(l): return bool(l.derH.H)
 
@@ -164,8 +162,7 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
         Et, et = HE.Et, He.Et
         HE.Et = np.add(HE.Et, He.Et); HE.relt = np.add(HE.relt, He.relt)
         if irdnt: Et[2:4] = [E+e for E,e in zip(Et[2:4], irdnt)]
-        HE.n += He.n  # combined param accumulation span
-
+        HE.n += He.n
 
     def comp_(_He, He, dderH, rn=1, fagg=0, flat=1):  # unpack tuples (formally lists) down to numericals and compare them
 
@@ -212,72 +209,74 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
 
 def ider_recursion(root, PP, fd=0):  # node-mediated correlation clustering: keep same Ps and links, increment link derH, then P derH in sum2PP
 
-    Q = comp_link_(PP) if fd else rng_recursion(PP)
-    # replace PP node_,link_, append derH by der+ or extend PP.link_ by rng++ cross-comp
-    form_PP_t(PP, Q)  # calls der+
+    comp_link_(PP) if fd else rng_recursion(PP) # edge only
 
-    if root is not None and PP.iderH: root.fback_ += [PP.iderH]  # feedback per PPd?
+    # der+: PP P_,link_'replace, derH+ or rng++: PP.link_+
+    form_PP_t(PP, PP.link_ if fd else PP.P_)  # calls der+
 
-def rng_recursion(PP, fd=0):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
+    if root is not None and PP.iderH:
+        root.fback_ += [PP.iderH]
+        # feedback per PPd
 
-    iP_ = PP.P_
+def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
+
     rng = 1  # cost of links added per rng+
-    while True:
-        P_ = []; V = 0
-        for P in iP_:
-            if len(P.rim_) < rng: continue  # no _rnglink_ or top row
-            _prelink_ = P.rim_.pop()
-            rnglink_, prelink_ = [],[]  # both per rng+
-            for _prelink in _prelink_:
-                try:
-                    _P = _prelink.node_[0]
-                except AttributeError:
-                    print(_prelink_)
-                    input()
+    _P_ = copy(edge.P_) # includes prelink
+
+    while True:  # extend mediated comp rng by adding prelinks
+        P_ = []  # with new prelinks
+        V = 0
+        for P,_pre_ in _P_:
+            if len(P.rim_) < rng-1: continue  # no _rng_link_ or top row
+            rng_link_ = []  # per rng+
+            for _P in _pre_:  # prelinks
+                pre_ = []
                 _y,_x = _P.yx; y,x = P.yx
                 angle = np.subtract([y,x], [_y,_x]) # dy,dx between node centers
                 distance = np.hypot(*angle)  # between node centers
                 # or rng * ((P.val+_P.val)/ ave_rval)?:
                 if distance <= rng:
-                    if len(_P.rim_) < rng: continue
+                    if len(_P.rim_) < rng-1: continue
                     mlink = comp_P(_P,P, angle,distance)
                     if mlink:  # return if match
                         V += mlink.derH.Et[0]
-                        rnglink_ += [mlink]
-                        prelink_ += [dP for dP in _P.rim_[-1]]  # connected __Ps
-            if rnglink_:
-                P.rim_ += [rnglink_]
-                if prelink_:
-                    P.rim_ += [prelink_]; P_ += [P]  # Ps with prelinks for next rng+
+                        rng_link_ += [mlink]
+                        if _P.rim_:  # higher rng
+                            pre_ += [dP.node_[0] for dP in _P.rim_[-1]]  # connected __Ps
+                        else:  # rng == 1 (we need this because _P.rim is empty when rng == 1)
+                            pre_index = [Pt[0] for Pt in edge.P_].index(_P)  # index of _P's pre in edge.P_
+                            pre_ += edge.P_[pre_index][1]
 
-        if V <= ave * rng * len(P_) * 6:  # implied val of all __P_s, 6: len mtuple
-            for P in P_: P.rim_.pop()  # remove prelinks
+                if pre_:
+                    P_ += [[P,pre_]]  # next P_ must have prelinks
+            if rng_link_:
+                P.rim_ += [rng_link_]
+        if not P_ or V <= ave * rng * len(P_) * 6:  # implied val of all __P_s, 6: len mtuple
             break
-        rng += 1
+        else:
+            _P_ = P_
+            rng += 1
     # der++ in PPds from rng++, no der++ inside rng++: high diff @ rng++ termination only?
-    PP.rng=rng  # represents rrdn
+    edge.rng=rng  # represents rrdn
+    edge.P_ = [Pt[0] for Pt in edge.P_]
 
-    return iP_
-
+# need to review
 def comp_link_(PP):  # node_- mediated: comp node.rim dPs
 
     dlink_ = []
-    ''' 
-    this dlink_ is flat, but input may be nested rim_: some input info is lost.
-    consistent dlink_ may be double-nested, from rim_ and _rim_, too complex? 
-    '''
     for dP in PP.link_:
-        rim = [link for rim in dP.rim for link in rim]  # flatten P.rim_ or layer dlink_ by root rng+?
-        for link in rim:
-            _node = link.node_[0]
-            if not _node.rim_: continue # empty in top row
-            _rim = [link for rim in _node.rim_ for link in rim] if isinstance(_node,CP) else _node.rim
-            for _link in _rim:  # comp all rng rims?
-                dlink = comp_P(_link,link)
+       for nmed, _rim_ in enumerate(dP.node_[0].rim_):  # link.node_ is CP in 1st der+
+           # add fork for CdP node_?
+            for _dP in _rim_:
+                dlink = comp_P(_dP,dP)
                 if dlink:  # return if match
-                    dlink.rim += [_link]
+                    dP.rim += [dlink]
                     dlink_ += [dlink]
-    return dlink_
+                    dlink.nmed = nmed
+
+    # we just need to update dP.rim, no return?
+    # return dlink_
+
 
 def comp_P(_P,P, angle=None, distance=None):  # comp dPs if fd else Ps
 
@@ -304,10 +303,9 @@ def comp_P(_P,P, angle=None, distance=None):  # comp dPs if fd else Ps
     yx = [(_c+c)/2 for _c,c in zip((_y,_x),(y,x))]
     latuple = [(P+p)/2 for P,p in zip(_P.latuple[:-1],P.latuple[:-1])] + [[(A+a)/2 for A,a in zip(_P.latuple[-1],P.latuple[-1])]]
 
-    link = CdP(node_=[_P,P],derH=derH,angle=angle,distance=distance,yx=yx,latuple=latuple)
+    link = CdP(node_=[_P,P],derH=derH, angle=angle,distance=distance,yx=yx,latuple=latuple)
     if link.derH.Et[0] > aveP * link.derH.Et[2]:  # always rng+? (vm > aveP * rm)
         return link
-
 
 # not revised:
 def form_PP_t(root, P_):  # form PPs of dP.valt[fd] + connected Ps val
@@ -318,8 +316,9 @@ def form_PP_t(root, P_):  # form PPs of dP.valt[fd] + connected Ps val
         mlink_,_mP_,dlink_,_dP_ = [],[],[],[]  # per P
         mLink_+=[mlink_]; _mP__+=[_mP_]
         dLink_+=[dlink_]; _dP__+=[_dP_]
-        if not (hasattr(P, "rim_") and P.rim_): continue
-        for link in [L for rim in P.rim_ for L in rim]:  # flatten P.link_ nested by rng
+        if hasattr(P, "rim"): link_ = [link for rim in P.node_[0].rim_ for link in rim]  # CdP: get upper links: all layers of rim_
+        else:                 link_ = [link for rim in P.rim_ for link in rim]  # flatten P.link_ nested by rng
+        for link in link_:
             if isinstance(link.derH.H[0],CH): m,d,mr,dr = link.derH.H[-1].Et  # last der+ layer vals
             else:                             m,d,mr,dr = link.derH.Et  # H is md_
             if m >= ave * mr:
@@ -330,7 +329,7 @@ def form_PP_t(root, P_):  # form PPs of dP.valt[fd] + connected Ps val
     for fd, (Link_,_P__) in zip((0,1),((mLink_,_mP__),(dLink_,_dP__))):
         CP_ = []  # all clustered Ps
         for P in P_:
-            if P in CP_ or not (hasattr(P, "rim_") and P.rim_): continue  # already packed in some sub-PP
+            if P in CP_: continue  # already packed in some sub-PP
             cP_, clink_ = [P], []  # cluster per P
             if P in P_:
                 P_index = P_.index(P)
@@ -354,7 +353,6 @@ def form_PP_t(root, P_):  # form PPs of dP.valt[fd] + connected Ps val
             feedback(root)  # after der+ in all nodes, no single node feedback
 
     root.node_ = PP_t  # nested in der+, add_alt_PPs_?
-
 
 # not revised
 def sum2PP(root, P_, dP_, fd):  # sum links in Ps and Ps in PP
@@ -383,17 +381,20 @@ def sum2PP(root, P_, dP_, fd):  # sum links in Ps and Ps in PP
         PP.latuple = [P+p for P,p in zip(PP.latuple[:-1],P.latuple[:-1])] + [[A+a for A,a in zip(PP.latuple[-1],P.latuple[-1])]]
         if P.derH:
             PP.iderH.add_(P.derH)  # no separate extH, the links are unique here
-        for y,x in P.yx_:
-            y = int(round(y)); x = int(round(x))  # summed with float dy,dx in slice_edge?
-        PP.box = accum_box(PP.box,y,x); celly_+=[y]; cellx_+=[x]
+        if isinstance(P, CP):
+            for y,x in P.yx_:
+                y = int(round(y)); x = int(round(x))  # summed with float dy,dx in slice_edge?
+                PP.box = accum_box(PP.box,y,x); celly_+=[y]; cellx_+=[x]
         if not fd: P.root = PP
     if PP.iderH:
         PP.iderH.Et[2:4] = [R+r for R,r in zip(PP.iderH.Et[2:4], iRt)]
-    # pixmap:
-    y0,x0,yn,xn = PP.box
-    PP.mask__ = np.zeros((yn-y0, xn-x0), bool)
-    celly_ = np.array(celly_); cellx_ = np.array(cellx_)
-    PP.mask__[(celly_-y0, cellx_-x0)] = True
+
+    if isinstance(P_[0], CP):  # skip if P is CdP because it doens't have box and yx
+        # pixmap:
+        y0,x0,yn,xn = PP.box
+        PP.mask__ = np.zeros((yn-y0, xn-x0), bool)
+        celly_ = np.array(celly_); cellx_ = np.array(cellx_)
+        PP.mask__[(celly_-y0, cellx_-x0)] = True
 
     return PP
 
@@ -480,14 +481,11 @@ if __name__ == "__main__":
         mask = np.zeros(shape, bool)
         mask[mask_nonzero] = True
 
-        # TODO: show deeper layers and layer info (der, rng)
         for fd, PP_ in enumerate(edge.node_):
             plt.imshow(mask, cmap='gray', alpha=0.5)
             plt.title(f"area={edge.area}, {'der+' if fd else 'rng+'}")
-            # TODO: verify that groups of elements from different PPs are separated
             for PP in PP_:
                 for dP in PP.link_:
                     (_y, _x), (y, x) = dP.node_[0].yx - yx0, dP.node_[1].yx - yx0
                     plt.plot([_x, x], [_y, y], "o-k")
-
             plt.show()

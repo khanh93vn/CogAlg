@@ -124,42 +124,42 @@ def segment_recursive(root, Q, fd, nrng):  # recursive eval node_|link_ rims for
 
     return graph_
 
-def rng_recursion(PP, rng=1, fd=0):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
+def rng_recursion(PP):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
 
-    iP_  = PP.P_
-    rng = 0  # cost of links added per rng+
+    iP_ = PP.P_
+    rng = 1  # cost of links added per rng+
     while True:
-        rng += 1
         P_ = []; V = 0
+        # revise to zip i_P_ with iP_:
         for P in iP_:
-            if P.link_:
-                if len(P.link)<rng: continue  # no current-rng link_
-            else: continue  # top P_ in PP?
-            _prelink_ = P.link_.pop()
-            rng_link_, prelink_ = [],[]  # both per rng+
-            for link in _prelink_:
-                if link.distance <= rng:  # | rng * ((P.val+_P.val)/ ave_rval)?
-                    _P = link.node_[0]
-                    if fd and not (P.derH and _P.derH): continue  # nothing to compare
-                    mlink = comp_P(link, fd)
-                    if mlink: # return if match
+            if len(P.rim_) < rng: continue  # no _rnglink_ or top row
+            i_P_ = P.rim_.pop()  # prelink_
+            rng_link_, _P_  = [],[]  # both per rng+
+            for _P in i_P_:
+                _y,_x = _P.yx; y,x = P.yx
+                angle = np.subtract([y,x], [_y,_x]) # dy,dx between node centers
+                distance = np.hypot(*angle)  # between node centers
+                # or rng * ((P.val+_P.val)/ ave_rval)?:
+                if distance <= rng:
+                    if len(_P.rim_) < rng: continue
+                    mlink = comp_P(_P,P, angle,distance)
+                    if mlink:  # return if match
                         V += mlink.derH.Et[0]
                         rng_link_ += [mlink]
-                        prelink_ += _P.link_[-1]  # connected __Ps links (_P.link_[-1] is prelinks)
+                        _P_ += [dP.node_[0] for dP in _P.rim_[-1]]  # connected __Ps
             if rng_link_:
-                P.link_ += [rng_link_]
-                if prelink_: P.link_ += [rng_link_]  # temporary pre-links
-            if prelink_:
-                P_ += [P]
-        if V > ave * rng * len(P_) * 6:  #  implied val of all __P_s, 6: len mtuple
-            iP_ = P_; fd = 0
-        else:
-            for P in PP.P_: P.link_.pop()  # remove prelinks
+                P.rim_ += [rng_link_]
+                if _P_:
+                    P.rim_ += [_P_]; P_ += [P]  # Ps with prelinks for next rng+
+
+        if V <= ave * rng * len(P_) * 6:  # implied val of all __P_s, 6: len mtuple
+            for P in P_: P.rim_.pop()  # remove prelinks
             break
+        rng += 1
     # der++ in PPds from rng++, no der++ inside rng++: high diff @ rng++ termination only?
     PP.rng=rng  # represents rrdn
 
-    return P_
+    return iP_
 
 def unpack_last_link_(link_):  # unpack last link layer
 
@@ -402,3 +402,77 @@ def comp_P(link, fd):
         link.yx_ += cP.yx_
     if vm > aveP * rm:  # always rng+?
         return link
+
+def segment_Q(root, Q, fd, nrng):  # recursive eval node_|link_ rims for cluster assignment
+    # eval Rim_ overlap for merge graphts, extending the Rim_?
+
+    link_V_xolp(Q, fd)  # recursive N Et += link.V + link.relt * node.rim _N_ overlap V:
+    # rim link Vt is potentiated by overlap of link.node_ rim _N_: Shared Nearest Neighbours
+    max_ = []
+    for G in Q:
+        _G_ = [link.node_[0] if link.node_[1] is G else link.node_[1] for link in get_rim(G)]  # all connected G' rim's _Gs
+        if not any([_G.DerH.Et[0] > G.DerH.Et[0] or (_G in max_) for _G in _G_]):  # _G if _G.V==G.V
+            max_ += [G]  # local maxes are seeds for floodfill, V* k * max range: add mediation step if no maxes in rrim?
+    # init graphts:
+    iGt_ = []
+    for N in max_:
+        rim = get_rim(N)
+        _N_ = [link.node_[0] if link.node_[1] is N else link.node_[1] for link in rim]
+        Gt = [[[N,rim]], copy(rim),copy(rim),_N_,[0,0,0,0]]  # nodet_,link_,Rim,_N_,Et; nodet: N,rim
+        N.root = Gt
+        iGt_ += [Gt]
+    _Gt_ = copy(iGt_)
+    r = 1
+    while _Gt_:  # single-linked floodfill per Gt, breadth-first for parallelization
+        Gt_ = []
+        for Gt in copy(_Gt_):
+            nodet_,link_,_rim, _N_, Et = Gt
+            rim = []  # per node
+            for link in _rim:  # floodfill Gt by rim tracing and _N.root merge
+                link_ += [link]
+                Et[:2] = np.add(Et[:2],link.Vt); Et[2:] = np.add(Et[2:],link.derH.Et[2:])
+                _N,N = link.node_ if link.node_[1] in _N_ else [link.node_[1],link.node_[0]]  # N is in, _N is outside _N_
+                if _N.root:
+                    if _N.root is not Gt:  # root was not merged, + eval|comp to keep connected Gt separate?
+                        merge_Gt(Gt,_N.root, rim, fd)
+                else:
+                    _N_ += [_N]  # for next loop:
+                    rim += [L for L in get_rim(_N) if L.Vt[fd] > ave*L.derH.Et[2+fd]]  # link Vt x= link node_'__N_'olp
+            if rim:
+                _rim[:] = rim; Gt_ += [Gt]
+        _Gt_ = Gt_
+        r += 1  # recursion depth
+
+    return [sum2graph(root, Gt, fd, nrng) for Gt in iGt_ if Gt]  # not-empty clusters
+
+def link_V_xolp(iQ, fd):  # recursive N.V += link.relv * node'_N_ overlap Et
+
+    _oV_ = [0 for n in iQ]
+    _Q = copy(iQ)
+    r = 1
+    while True:  # refine overlap between N.rim _N_s of linked Ns, depending on prior-loop overlap
+        OV, DOV = 0,0
+        Q, oV_ = [],[]
+        for N, _oV in zip(_Q, _oV_):  # update node rim link Ets
+            oV, DoV = 0,0
+            rim = get_rim(N)
+            _N_ = [L.node_[0] if L.node_[1] is N else L.node_[1] for L in rim]
+            for _N, link in zip(_N_,rim):
+                _rim = get_rim(_N)
+                __N_ = [L.node_[0] if L.node_[1] is _N else L.node_[1] for L in _rim]
+                oN_ = list(set(_N_).intersection(set(__N_)))
+                oV += sum([n.Et[fd]- ave*n.Et[2+fd] for n in oN_])  # sum V deviation of overlapping Ns
+                doV = oV - _oV  # oV update to adjust Vt
+                link.Vt[fd] += link.derH.relt[fd] / link.derH.n * doV  # update oN_-modulated V only
+                DoV += doV
+            DOV += DoV; OV += oV
+            if DoV > ave:
+                Q += [N]; oV_ += [oV]
+        # test update value:
+        if DOV < ave:
+            break
+        for N in Q:  # sum node Ets from updated node rim link Ets:
+            N.Et[fd] = sum([link.derH.Et[fd] for link in get_rim(N)])
+        r += 1
+        _Q = Q; _oV_ = oV_
+
