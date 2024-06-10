@@ -2,8 +2,8 @@ import numpy as np
 from copy import deepcopy, copy
 from itertools import combinations, product, zip_longest
 from .slice_edge import comp_angle, CsliceEdge
-from .comp_slice import ider_recursion, comp_latuple, get_match, CH, CG, CdP
-from utils import box2center, extend_box
+from .comp_slice import rng_recursion, form_PP_t, comp_latuple, CH, CG
+from utils import extend_box
 from frame_blobs import CBase
 
 '''
@@ -71,7 +71,10 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
             edge.derH = CH(); edge.iderH = CH(); edge.fback_=[]; edge.Et=[0,0,0,0]; edge.link_=[]
             for P, _ in edge.P_:
                 P.derH = CH()
-            ider_recursion(None, edge)  # vertical, lateral-overlap P cross-comp -> PP clustering
+            # vertical, lateral-overlap P cross-comp -> PP clustering:
+            rng_recursion(edge)
+            form_PP_t(edge, edge.P_)  # calls der+: PP P_,link_'replace, derH+ or rng++: PP.link_+
+
             node_t, link_t = [[],[]], [[],[]]
             for fd, node_ in enumerate(copy(edge.node_)):  # always node_t
                 if edge.iderH and any(edge.iderH.Et):  # any for np array

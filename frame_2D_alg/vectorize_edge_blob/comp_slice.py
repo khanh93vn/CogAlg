@@ -51,7 +51,9 @@ class CcompSliceFrame(CsliceEdge):
                 edge.iderH = CH(); edge.fback_ = []
                 for P in edge.P_:
                     P.derH = CH()
-                ider_recursion(None, edge)  # vertical, lateral-overlap P cross-comp -> PP clustering
+                # vertical, lateral-overlap P cross-comp -> PP clustering:
+                rng_recursion(edge)
+                form_PP_t(edge, edge.P_)  # calls der+: PP P_,link_'replace, derH+ or rng++: PP.link_+
 
     CBlob = CEdge
 
@@ -209,26 +211,26 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
                 setattr(_H, attr, deepcopy(value))
 
 
-def ider_recursion(root, PP, fd=0):  # node-mediated correlation clustering: keep same Ps and links, increment link derH, then P derH in sum2PP
+def ider_recursion(root, PP):  # node-mediated correlation clustering: keep same Ps and links, increment link derH, then P derH in sum2PP
 
-    comp_link_(PP) if fd else rng_recursion(PP) # edge only
+    comp_link_(PP)
 
     # der+: PP P_,link_'replace, derH+ or rng++: PP.link_+
-    form_PP_t(PP, PP.link_ if fd else PP.P_)  # calls der+
+    form_PP_t(PP, PP.link_)  # calls der+
 
-    if root is not None and PP.iderH:
+    if PP.iderH:
         root.fback_ += [PP.iderH]
         # feedback per PPd
 
 def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
 
     rng = 1  # cost of links added per rng+
-    _P_ = copy(edge.P_) # includes prelink
+    _Pt_ = zip(edge.P_, edge.pre__) # includes prelink
 
     while True:  # extend mediated comp rng by adding prelinks
-        P_ = []  # with new prelinks
+        Pt_ = []  # with new prelinks
         V = 0
-        for P,_pre_ in _P_:
+        for P,_pre_ in _Pt_:
             if len(P.rim_) < rng-1: continue  # no _rng_link_ or top row
             rng_link_ = []  # per rng+
             for _P in _pre_:  # prelinks
@@ -246,21 +248,19 @@ def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and conti
                         if _P.rim_:  # higher rng
                             pre_ += [dP.node_[0] for dP in _P.rim_[-1]]  # connected __Ps
                         else:  # rng == 1 (we need this because _P.rim is empty when rng == 1)
-                            pre_index = [Pt[0] for Pt in edge.P_].index(_P)  # index of _P's pre in edge.P_
-                            pre_ += edge.P_[pre_index][1]
+                            pre_index = edge.P_.index(_P)  # index of _P's pre in edge.P_
+                            pre_ += edge.pre__[pre_index]
 
-                if pre_:
-                    P_ += [[P,pre_]]  # next P_ must have prelinks
-            if rng_link_:
-                P.rim_ += [rng_link_]
-        if not P_ or V <= ave * rng * len(P_) * 6:  # implied val of all __P_s, 6: len mtuple
+                if pre_: Pt_ += [(P,pre_)]  # next P_ must have prelinks
+            if rng_link_: P.rim_ += [rng_link_]
+        if not Pt_ or V <= ave * rng * len(Pt_) * 6:  # implied val of all __P_s, 6: len mtuple
             break
         else:
-            _P_ = P_
+            _Pt_ = Pt_
             rng += 1
     # der++ in PPds from rng++, no der++ inside rng++: high diff @ rng++ termination only?
     edge.rng=rng  # represents rrdn
-    edge.P_ = [Pt[0] for Pt in edge.P_]
+    del edge.pre__
 
 # need to review
 def comp_link_(PP):  # node_- mediated: comp node.rim dPs
@@ -350,7 +350,7 @@ def form_PP_t(root, P_):  # form PPs of dP.valt[fd] + connected Ps val
     # eval der+/ PP.link_: correlation clustering, after form_PP_t -> P.root
     for PP in PP_t[1]:
         if PP.iderH.Et[0] * len(PP.link_) > ave_PPd * PP.iderH.Et[2]:
-            ider_recursion(root, PP, fd=1)
+            ider_recursion(root, PP)
         if root.fback_:
             feedback(root)  # after der+ in all nodes, no single node feedback
 
