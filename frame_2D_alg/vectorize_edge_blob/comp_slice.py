@@ -53,8 +53,7 @@ class CcompSliceFrame(CsliceEdge):
                 for P in edge.P_:
                     P.derH = CH()
                     P.rim_ = []
-                # vertical, lateral-overlap P cross-comp -> PP clustering:
-                rng_recursion(edge)
+                rng_recursion(edge)  # vertical, lateral-overlap P cross-comp -> PP clustering:
                 form_PP_t(edge, edge.P_)  # calls der+: PP P_,link_'replace, derH+ or rng++: PP.link_+
 
     CBlob = CEdge
@@ -307,7 +306,8 @@ def comp_P(_P,P, angle=None, distance=None):  # comp dPs if fd else Ps
     if link.derH.Et[0] > aveP * link.derH.Et[2]:  # always rng+? (vm > aveP * rm)
         return link
 
-# not revised:
+# not revised below:
+
 def form_PP_t(root, P_):  # form PPs of dP.valt[fd] + connected Ps val
 
     PP_t = [[],[]]
@@ -348,14 +348,12 @@ def form_PP_t(root, P_):  # form PPs of dP.valt[fd] + connected Ps val
     # eval der+/ PP.link_: correlation clustering, after form_PP_t -> P.root
     for PP in PP_t[1]:
         if PP.iderH.Et[0] * len(PP.link_) > ave_PPd * PP.iderH.Et[2]:
-            # ider_recursion(root, PP)
-            pass
+            ider_recursion(root, PP)
         if root.fback_:
             feedback(root)  # after der+ in all nodes, no single node feedback
 
     root.node_ = PP_t  # nested in der+, add_alt_PPs_?
 
-# not revised
 def sum2PP(root, P_, dP_, fd):  # sum links in Ps and Ps in PP
 
     PP = CG(fd=fd, root=root, rng=root.rng+1)
@@ -390,7 +388,7 @@ def sum2PP(root, P_, dP_, fd):  # sum links in Ps and Ps in PP
     if PP.iderH:
         PP.iderH.Et[2:4] = [R+r for R,r in zip(PP.iderH.Et[2:4], iRt)]
 
-    if isinstance(P_[0], CP):  # skip if P is CdP because it doens't have box and yx
+    if isinstance(P_[0], CP):  # CdP has no box, yx
         # pixmap:
         y0,x0,yn,xn = PP.box
         PP.mask__ = np.zeros((yn-y0, xn-x0), bool)
@@ -399,7 +397,6 @@ def sum2PP(root, P_, dP_, fd):  # sum links in Ps and Ps in PP
 
     return PP
 
-# not revised
 def feedback(root):  # in form_PP_, append new der layers to root PP, single vs. root_ per fork in agg+
 
     HE = deepcopy(root.fback_.pop(0))
@@ -490,7 +487,7 @@ if __name__ == "__main__":
                 nodet_set = set()
                 for dP in PP.link_:
                     _node, node = dP.node_
-                    if (_node.id, node.id) in nodet_set:  # verify link unique-ness
+                    if (_node.id, node.id) in nodet_set:  # verify link uniqueness
                         raise ValueError(
                             f"link not unique between {_node} and {node}. PP.link_:\n" +
                             "\n".join(map(lambda dP: f"dP.id={dP.id}, _node={dP.node_[0]}, node={dP.node_[1]}", PP.link_))

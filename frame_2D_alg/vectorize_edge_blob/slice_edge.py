@@ -47,8 +47,8 @@ class CsliceEdge(CFrame):
             # form P per non-overlapped max yx
             edge.P_ = []; edge.rootd = {}
             while yx_:
-                yx = yx_.pop(); axis = axisd[yx]    # get max of maxes (highest g)
-                edge.P_ += [CP(edge, yx, axis)]     # form P
+                yx = yx_.pop(); axis = axisd[yx]  # get max of maxes (highest g)
+                edge.P_ += [CP(edge, yx, axis)]   # form P
                 yx_ = [yx for yx in yx_ if yx not in edge.rootd]    # remove merged maxes if any
 
             edge.P_.sort(key=lambda P: P.yx, reverse=True)
@@ -90,7 +90,6 @@ class CsliceEdge(CFrame):
                         if (y,x) not in edge.dert_: continue   # stop if yx outside the edge
                         edge.rootd[y,x] = _P
                         adjacent_ += [(_P, y,x)]
-
     CBlob = CEdge
 
 class CP(CBase):
