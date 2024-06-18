@@ -1,5 +1,6 @@
 import numpy as np
 from collections import defaultdict
+from itertools import combinations
 from math import atan2, cos, floor, pi
 import sys
 sys.path.append("..")
@@ -26,7 +27,7 @@ ave_mL = 2
 ave_dist = 3
 max_dist = 15
 ave_dangle = .95  # vertical difference between angles: -1->1, abs dangle: 0->1, ave_dangle = (min abs(dangle) + max abs(dangle))/2,
-
+ave_olp = 5
 
 class CsliceEdge(CFrame):
 
@@ -50,7 +51,6 @@ class CsliceEdge(CFrame):
                 yx = yx_.pop(); axis = axisd[yx]  # get max of maxes (highest g)
                 edge.P_ += [CP(edge, yx, axis)]   # form P
                 yx_ = [yx for yx in yx_ if yx not in edge.rootd]    # remove merged maxes if any
-
             edge.P_.sort(key=lambda P: P.yx, reverse=True)
             edge.trace()
             # del edge.rootd    # still being used for visual verification
@@ -90,6 +90,21 @@ class CsliceEdge(CFrame):
                         if (y,x) not in edge.dert_: continue   # stop if yx outside the edge
                         edge.rootd[y,x] = _P
                         adjacent_ += [(_P, y,x)]
+            for P in edge.P_:
+                new_pre_ = []
+                for __P, _P in combinations(edge.pre__[P]):
+                    rel_overlap = projected_x_overlap / projected_x_span    # sorry, could you elaborate on this?
+                    if rel_overlap > ave_olp:
+                        new_pre_ += [_P if hypot(*_P.yx) > hypot(*__P.yx) else __P]
+                edge.pre__[P] = new_pre_
+                """
+                Make it nearest vertical neighbour: select min hypot(dy,dx) from multiple _Ps overlapping along P axis?
+                Project _Ps on P axis, compute rel_overlap = projected_x_overlap / projected_x_span.
+                for i,_P in enumerate(_P_):
+                for __P in _P_[i:]:
+                if rel_overlap(_P,__P) > min:
+                _P_.remove(_P if hypot(*_P.yx) < hypot(*__P.yx) else __P)
+                """
     CBlob = CEdge
 
 class CP(CBase):
