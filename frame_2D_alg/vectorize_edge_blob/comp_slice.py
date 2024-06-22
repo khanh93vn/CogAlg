@@ -474,7 +474,7 @@ if __name__ == "__main__":
         mask = np.zeros(shape, bool)
         mask[mask_nonzero] = True
 
-        def show_PP(_PP):
+        def draw_PP(_PP):
             if _PP.node_: print(_PP, "has node_")
             for fd, PP_ in enumerate(_PP.node_):
                 if not PP_: continue
@@ -499,6 +499,6 @@ if __name__ == "__main__":
                         (_y, _x), (y, x) = _node.yx - yx0, node.yx - yx0
                         plt.plot([_x, x], [_y, y], "-k")
                 plt.show()
-                for PP in PP_: show_PP(PP)
+                for PP in PP_: draw_PP(PP)
 
-        show_PP(edge)
+        draw_PP(edge)
