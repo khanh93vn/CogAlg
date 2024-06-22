@@ -226,7 +226,7 @@ def ider_recursion(root, PP):  # node-mediated correlation clustering:
 def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
 
     rng = 1  # cost of links added per rng+
-    _Pt_ = [(P,edge.pre__[P]) for P in edge.P_] # includes prelink
+    _Pt_ = edge.pre__.items() # includes prelink
 
     while True:  # extend mediated comp rng by adding prelinks
         Pt_ = []  # with new prelinks
@@ -239,13 +239,13 @@ def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and conti
                 angle = np.subtract([y,x],[_y,_x]) # dy,dx between node centers
                 distance = np.hypot(*angle)  # between node centers
                 # or rng * ((P.val+_P.val)/ ave_rval)?:
-                if distance <= rng:
+                if distance <= rng:     # this would drop longer pre-links permanently (won't appear in subsequent rng evals)
                     if len(_P.rim_) < rng-1: continue
                     mlink = comp_P(_P,P, angle,distance)
                     if mlink:  # return if match
                         V += mlink.derH.Et[0]
                         rng_link_ += [mlink]
-                        if _P.rim_: pre_ += [dP.nodet[0] for dP in _P.rim_[-1]]  # connected __Ps
+                        if _P.rim_: pre_ += [dP.nodet[0] for dP in _P.rim_[-1]]  # connected __Ps. Misses 2 cases of __P
                         else:       pre_ += edge.pre__[_P]  # rng == 1
             # next P_ has prelinks:
             if pre_: Pt_ += [(P,pre_)]
@@ -492,7 +492,7 @@ if __name__ == "__main__":
                         if (_node.id, node.id) in nodet_set:  # verify link uniqueness
                             raise ValueError(
                                 f"link not unique between {_node} and {node}. PP.link_:\n" +
-                                "\n".join(map(lambda dP: f"dP.id={dP.id}, _node={dP.node_[0]}, node={dP.node_[1]}", PP.link_))
+                                "\n".join(map(lambda dP: f"dP.id={dP.id}, _node={dP.nodet[0]}, node={dP.nodet[1]}", PP.link_))
                             )
                         nodet_set.add((_node.id, node.id))
                         assert _node.yx < node.yx  # verify that link is up-link
