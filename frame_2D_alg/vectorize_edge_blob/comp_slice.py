@@ -478,7 +478,7 @@ if __name__ == "__main__":
             if _PP.node_: print(_PP, "has node_")
             for fd, PP_ in enumerate(_PP.node_):
                 if not PP_: continue
-                
+
                 plt.imshow(mask, cmap='gray', alpha=0.5)
                 plt.title(f"Number of PPs: {len(PP_)}, {'der+' if fd else 'rng+'}")
                 for PP in PP_:
