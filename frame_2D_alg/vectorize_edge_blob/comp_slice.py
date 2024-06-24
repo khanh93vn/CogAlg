@@ -239,7 +239,7 @@ def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and conti
                 angle = np.subtract([y,x],[_y,_x]) # dy,dx between node centers
                 distance = np.hypot(*angle)  # between node centers
                 # or rng * ((P.val+_P.val)/ ave_rval)?:
-                if distance <= rng:     # this would drop longer pre-links permanently (won't appear in subsequent rng evals)
+                if distance <= rng*1.4142:
                     if len(_P.rim_) < rng-1: continue
                     mlink = comp_P(_P,P, angle,distance)
                     if mlink:  # return if match
@@ -262,9 +262,9 @@ def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and conti
 
 def comp_link_(PP):  # node_- mediated: comp node.rim dPs
 
-    dlink_ = []
+    dlink_ = []     # no use?
     for dP in PP.link_:
-       for nmed, _rim_ in enumerate(dP.nodet[0].rim_):  # link.node_ is CP in 1st der+
+       for nmed, _rim_ in enumerate(dP.nodet[0].rim_):  # link.nodet is CP in 1st der+
            # add fork for CdP node_?
             for _dP in _rim_:
                 dlink = comp_P(_dP,dP)
@@ -296,10 +296,10 @@ def comp_P(_P,P, angle=None, distance=None):  # comp dPs if fd else Ps
         derH = CH(Et=[vm,vd,rm,rd],H=H,n=n)
         _y,_x = _P.yx; y,x = P.yx
     # get aves:
-    yx = [(_c+c)/2 for _c,c in zip((_y,_x),(y,x))]
+    yx = (_y+y)/2,(_x+x)/2
     latuple = [(P+p)/2 for P,p in zip(_P.latuple[:-1],P.latuple[:-1])] + [[(A+a)/2 for A,a in zip(_P.latuple[-1],P.latuple[-1])]]
 
-    link = CdP(nodet=[_P,P],derH=derH, angle=angle, span=distance, yx=yx, latuple=latuple)
+    link = CdP(nodet=[_P,P], derH=derH, angle=angle, span=distance, yx=yx, latuple=latuple)
     if link.derH.Et[0] > aveP * link.derH.Et[2]:  # always rng+? (vm > aveP * rm)
         return link
 
@@ -319,25 +319,23 @@ def form_PP_t(root, P_):  # form PPs of dP.valt[fd] + connected Ps val
             if isinstance(link.derH.H[0],CH): m,d,mr,dr = link.derH.H[-1].Et  # last der+ layer vals
             else:                             m,d,mr,dr = link.derH.Et  # H is md_
             if m >= ave * mr:
-                mlink_+= [link]; _mP_+= [link.nodet[1] if link.nodet[0] is P else link.nodet[0]]
+                mlink_+= [link]; _mP_+= [link.nodet[0]]
             if d > ave * dr:  # ?link in both forks?
-                dlink_+= [link]; _dP_+= [link.nodet[1] if link.nodet[0] is P else link.nodet[0]]
+                dlink_+= [link]; _dP_+= [link.nodet[0]]
         # aligned
     for fd, (Link_,_P__) in zip((0,1),((mLink_,_mP__),(dLink_,_dP__))):
         CP_ = []  # all clustered Ps
         for P in P_:
             if P in CP_: continue  # already packed in some sub-PP
-            cP_, clink_ = [P], []  # cluster per P
-            if P in P_:
-                P_index = P_.index(P)
-                clink_ += Link_[P_index]
-                perimeter = deque(_P__[P_index])  # recycle with breadth-first search, up and down:
-                while perimeter:
-                    _P = perimeter.popleft()
-                    if _P in cP_ or _P in CP_ or _P not in P_: continue  # clustering is exclusive
-                    cP_ += [_P]
-                    clink_ += Link_[P_.index(_P)]
-                    perimeter += _P__[P_.index(_P)]  # extend P perimeter with linked __Ps
+            P_index = P_.index(P)
+            cP_, clink_ = [P], [*Link_[P_index]]  # cluster per P
+            perimeter = deque(_P__[P_index])  # recycle with breadth-first search, up and down:
+            while perimeter:
+                _P = perimeter.popleft()
+                if _P in cP_ or _P in CP_ or _P not in P_: continue  # clustering is exclusive
+                cP_ += [_P]
+                clink_ += Link_[P_.index(_P)]
+                perimeter += _P__[P_.index(_P)]  # extend P perimeter with linked __Ps
             PP = sum2PP(root, cP_, clink_, fd)
             PP_t[fd] += [PP]
             CP_ += cP_
