@@ -128,14 +128,14 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
     lay4: [[m,d], [md,dd], [[md1,dd1],[mdd,ddd]]]: 3 sLays, <=2 ssLays
     '''
     name = "H"
-    def __init__(He, n=0, Et=None, relt=None, H=None):
+    def __init__(He, n=0, Et=None, relt=None, H=None, root=None):
         super().__init__()
         # He.nest = nest  # nesting depth: -1/ ext, 0/ md_, 1/ derH, 2/ subH, 3/ aggH
         He.n = n  # total number of params compared to form derH, summed in comp_G and then from nodes in sum2graph
         He.Et = [0,0,0,0] if Et is None else Et   # evaluation tuple: valt, rdnt
         He.relt = [0,0] if relt is None else relt  # m,d relative to max possible m,d
         He.H = [] if H is None else H  # hierarchy of der layers or md_
-
+        He.root = None if root is None else root
     def __bool__(H): return H.n != 0
 
     def add_(HE, He, irdnt=None):  # unpack down to numericals and sum them
@@ -146,8 +146,8 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
                 H = []
                 for Lay, lay in zip_longest(HE.H, He.H, fillvalue=None):
                     if lay:  # to be summed
-                        if Lay is None: Lay = CH()
-                        Lay.add_(lay, irdnt)  # recursive unpack to sum md_s
+                        if Lay is None: Lay = deepcopy(lay)
+                        else: Lay.add_(lay, irdnt)  # recursive unpack to sum md_s
                     H += [Lay]
                 HE.H = H
             else:
@@ -222,7 +222,6 @@ def ider_recursion(root, PP):  # node-mediated correlation clustering:
     if PP.iderH:  # PPd feedback
         root.fback_ += [PP.iderH]
 
-
 def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
 
     rng = 1  # cost of links added per rng+
@@ -236,16 +235,14 @@ def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and conti
             rng_link_ = []; pre_ = []  # per rng+
             for _P in _pre_:  # prelinks
                 _y,_x = _P.yx; y,x = P.yx
-                angle = np.subtract([y,x],[_y,_x]) # dy,dx between node centers
-                distance = np.hypot(*angle)  # between node centers
-                # or rng * ((P.val+_P.val)/ ave_rval)?:
-                if distance <= rng*1.4142:
+                dy,dx = np.subtract([y,x],[_y,_x]) # dy,dx between node centers
+                if abs(dy)+abs(dx) <= rng*2:  # <max Manhattan distance
                     if len(_P.rim_) < rng-1: continue
-                    mlink = comp_P(_P,P, angle,distance)
-                    if mlink:  # return if match
-                        V += mlink.derH.Et[0]
-                        rng_link_ += [mlink]
-                        if _P.rim_: pre_ += [dP.nodet[0] for dP in _P.rim_[-1]]  # connected __Ps. Misses 2 cases of __P
+                    link = comp_P(_P,P, angle=[dy,dx], distance=np.hypot(dy,dx))
+                    if link and link.derH.Et[0] > aves[0]*link.derH.Et[2]:  # mlink
+                        V += link.derH.Et[0]
+                        rng_link_ += [link]
+                        if _P.rim_: pre_ += [dP.nodet[0] for dP in _P.rim_[-1]]  # connected __Ps
                         else:       pre_ += edge.pre__[_P]  # rng == 1
             # next P_ has prelinks:
             if pre_: Pt_ += [(P,pre_)]
@@ -262,17 +259,14 @@ def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and conti
 
 def comp_link_(PP):  # node_- mediated: comp node.rim dPs
 
-    dlink_ = []     # no use?
     for dP in PP.link_:
-       for nmed, _rim_ in enumerate(dP.nodet[0].rim_):  # link.nodet is CP in 1st der+
-           # add fork for CdP node_?
-            for _dP in _rim_:
-                dlink = comp_P(_dP,dP)
-                if dlink:
-                    dP.rim += [dlink]  # in lower node uplinks
-                    dlink_ += [dlink]
-                    dlink.nmed = nmed  # link mediation order
-
+        if dP.derH.Et[1] > aves[1]:
+           for nmed, _rim_ in enumerate(dP.nodet[0].rim_):  # link.nodet is CP in 1st der+
+               for _dP in _rim_:    # add fork for CdP node_?
+                   dlink = comp_P(_dP,dP)
+                   if dlink:
+                       dP.rim += [dlink]  # in lower node uplinks
+                       dlink.nmed = nmed  # link mediation order0
 
 def comp_P(_P,P, angle=None, distance=None):  # comp dPs if fd else Ps
 
@@ -300,10 +294,9 @@ def comp_P(_P,P, angle=None, distance=None):  # comp dPs if fd else Ps
     latuple = [(P+p)/2 for P,p in zip(_P.latuple[:-1],P.latuple[:-1])] + [[(A+a)/2 for A,a in zip(_P.latuple[-1],P.latuple[-1])]]
 
     link = CdP(nodet=[_P,P], derH=derH, angle=angle, span=distance, yx=yx, latuple=latuple)
-    if link.derH.Et[0] > aveP * link.derH.Et[2]:  # always rng+? (vm > aveP * rm)
+    # if v > ave * r: valuable links only
+    if link.derH.Et[0] > aves[0] * link.derH.Et[2] or link.derH.Et[1] > aves[1] * link.derH.Et[3]:
         return link
-
-# not revised below:
 
 def form_PP_t(root, P_):  # form PPs of dP.valt[fd] + connected Ps val
 
@@ -316,12 +309,12 @@ def form_PP_t(root, P_):  # form PPs of dP.valt[fd] + connected Ps val
         link_ = [link for rim in P.nodet[0].rim_ for link in rim] if hasattr(P,"rim") else [link for rim in P.rim_ for link in rim]
         # get upper links from all rngs of CP.rim_ | CdP.rim
         for link in link_:
-            if isinstance(link.derH.H[0],CH): m,d,mr,dr = link.derH.H[-1].Et  # last der+ layer vals
-            else:                             m,d,mr,dr = link.derH.Et  # H is md_
+            m,d,mr,dr = link.derH.H[-1].Et if isinstance(link.derH.H[0],CH) else link.derH.Et  # H is md_; last der+ layer vals
+            _P = link.nodet[1] if link.nodet[0] is P else link.nodet[0]
             if m >= ave * mr:
-                mlink_+= [link]; _mP_+= [link.nodet[0]]
+                mlink_+= [link]; _mP_+= [_P]
             if d > ave * dr:  # ?link in both forks?
-                dlink_+= [link]; _dP_+= [link.nodet[0]]
+                dlink_+= [link]; _dP_+= [_P]
         # aligned
     for fd, (Link_,_P__) in zip((0,1),((mLink_,_mP__),(dLink_,_dP__))):
         CP_ = []  # all clustered Ps
@@ -339,8 +332,7 @@ def form_PP_t(root, P_):  # form PPs of dP.valt[fd] + connected Ps val
             PP = sum2PP(root, cP_, clink_, fd)
             PP_t[fd] += [PP]
             CP_ += cP_
-
-    # eval der+/ PP.link_: correlation clustering, after form_PP_t -> P.root
+    # eval PP.link_ for der+: correlation clustering, after form_PP_t -> P.root
     for PP in PP_t[1]:
         if PP.iderH.Et[0] * len(PP.link_) > ave_PPd * PP.iderH.Et[2]:
             ider_recursion(root, PP)
