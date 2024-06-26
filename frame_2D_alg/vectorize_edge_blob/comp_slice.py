@@ -1,7 +1,7 @@
 import numpy as np
 from collections import deque, defaultdict
 from copy import deepcopy, copy
-from itertools import zip_longest, combinations
+from itertools import zip_longest, repeat
 import sys
 sys.path.append("..")
 from frame_blobs import CBase, imread
@@ -261,12 +261,16 @@ def comp_link_(PP):  # node_- mediated: comp node.rim dPs
 
     for dP in PP.link_:
         if dP.derH.Et[1] > aves[1]:
-           for nmed, _rim_ in enumerate(dP.nodet[0].rim_):  # link.nodet is CP in 1st der+
-               for _dP in _rim_:    # add fork for CdP node_?
-                   dlink = comp_P(_dP,dP)
-                   if dlink:
-                       dP.rim += [dlink]  # in lower node uplinks
-                       dlink.nmed = nmed  # link mediation order0
+            P = dP.nodet[0]
+
+            if hasattr(P, "rim"): _dPt_ = zip(repeat(P.nmed), P.rim)    # fork for CdP nodet
+            else: _dPt_ = ((nmed, link) for nmed, rim in enumerate(P.rim_) for link in rim) # link.nodet is CP in 1st der+
+
+            for nmed, _dP in _dPt_:
+                dlink = comp_P(_dP, dP)
+                if dlink:
+                    dP.rim += [dlink]  # in lower node uplinks
+                    dlink.nmed = nmed  # link mediation order0
 
 def comp_P(_P,P, angle=None, distance=None):  # comp dPs if fd else Ps
 
@@ -306,11 +310,13 @@ def form_PP_t(root, P_):  # form PPs of dP.valt[fd] + connected Ps val
         mlink_,_mP_,dlink_,_dP_ = [],[],[],[]  # per P
         mLink_+=[mlink_]; _mP__+=[_mP_]
         dLink_+=[dlink_]; _dP__+=[_dP_]
-        link_ = [link for rim in P.nodet[0].rim_ for link in rim] if hasattr(P,"rim") else [link for rim in P.rim_ for link in rim]
+        link_ = P.rim if hasattr(P,"rim") else [link for rim in P.rim_ for link in rim]
         # get upper links from all rngs of CP.rim_ | CdP.rim
         for link in link_:
             m,d,mr,dr = link.derH.H[-1].Et if isinstance(link.derH.H[0],CH) else link.derH.Et  # H is md_; last der+ layer vals
-            _P = link.nodet[1] if link.nodet[0] is P else link.nodet[0]
+            # _P = link.nodet[1] if link.nodet[0] is P else link.nodet[0]
+            _P = link.nodet[0]
+            assert link.nodet[1] is P
             if m >= ave * mr:
                 mlink_+= [link]; _mP_+= [_P]
             if d > ave * dr:  # ?link in both forks?
@@ -478,7 +484,6 @@ if __name__ == "__main__":
                         plt.plot(x, y, "ok")
                     for dP in PP.link_:
                         _node, node = dP.nodet
-                        assert isinstance(_node, CP)
                         if (_node.id, node.id) in nodet_set:  # verify link uniqueness
                             raise ValueError(
                                 f"link not unique between {_node} and {node}. PP.link_:\n" +
