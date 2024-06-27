@@ -49,13 +49,8 @@ class CcompSliceFrame(CsliceEdge):
         def vectorize(edge):  # overrides in CsliceEdge.CEdge.vectorize
             edge.slice_edge()
             if edge.latuple[-1] * (len(edge.P_)-1) > ave_PPm:  # eval PP, rdn=1
-                edge.iderH = CH(); edge.fback_ = []
-                for P in edge.P_:
-                    P.derH = CH()
-                    P.rim_ = []  # higher links for derH accum
-                rng_recursion(edge)  # vertical, lateral-overlap P cross-comp -> PP clustering:
-                form_PP_t(edge, edge.P_)
-                # calls der+: PP P_,link_'replace, derH+ or rng++: PP.link_+
+                comp_slice(edge)
+
     CBlob = CEdge
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
@@ -213,13 +208,26 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
                 setattr(_H, attr, deepcopy(value))
 
 
-def second_der_(root, PP):  # node-mediated correlation clustering, increment link derH, then P derH in sum2PP
+def comp_slice(edge):
+    edge.iderH = CH(); edge.fback_ = []
+    for P in edge.P_:
+        P.derH = CH()
+        P.rim_ = []  # higher links for derH accum
+    rng_recursion(edge)  # vertical, lateral-overlap P cross-comp -> PP clustering:
+    form_PP_t(edge, edge.P_)
 
-    comp_link_(PP)
-    form_PP_t(PP, PP.link_)
-    # no der++
-    if PP.iderH:  # PPd feedback
-        root.fback_ += [PP.iderH]
+    # calls der+: PP P_,link_'replace, derH+ or rng++: PP.link_+
+    # eval PP.link_ for der+: correlation clustering, after form_PP_t -> P.root
+    for PP in edge.node_[1]:
+        if PP.iderH.Et[0] * len(PP.link_) > ave_PPd * PP.iderH.Et[2]:
+            # node-mediated correlation clustering, increment link derH, then P derH in sum2PP:
+            comp_link_(PP)
+            form_PP_t(PP, PP.link_)
+            # no der++
+            if PP.iderH:    # PPd feedback
+                edge.fback_ += [PP.iderH]
+                feedback(edge)  # after der+ in all nodes, no single node feedback
+
 
 def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
 
@@ -259,12 +267,12 @@ def comp_link_(PP):  # node_- mediated: comp node.rim dPs
 
     for dP in PP.link_:
         if dP.derH.Et[1] > aves[1]:
-           for nmed, _rim_ in enumerate(dP.nodet[0].rim_):  # link.nodet is CP
-               for _dP in _rim_:
-                   dlink = comp_P(_dP,dP)
-                   if dlink:
-                       dP.rim += [dlink]  # in lower node uplinks
-                       dlink.nmed = nmed  # link mediation order0
+            for nmed, _rim_ in enumerate(dP.nodet[0].rim_):  # link.nodet is CP
+                for _dP in _rim_:
+                    dlink = comp_P(_dP,dP)
+                    if dlink:
+                        dP.rim += [dlink]  # in lower node uplinks
+                        dlink.nmed = nmed  # link mediation order0
 
 def comp_P(_P,P, angle=None, distance=None):  # comp dPs if fd else Ps
 
@@ -303,11 +311,11 @@ def form_PP_t(root, P_):  # form PPs of dP.valt[fd] + connected Ps val
         mlink_,_mP_,dlink_,_dP_ = [],[],[],[]  # per P
         mLink_+=[mlink_]; _mP__+=[_mP_]
         dLink_+=[dlink_]; _dP__+=[_dP_]
-        link_ = [link for rim in P.nodet[0].rim_ for link in rim] if hasattr(P,"rim") else [link for rim in P.rim_ for link in rim]
+        link_ = P.rim if hasattr(P,"rim") else [link for rim in P.rim_ for link in rim]
         # get upper links from all rngs of CP.rim_ | CdP.rim
         for link in link_:
             m,d,mr,dr = link.derH.H[-1].Et if isinstance(link.derH.H[0],CH) else link.derH.Et  # H is md_; last der+ layer vals
-            _P = link.nodet[1] if link.nodet[0] is P else link.nodet[0]
+            _P = link.nodet[0]
             if m >= ave * mr:
                 mlink_+= [link]; _mP_+= [_P]
             if d > ave * dr:  # ?link in both forks?
@@ -329,14 +337,6 @@ def form_PP_t(root, P_):  # form PPs of dP.valt[fd] + connected Ps val
             PP = sum2PP(root, cP_, clink_, fd)
             PP_t[fd] += [PP]
             CP_ += cP_
-    # eval PP.link_ for der+: correlation clustering, after form_PP_t -> P.root
-    for PP in PP_t[1]:
-        if isinstance(PP.link_[0].nodet[0], CdP):
-            continue  # no der++ for Ps
-        if PP.iderH.Et[0] * len(PP.link_) > ave_PPd * PP.iderH.Et[2]:
-            second_der_(root, PP)
-        if root.fback_:
-            feedback(root)  # after der+ in all nodes, no single node feedback
 
     root.node_ = PP_t  # nested in der+, add_alt_PPs_?
 
@@ -387,7 +387,7 @@ def feedback(root):  # in form_PP_, append new der layers to root PP, single vs.
         HE.add_(He)
     root.iderH.add_(HE.H[-1] if isinstance(HE.H[0], CH) else HE)  # last md_ in H or sum md_
 
-    if root.root and isinstance(root.root, CG):  # skip if root is Edge
+    if root.root and isinstance(root.root, CG):  # skip if root is Edge. Update: it's always edge now
         rroot = root.root  # single PP.root, can't be P
         fback_ = rroot.fback_
         node_ = rroot.node_[1] if rroot.node_ and isinstance(rroot.node_[0],list) else rroot.P_  # node_ is updated to node_t in sub+
@@ -468,7 +468,8 @@ if __name__ == "__main__":
             for fd, PP_ in enumerate(_PP.node_):
                 if not PP_: continue
                 plt.imshow(mask, cmap='gray', alpha=0.5)
-                plt.title(f"Number of PPs: {len(PP_)}, {'der+' if fd else 'rng+'}")
+                fork = 'der+' if isinstance(PP_[0].P_[0], CdP) else 'rng+'
+                plt.title(f"Number of PP{'d' if fd else 'm'}s: {len(PP_)}, {fork}")
                 for PP in PP_:
                     nodet_set = set()
                     for P in PP.P_:
