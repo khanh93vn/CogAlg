@@ -42,7 +42,6 @@ PP_aves = ave_PPm, ave_PPd = 50, 50
 P_aves = ave_Pm, ave_Pd = 10, 10
 ave_Gm = 50
 
-
 class CcompSliceFrame(CsliceEdge):
     class CEdge(CsliceEdge.CEdge): # replaces CBlob
 
@@ -50,8 +49,8 @@ class CcompSliceFrame(CsliceEdge):
             edge.slice_edge()
             if edge.latuple[-1] * (len(edge.P_)-1) > ave_PPm:  # eval PP, rdn=1
                 comp_slice(edge)
-
     CBlob = CEdge
+
 
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
@@ -208,25 +207,25 @@ class CH(CBase):  # generic derivation hierarchy with variable nesting
                 setattr(_H, attr, deepcopy(value))
 
 
-def comp_slice(edge):
-    edge.iderH = CH(); edge.fback_ = []
+def comp_slice(edge):  # root function
+
+    edge.iderH = CH()
     for P in edge.P_:
         P.derH = CH()
         P.rim_ = []  # higher links for derH accum
-    rng_recursion(edge)  # vertical, lateral-overlap P cross-comp -> PP clustering:
-    form_PP_t(edge, edge.P_)
 
-    # calls der+: PP P_,link_'replace, derH+ or rng++: PP.link_+
-    # eval PP.link_ for der+: correlation clustering, after form_PP_t -> P.root
-    for PP in edge.node_[1]:
-        if PP.iderH.Et[0] * len(PP.link_) > ave_PPd * PP.iderH.Et[2]:
-            # node-mediated correlation clustering, increment link derH, then P derH in sum2PP:
-            comp_link_(PP)
+    rng_recursion(edge)  # vertical P cross-comp if lateral overlap, -> PP clustering:
+    form_PP_t(edge, edge.P_)
+    fback_ = []
+    for PP in edge.node_[1]:  # PPd_
+        if PP.iderH.Et[1] * len(PP.link_) > ave_PPd * PP.iderH.Et[3]:
+            comp_link_(PP)  # node-mediated correlation clustering, increment link derH, then P derH in sum2PP:
             form_PP_t(PP, PP.link_)
-            # no der++
-            if PP.iderH:    # PPd feedback
-                edge.fback_ += [PP.iderH]
-                feedback(edge)  # after der+ in all nodes, no single node feedback
+            if PP.iderH:
+                fback_ += [PP.iderH]
+    DerLay = CH()
+    for derLay in fback_: DerLay.add_(derLay)  # append with single layer formed in comp_link
+    edge.iderH.append_(DerLay)
 
 
 def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
@@ -379,21 +378,6 @@ def sum2PP(root, P_, dP_, fd):  # sum links in Ps and Ps in PP
         PP.mask__[(celly_-y0, cellx_-x0)] = True
 
     return PP
-
-def feedback(root):  # in form_PP_, append new der layers to root PP, single vs. root_ per fork in agg+
-
-    HE = deepcopy(root.fback_.pop(0))
-    for He in root.fback_:
-        HE.add_(He)
-    root.iderH.add_(HE.H[-1] if isinstance(HE.H[0], CH) else HE)  # last md_ in H or sum md_
-
-    if root.root and isinstance(root.root, CG):  # skip if root is Edge. Update: it's always edge now
-        rroot = root.root  # single PP.root, can't be P
-        fback_ = rroot.fback_
-        node_ = rroot.node_[1] if rroot.node_ and isinstance(rroot.node_[0],list) else rroot.P_  # node_ is updated to node_t in sub+
-        fback_ += [HE]
-        if len(fback_)==len(node_):  # all nodes terminated and fed back
-            feedback(rroot)  # sum2PP adds derH per rng, feedback adds deeper sub+ layers
 
 def comp_latuple(_latuple, latuple, rn, fagg=0):  # 0der params
 
