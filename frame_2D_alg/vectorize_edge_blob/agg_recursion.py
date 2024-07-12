@@ -100,7 +100,7 @@ def agg_recursion(root, N_, fL, rng=1):  # fL: compare node-mediated links, else
         for fd, node_ in zip((0,1), node_t):
             N_ = [n for n in node_ if n.derH.Et[fd] > G_aves[fd] * n.derH.Et[2+fd]]  # prune node_
             if root.derH.Et[0] * (max(0,(len(N_)-1)*root.rng)) > G_aves[1]*root.derH.Et[2]:
-                # agg+: rng+ val *= n comparands, forms CGs:
+                # agg+ rng+, val *= n comparands, forms CGs:
                 agg_recursion(root, N_, fL=0)
         root.node_[:] = node_t
     # else keep root.node_
@@ -125,6 +125,7 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
 
     G_ = []
     Et = [0,0,0,0]
+    # comp_N, init conv kernels
     for (_G, G) in list(combinations(N_,r=2)):
         if _G in [G for compared_ in G.compared__ for G in compared_]:  # compared in any rng++
             continue
@@ -141,35 +142,65 @@ def rng_kern_(N_, rng):  # comp Gs summed in kernels, ~ graph CNN without backpr
                     if g not in G_: G_ += [g]
     compared__=[]
     for G in G_:
-        compared__ += [G.compared__[-1]]  # buffer full compared_s
-        G.krim = [link.nodet[0] if link.nodet[1] is G else link.nodet[1] for link, rev in G.rim]
-    n = 1  # n convolutions = len extH.H[-1]
-    iG_ = copy(G_)  # has ext_Lay
+        compared__ += [G.compared__[-1]]  # buffer full kernel
+        krim = [link.nodet[0] if link.nodet[1] is G else link.nodet[1] for link, rev in G.rim]
+        Lay = CH()
+        for _G in krim: Lay.add_(_G.derH)  # init with DerH of immediate krim, then sum mediated krims
+        G.DerH.append_(Lay, flat=0)  # comp -> G.extH
+        G.kH = [krim]
+    n = 1 # convo rng
+    iG_ = copy(G_) # has extLay
+    # convolution / kernel rim: def, sum, comp in separate loops for bilateral G,_G assign:
     while True:
-        _G_ = []  # rng+ convolution, cross-comp: recursive center node DerH += linked node derHs for next loop:
+        _G_ = []
+        for G in G_:  # fill, reset layer per krim:
+            G.kH += [[]]; G.compared__[-1] = []
+            G.extH.H[-1].H += [CH(root=G.extH.H[-1])]  # derivatives
+            G.DerH.H[-1].H += [CH(root=G.extH.H[-1])]  # comparands
         for G in G_:
-            G.compared__[-1] = []  # reset per krim
-            H,eH = G.derH, G.extH  # comparand,ders
-            for _G in G.krim:
-                if _G in [G for compared_ in G.compared__ for G in compared_]:  # in any rng++ or when _G was G
-                    continue
+            # += klay:
+            for _G in G.kH[-1]:
+                for link, rev in _G.rim:
+                    __G = link.nodet[0] if link.nodet[1] is G else link.nodet[1]
+                    if __G not in G.kH[-1] + [g for compared_ in G.compared__ for g in compared_]:
+                        G.kH[-1] += [__G]; __G.kH[-1] += [G]  # bilateral add layer of unique mediated nodes
+        for G in G_: G.compared__[-1] = []
+        for G in G_:
+            # += DerH sublay:
+            for _G in G.kH[-1]:  # add last krim
+                if _G in G.compared__[-1]: continue  # / _G is G
                 G.compared__[-1] += [_G]; _G.compared__[-1] += [G]
-                _H,_eH = _G.derH, _G.extH  # comparand, ders
-                dH = _H.comp_(H, DH=CH(),rn=1,fagg=1,flat=1)  # comp last krim
-                deH = _eH.comp_(eH, DH=CH(),rn=1,fagg=1,flat=1)  # skip last rng: incomplete?
-                dH.append_(deH)
+                G.DerH.H[-1].add_(_G.derH); _G.DerH.H[-1].add_(G.derH)  # bilateral sum layer
+        for G in G_: G.compared__[-1] = []
+        for G in G_:
+            # += extH sublay:
+            for _G in G.kH[0]:  # comp direct kernel
+                if _G in G.compared__[-1]: continue  # / _G is G
+                G.compared__[-1] += [_G]; _G.compared__[-1] += [G]
+                # comp last DerLay:
+                dH = _G.DerH.H[-1].comp_(G.DerH.H[-1], DH=CH(),rn=1,fagg=1,flat=1)
                 if dH.Et[0] > ave * dH.Et[2] * (n+1):  # n adds to costs
-                    for h in _eH, eH:
-                        h.H[n].add_(dH) if len(h.H)>=n+1 else h.append_(dH,flat=0)  # bilateral assign
-            h = G.extH
-            if len(h.H) > n and h.H[-1].Et[0] > ave * h.H[-1].Et[2] * n:  # G.extH may not be appended
-                _G_ += [G]  # else G kernel is not extended
+                    for h in _G.extH, G.extH:
+                        h.H[-1].H[n].add_(dH)  # bilateral assign
+            if len(G.extH.H[-1].H) > n and G.extH.H[-1].Et[0] > ave * G.extH.H[-1].Et[2] * n:
+                _G_ += [G]  # appended G.extH
+            else:
+                G.compared__.pop(); G.DerH.H[-1].H.pop(); G.extH.H[-1].H.pop()  # init only
         if _G_:
-            G_ = _G_; n += 1
+            G_ = _G_
+            n += 1
         else:
-            for G, compared_ in zip (iG_, compared__):
-                G.compared__[-1] = compared_; delattr(G, "krim")
+            for G, compared_ in zip (iG_,compared__): G.compared__[-1] = compared_  # reassign full kernel
             break
+    for G in G_:
+        for rlay in G.extH.H:  # rng layer
+            Dlay = CH()
+            _klay = rlay.H[0]
+            for klay in rlay.H[1:]:  # comp consecutive kernel layers:
+                Dlay.add_(_klay.comp_(klay, DH=CH(), rn=1,fagg=1,flat=1))  # no DH, local Dlay
+                _klay = klay
+            if Dlay.Et[0] < ave * Dlay.Et[2]: rlay.H = []  # remove discrete k layers, keep sum in extH.H[n]
+
     return iG_, Et  # Gs with added rim
 
 
@@ -213,30 +244,26 @@ def rng_link_(_L_):  # comp Clinks: der+'rng+ in root.link_ rim_t node rims: dir
 
     return rL_, Et, rng
 
-# G.derH = [der_latuple, der_iderH,.. der_ext]?
 
 def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link+=dderH, comparand rim+=Link
 
     fd = rev is not None  # compared links have binary relative direction?
     dH = CH(); _N, N = Link.nodet; rn = _N.n / N.n
 
-    if fd:  # Clink Ns
-        _N.derH.comp_(N.derH, dH, rn, fagg=1, flat=0, frev=rev)  # append and sum new dH to base dH
-        # reverse angle direction for left link:
-        _A, A = _N.angle, N.angle if rev else [-d for d in N.angle]
-        Et, rt, md_ = comp_ext(2,2, _N.S,N.S/rn, _A,A)  # 2 nodes in nodet
-        dH.append_(CH(Et=Et,relt=rt,H=md_,n=0.5,root=dH), flat=0)  # der_ext is top layer
-    else:  # CG Ns
+    if fd:  # Clinks: reverse direction for left link:
+        _L,L,_S,S,_A,A = 2,2, _N.S,N.S/rn, _N.angle, N.angle if rev else [-d for d in N.angle]
+    else:   # CGs
+        _L,L,_S,S,_A,A = len(_N.node_),len(N.node_), _N.S,N.S/rn, _N.A,N.A
         et, rt, md_ = comp_latuple(_N.latuple, N.latuple, rn,fagg=1)
-        # init dH with der_latuple:
-        dH.append_(CH(Et=et,relt=rt, H=md_,n=1,root=dH), flat=0)
-        _N.derH.comp_(N.derH, dH,rn,fagg=1,flat=1,frev=rev)  # += dderH
-        Et, Rt, Md_ = comp_ext(len(_N.node_),len(N.node_),_N.S,N.S/rn,_N.A,N.A)
-        dH.append_(CH(Et=Et,relt=Rt,H=Md_,n=0.5,root=dH), flat=0)  # dH += [der_ext]
+        # derH = [?dlatuple, *diderH -> dderH, dext]:
+        dH.append_(CH(Et=et,relt=rt,H=md_,n=1,root=dH),flat=0) # dH.H = [dlatuple]
+
+    _N.derH.comp_(N.derH, dH, rn, fagg=1, flat=1, frev=rev)   # dH.H += [*dderH]
+    Et, Rt, Md_ = comp_ext(_L,L, _S,S, _A,A)
+    dH.append_(CH(Et=Et,relt=Rt,H=Md_,n=0.5,root=dH),flat=0)  # dH.H += [dext]
     # / N, if >1 PPs | Gs:
-    if _N.extH and N.extH:
-        _N.extH.comp_(N.extH, dH, rn, fagg=1, flat=1, frev=rev)
-    # link.derH += dH:
+    if _N.extH and N.extH: _N.extH.comp_(N.extH, dH, rn, fagg=1, flat=1, frev=rev)
+    # dH += [*dextH]
     if fd: Link.derH.append_(dH, flat=1)
     else:  Link.derH = dH
     iEt[:] = np.add(iEt,dH.Et)  # init eval rng+ and form_graph_t by total m|d?
@@ -259,9 +286,12 @@ def comp_N(Link, iEt, rng, rev=None):  # dir if fd, Link+=dderH, comparand rim+=
                     node.rimt_ += [[[[Link,rev]],[]]] if dir else [[[],[[Link,rev]]]]  # add rng layer
             else:
                 node.rim += [[Link,rev]]
-                eH = node.extH
-                if len(eH.H)==rng: eH.H[-1].add_(Link.derH)  # accum last layer
-                else:  eH.append_(Link.derH, flat=0)  # init last layer
+                if len(node.extH.H)==rng:
+                    node.extH.H[-1].H[-1].add_(Link.derH)  # accum last layer
+                else:
+                    rngLay = CH()
+                    rngLay.append_(Link.derH, flat=0)
+                    node.extH.append_(rngLay, flat=0)  # init last layer
         return True
 
 
@@ -378,14 +408,12 @@ def sum_N_(N_, fd=0):  # sum partial grapht in merge
     L, A = (N.span, N.angle) if fd else (len(N.node_), N.A)
     if not fd:
         latuple = deepcopy(N.latuple)  # ignore if Clink?
-        iderH = deepcopy(N.iderH)
     derH = deepcopy(N.derH)
     extH = deepcopy(N.extH)
     # Et = copy(N.Et)
     for N in N_[1:]:
         if not fd:
             latuple = [P+p for P,p in zip(latuple[:-1],N.latuple[:-1])] + [[A+a for A,a in zip(latuple[-1],N.latuple[-1])]]
-            if N.iderH: iderH.add_(N.iderH)
         n += N.n; S += N.S
         L += N.span if fd else len(N.node_)
         A = [Angle+angle for Angle,angle in zip(A, N.angle if fd else N.A)]
@@ -393,7 +421,7 @@ def sum_N_(N_, fd=0):  # sum partial grapht in merge
         if N.extH: extH.add_(N.extH)
 
     if fd: return n, L, S, A, derH, extH
-    else:  return n, L, S, A, derH, extH, latuple, iderH  # no comp Et
+    else:  return n, L, S, A, derH, extH, latuple  # no comp Et
 
 def comp_N_(_node_, node_):  # compare partial graphs in merge
 
@@ -407,13 +435,11 @@ def comp_N_(_node_, node_):  # compare partial graphs in merge
         dderH.n = 1; dderH.Et = et; dderH.relt = rt
         dderH.H = [CH(Et=copy(et),relt=copy(rt),H=md_,n=1)]
     else:
-        _latuple, _iderH = _pars[6:]; latuple, iderH = pars[6:]
+        _latuple = _pars[6]; latuple = pars[6]
         if any(_latuple[:5]) and any(latuple[:5]):  # latuple is empty in Clink
             Et, Rt, Md_ = comp_latuple(_latuple, latuple, rn, fagg=1)
             dderH.n = 1; dderH.Et = np.add(Et,et); dderH.relt = np.add(Rt,rt)
             dderH.H = [CH(Et=et,relt=rt,H=md_,n=.5),CH(Et=Et,relt=Rt,H=Md_,n=1)]
-        if _iderH and iderH:  # iderH is empty in Clink
-            _iderH.comp_(iderH, dderH, rn, fagg=1, flat=0)
 
     if _derH and derH: _derH.comp_(derH, dderH, rn, fagg=1, flat=0)  # append and sum new dderH to base dderH
     if _extH and extH: _extH.comp_(extH, dderH, rn, fagg=1, flat=1)
@@ -433,8 +459,6 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
         graph.box = extend_box(graph.box, G.box)
         if isinstance(G, CG):  # add latuple to Clink too?
             graph.latuple = [P+p for P,p in zip(graph.latuple[:-1],G.latuple[:-1])] + [[A+a for A,a in zip(graph.latuple[-1],G.latuple[-1])]]
-            if G.iderH:  # empty in single-P PP|Gs
-                graph.iderH.add_(G.iderH)
         graph.n += G.n  # non-derH accumulation?
         graph.derH.add_(G.derH)
         if fd: G.Et = [0,0,0,0]  # reset in last form_graph_t fork, Gs are shared in both forks
