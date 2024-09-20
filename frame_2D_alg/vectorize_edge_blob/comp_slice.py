@@ -286,7 +286,7 @@ def comp_P(_P,P, angle=None, distance=None, fder=0):  # comp dPs if fd else Ps
     link = CdP(nodet=[_P,P], mdLay=derLay, angle=angle, span=distance, yx=[(_y+y)/2,(_x+x)/2], latuple=latuple)
     # if v > ave * r:
     if link.mdLay.Et[fder] > aves[fder] * link.mdLay.Et[fder+2]:
-        P.lrim += [link]; P.prim +=[_P]; _P.prim +=[P]  # add Link as uplink in P.lrim
+        P.lrim += [link]; P.prim +=[_P]  # add Link as uplink in P.lrim
         return link
 
 def form_PP_(root, iP_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
@@ -295,7 +295,7 @@ def form_PP_(root, iP_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
     PPt_ = []
     for P in iP_:
         if not P.lrim:
-            PPt_ += [P]; continue
+            PPt_ += [P]; continue   # also, P hasn't been mark as merged
         _prim_ = P.prim; _lrim_ = P.lrim
         _P_ = {P}; link_ = set(); Et = [0,0,0,0]
         while _prim_:
@@ -309,10 +309,13 @@ def form_PP_(root, iP_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
             _prim_, _lrim_ = prim_, lrim_
         PPt = sum2PP(root, list(_P_), list(link_), fd)
         PPt_ += [PPt]
-        P_, link_, mdLay = PPt[1:4]
-        if not fd and len(P_) > ave_L and mdLay.Et[fd] >PP_aves[fd] * mdLay.Et[2+fd]:
-            comp_link_(PPt)
-            form_PP_(PPt, link_, fd=1)  # form sub_PPd_ in select PPs, not recursive
+        
+    for PPt in PPt_:
+        if isinstance(PPt, list):   # because of line 298 above, PPt_ contains a mix of CPs, CdPs and lists (PPt)
+            P_, link_, mdLay = PPt[1:4]
+            if not fd and len(P_) > ave_L and mdLay.Et[fd] >PP_aves[fd] * mdLay.Et[2+fd]:
+                comp_link_(PPt)
+                form_PP_(PPt, link_, fd=1)  # form sub_PPd_ in select PPs, not recursive
 
     if isinstance(root, list): root[2] = PPt_  # PPt. PPt_ replaces link_ (root[2])?
     else: root.node_ = PPt_  # Cedge
