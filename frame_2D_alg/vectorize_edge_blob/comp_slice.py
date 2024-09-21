@@ -285,7 +285,7 @@ def comp_P(_P,P, angle=None, distance=None, fder=0):  # comp dPs if fd else Ps
     link = CdP(nodet=[_P,P], mdLay=derLay, angle=angle, span=distance, yx=[(_y+y)/2,(_x+x)/2], latuple=latuple)
     # if v > ave * r:
     if link.mdLay.Et[fder] > aves[fder] * link.mdLay.Et[fder+2]:
-        P.lrim += [link]; P.prim +=[_P]  # add Link as uplink in P.lrim
+        P.lrim += [link]; _P.lrim += [link]; P.prim +=[_P]; _P.prim +=[P]  # add Link in P.lrim and _P.lrim
         return link
 
 def form_PP_(root, iP_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
@@ -299,7 +299,7 @@ def form_PP_(root, iP_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
         _P_ = {P}; link_ = set(); Et = [0,0,0,0]
         while _prim_:
             prim_,lrim_ = set(),set()
-            for _P,_L in zip(_prim_,_lrim_):    # _P,_L won't align as _lrim_ contains only uplinks
+            for _P,_L in zip(_prim_,_lrim_):
                 if _P.merged: continue  # was merged
                 _P_.add(_P); link_.add(_L); Et = np.add(Et, _L.mdLay.Et)
                 prim_.update(set(_P.prim) - _P_)
@@ -310,13 +310,13 @@ def form_PP_(root, iP_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
         PPt_ += [PPt]
 
     for PPt in PPt_:
-        if isinstance(PPt, list):   # PPt_ contains a mix of CPs and lists PPts
+        if isinstance(PPt, list):   # PPt_ contains a mix of CPs and lists PPts (for fd it's CdPs, not CPs?)
             P_, link_, mdLay = PPt[1:4]
             if not fd and len(P_) > ave_L and mdLay.Et[fd] >PP_aves[fd] * mdLay.Et[2+fd]:
                 comp_link_(PPt)
                 form_PP_(PPt, link_, fd=1)  # form sub_PPd_ in select PPs, not recursive
 
-    if isinstance(root, list): root[2] = PPt_  # PPt. PPt_ replaces link_ (root[2])?
+    if isinstance(root, list): root[2] = PPt_  # PPt. PPt_ replaces link_
     else: root.node_ = PPt_  # Cedge
 
 
@@ -431,15 +431,25 @@ if __name__ == "__main__":
         mask[mask_nonzero] = True
 
         def draw_PP(rootPPt):
-            root, P_, link_, mdLay, latuple, A, S, area, box, yx, n = rootPPt
-            if not link_:
-                print("PP has no link, len(P_) == 1?")
-                assert len(P_) == 1
+            if isinstance(rootPPt, CP):
+                print("single P")
+                return
+            if isinstance(rootPPt, CdP):
+                print("single CdP")
                 return
 
-            if not isinstance(link_[0], CdP):   # subPPt_ replaces link_?
-                print("PP has children")
-                assert isinstance(link_[0], list)
+            root, P_, link_, mdLay, latuple, A, S, area, box, yx, n = rootPPt
+
+            assert len(link_) > 0   # link_ can't be empty
+
+            link_replaced = not isinstance(link_[0], CdP)
+            for dP in link_[1:]:
+                if link_replaced ^ isinstance(dP, CdP):
+                    raise ValueError(
+                        f"link_ contains a mix of CdP and PP|P:\n{' '.join(map(lambda e: type(e).__name__, link_))}")
+
+            if link_replaced:   # subPPt_ replaces link_
+                print("has children")
                 for PPt in link_:
                     draw_PP(PPt)
             print("Drawing PP...")
@@ -451,7 +461,9 @@ if __name__ == "__main__":
                 (y, x) = P.yx - yx0
                 plt.plot(x, y, "ok")
             for dP in link_:
-                if not isinstance(dP, CdP): break
+                if not isinstance(dP, CdP):
+                    print("link_ is replaced by CP_")
+                    break
                 _node, node = dP.nodet
                 if (_node.id, node.id) in nodet_set:  # verify link uniqueness
                     raise ValueError(
