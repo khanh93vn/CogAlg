@@ -194,7 +194,6 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting, depending 
         DLay = CH(node_=_He.node_+He.node_).add_H(_He.comp_md_t(He))
         # node_ is mediated comparands, default comp He.md_t per He,
         # H=[] in bottom | deprecated layer
-
         for _lay, lay in zip(_He.H, He.H):  # loop extHs or [mdlat,mdLay,mdext] rng tuples, flat
             if _lay and lay:
                 dLay = _lay.comp_H(lay, rn, fagg, frev)  # comp He.md_t, comp,unpack lay.H
@@ -309,9 +308,9 @@ def form_PP_(root, iP_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
             _prim_, _lrim_ = prim_, lrim_
         PPt = sum2PP(root, list(_P_), list(link_), fd)
         PPt_ += [PPt]
-        
+
     for PPt in PPt_:
-        if isinstance(PPt, list):   # because of line 298 above, PPt_ contains a mix of CPs, CdPs and lists (PPt)
+        if isinstance(PPt, list):   # PPt_ contains a mix of CPs and lists PPts
             P_, link_, mdLay = PPt[1:4]
             if not fd and len(P_) > ave_L and mdLay.Et[fd] >PP_aves[fd] * mdLay.Et[2+fd]:
                 comp_link_(PPt)
