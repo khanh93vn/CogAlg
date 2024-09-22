@@ -294,6 +294,7 @@ def form_PP_(root, iP_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
     PPt_ = []
 
     for P in iP_:  # for dP in link_ if fd
+        if P.merged: continue   # avoid creating empty PPs
         if not P.lrim:
             PPt_ += [P]; continue
         _prim_ = P.prim; _lrim_ = P.lrim
@@ -317,9 +318,8 @@ def form_PP_(root, iP_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
                 if len(link_) > ave_L and mdLay.Et[fd] >PP_aves[fd] * mdLay.Et[2+fd]:
                     comp_link_(PPt)
                     form_PP_(PPt, link_, fd=1)
-
-    if fd: root[2] = PPt_  # replace PPm link_
-    else: root.node_= PPt_ # replace edge.node_
+        root.node_ = PPt_  # replace edge.node_
+    else: root[2] = PPt_  # replace PPm link_. # PPt_ is a mix of CdPs and PPts
 
 
 def comp_link_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
@@ -413,9 +413,12 @@ if __name__ == "__main__":
 
     image_file = '../images/raccoon_eye.jpeg'
     image = imread(image_file)
+    frame = CcompSliceFrame(image).segment()
 
     # ----- verification -----
-    frame = CcompSliceFrame(image).segment()
+    # draw PPms as graphs of Ps and dPs
+    # draw PPds as graphs of dPs and ddPs
+    # dPs are shown in black, ddPs are shown in red
     import matplotlib.pyplot as plt
     from slice_edge import unpack_edge_
     num_to_show = 5
@@ -432,50 +435,49 @@ if __name__ == "__main__":
         mask = np.zeros(shape, bool)
         mask[mask_nonzero] = True
 
-        def draw_PP(rootPPt):
-            if isinstance(rootPPt, CP):
-                print("single P")
-                return
-            if isinstance(rootPPt, CdP):
-                print("single CdP")
-                return
+        # flatten data
+        P_, dP_, PPm_, PPd_ = [], [], [], []
+        for node in edge.node_:
+            if isinstance(node, CP): P_ += [node]
+            else: PPm_ += [node]
+        for PPm in PPm_:
+            # root, P_, link_, mdLay, latuple, A, S, area, box, yx, n = PPm
+            assert len(PPm[2]) > 0  # link_ can't be empty
+            P_ += PPm[1]
+            for link in PPm[2]:
+                if isinstance(link, CdP): dP_ += [link]
+                else: PPd_ += [link]
+        for PPd in PPd_:
+            assert len(PPd[2]) > 0  # link_ can't be empty
+            dP_ += PPd[1] + PPd[2]  # dPs and ddPs
 
-            root, P_, link_, mdLay, latuple, A, S, area, box, yx, n = rootPPt
+        plt.imshow(mask, cmap='gray', alpha=0.5)
+        # plt.title("")
 
-            assert len(link_) > 0   # link_ can't be empty
+        # draw Ps
+        print("Drawing Ps...")
+        for P in P_:
+            (y, x) = P.yx - yx0
+            plt.plot(x, y, "ok")
 
-            link_replaced = not isinstance(link_[0], CdP)
-            for dP in link_[1:]:
-                if link_replaced ^ isinstance(dP, CdP):
-                    raise ValueError(
-                        f"link_ contains a mix of CdP and PP|P:\n{' '.join(map(lambda e: type(e).__name__, link_))}")
+        # draw dPs and ddPs
+        print("Drawing dPs...")
+        nodet_set = set()
+        for dP in dP_:
+            _node, node = dP.nodet  # node is P or dP
+            if (_node.id, node.id) in nodet_set:  # verify link uniqueness
+                raise ValueError(
+                    f"link not unique between {_node} and {node}. Duplicated links:\n" +
+                    "\n".join([
+                        f"dP.id={dP.id}, _node={dP.nodet[0]}, node={dP.nodet[1]}"
+                        for dP in dP_
+                        if dP.nodet[0] is _node and dP.nodet[1] is node
+                    ])
+                )
+            nodet_set.add((_node.id, node.id))
+            assert _node.yx < node.yx  # verify that link is up-link
+            (_y, _x), (y, x) = _node.yx - yx0, node.yx - yx0
+            style = "-r" if isinstance(_node, CdP) else "-k"
+            plt.plot([_x, x], [_y, y], "-k")
 
-            if link_replaced:   # subPPt_ replaces link_
-                print("has children")
-                for PPt in link_:
-                    draw_PP(PPt)
-            print("Drawing PP...")
-
-            plt.imshow(mask, cmap='gray', alpha=0.5)
-            # plt.title("")
-            nodet_set = set()
-            for P in P_:
-                (y, x) = P.yx - yx0
-                plt.plot(x, y, "ok")
-            for dP in link_:
-                if not isinstance(dP, CdP):
-                    print("link_ is replaced by CP_")
-                    break
-                _node, node = dP.nodet
-                if (_node.id, node.id) in nodet_set:  # verify link uniqueness
-                    raise ValueError(
-                        "link not unique between {_node} and {node}. PP.link_:\n" +
-                        "\n".join(map(lambda dP: f"dP.id={dP.id}, _node={dP.nodet[0]}, node={dP.nodet[1]}", PP.link_))
-                    )
-                nodet_set.add((_node.id, node.id))
-                assert _node.yx < node.yx  # verify that link is up-link
-                (_y, _x), (y, x) = _node.yx - yx0, node.yx - yx0
-                plt.plot([_x, x], [_y, y], "-k")
-            plt.show()
-        for PPt in edge.node_:
-            draw_PP(PPt)
+        plt.show()
