@@ -107,9 +107,17 @@ def comp_slice(edge):  # root function
         P.mdLay = [[],[0,0,0,0],0]  # for accumulation in sum2PP later (in lower P)
         P.rim_ = []; P.lrim = []; P.prim = []
     rng_recursion(edge)  # vertical P cross-comp -> PP clustering, if lateral overlap
-    form_PP_(edge, edge.P_)
-    for N in edge.node_:
-        mdLay = N[3] if isinstance(N, list) else N.mdLay  # CP
+    edge.node_ = form_PP_(edge, edge.P_)
+
+    for N in edge.node_:  # eval sub-clustering, not recursive
+        if isinstance(N, list):  # a mix of CPs and PPms
+            _, P_, link_, mdLay, *_ = PPt = N
+            _, Et, _ = mdLay
+            if len(link_) > ave_L and Et[0] >PP_aves[0] * Et[2]:    # fd = 0
+                comp_link_(PPt)
+                PPt[2] = form_PP_(PPt, link_)   # += PPds within PPm link_
+            mdLay = PPt[3]
+        else: mdLay = N.mdLay # N is CP
         add_md_(edge.mdLay,mdLay)
 
 def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
@@ -184,7 +192,7 @@ def comp_link_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
                     comp_P(_dP,dP, fder=1)
                     # if dlink: dlink.nmed = nmed  # link mediation order, not used?
 
-def form_PP_(root, iP_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
+def form_PP_(root, iP_):  # form PPs of dP.valt[fd] + connected Ps val
 
     for P in iP_: P.merged = 0
     PPt_ = []
@@ -204,23 +212,13 @@ def form_PP_(root, iP_, fd=0):  # form PPs of dP.valt[fd] + connected Ps val
                 lrim_.update(set(_P.lrim) - link_)
                 _P.merged = 1
             _prim_, _lrim_ = prim_, lrim_
-        PPt = sum2PP(root, list(_P_), list(link_), fd)
+        PPt = sum2PP(root, list(_P_), list(link_))
         PPt_ += [PPt]
-
-    if fd:  # terminal fork
-        root[2] = PPt_  # replace PPm link_ with a mix of CdPs and PPds
-    else:
-        for PPt in PPt_:  # eval sub-clustering, not recursive
-            if isinstance(PPt, list):  # a mix of CPs and PPms
-                P_, link_, [_, Et, _] = PPt[1:4]
-                if len(link_) > ave_L and Et[fd] >PP_aves[fd] * Et[2+fd]:
-                    comp_link_(PPt)
-                    form_PP_(PPt, link_, fd=1)
-                    # += PPds within PPm link_
-        root.node_ = PPt_  # edge.node_
+    
+    return PPt_
 
 
-def sum2PP(root, P_, dP_, fd):  # sum links in Ps and Ps in PP
+def sum2PP(root, P_, dP_):  # sum links in Ps and Ps in PP
 
     mdLay, latuple, link_, A, S, area, n, box = [[],[0,0,0,0],0], [0,0,0,0,0,[0,0]], [], [0,0], 0, 0, 0, [0,0,0,0]
     iRt = root[3][1] if isinstance(root,list) else root.mdLay[1][2:4]   # add to rdnt in root.mdLay.Et or root Et
