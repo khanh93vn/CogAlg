@@ -76,7 +76,7 @@ def add_md_(HE, He,  irdnt=[]):  # p may be derP, sum derLays
 
     if HE:
         HE[0] = [V + v for V, v in zip_longest(HE[0], He[0], fillvalue=0)]  # H
-        HE[1] = np.add(HE[1], He[1])  # Et
+        HE[1] += He[1]  # Et
         HE[2] += He[2]  # n: combined param accumulation span
         if any(irdnt): HE[1][2:] = [E + e for E, e in zip(HE[1][2:], irdnt)]
     else:
@@ -97,28 +97,30 @@ def comp_md_(_H, H, rn=1, frev=0):
         rm += vd > vm; rd += vm >= vd
         derLay += [match, diff]  # flat
 
-    return [derLay, [vm,vd,rm,rd], 1]  # [H, Et, n]
+    return [derLay, np.array([vm,vd,rm,rd]), 1]  # [H, Et, n]
 
 
 def comp_slice(edge):  # root function
 
-    edge.mdLay = [[],[0,0,0,0],0]  # H, Et, n
+    edge.mdLay = [[],np.array([.0,.0,.0,.0]),0]  # H, Et, n
     for P in edge.P_:  # add higher links
-        P.mdLay = [[],[0,0,0,0],0]  # for accumulation in sum2PP later (in lower P)
+        P.mdLay = [[],np.array([.0,.0,.0,.0]),0]  # for accumulation in sum2PP later (in lower P)
         P.rim_ = []; P.lrim = []; P.prim = []
+
     rng_recursion(edge)  # vertical P cross-comp -> PP clustering, if lateral overlap
     edge.node_ = form_PP_(edge, edge.P_)
 
-    for N in edge.node_:  # eval sub-clustering, not recursive
-        if isinstance(N, list):  # a mix of CPs and PPms
-            _, P_, link_, mdLay, *_ = PPt = N
-            _, Et, _ = mdLay
-            if len(link_) > ave_L and Et[0] >PP_aves[0] * Et[2]:    # fd = 0
-                comp_link_(PPt)
-                PPt[2] = form_PP_(PPt, link_)   # += PPds within PPm link_
-            mdLay = PPt[3]
-        else: mdLay = N.mdLay # N is CP
-        add_md_(edge.mdLay,mdLay)
+    for PPm in edge.node_:  # eval sub-clustering, not recursive
+        if isinstance(PPm, list):  # PPt, not CP
+            P_, link_, mdLay = PPm[1:4]
+            Et = mdLay[1]
+            if len(link_) > ave_L and Et[0] >PP_aves[0] * Et[2]:
+                comp_link_(PPm)
+                PPm[2] = form_PP_(PPm, link_)  # add PPds within PPm link_
+            mdLay = PPm[3]
+        else:
+            mdLay = PPm.mdLay  # PPm is actually CP
+        add_md_(edge.mdLay, mdLay)
 
 def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
 
@@ -145,7 +147,7 @@ def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and conti
             if pre_: Pt_ += [(P,pre_)]
             if rng_link_: P.rim_ += [rng_link_]
 
-        if not Pt_ or V <= ave * rng * len(Pt_) * 6:  # implied val of all __P_s, 6: len mtuple
+        if not Pt_ or V <= ave * rng * len(Pt_) * 6:  # implied __P_s val, 6: len mtuple
             break
         else:
             _Pt_ = Pt_
@@ -214,13 +216,13 @@ def form_PP_(root, iP_):  # form PPs of dP.valt[fd] + connected Ps val
             _prim_, _lrim_ = prim_, lrim_
         PPt = sum2PP(root, list(_P_), list(link_))
         PPt_ += [PPt]
-    
+
     return PPt_
 
 
 def sum2PP(root, P_, dP_):  # sum links in Ps and Ps in PP
 
-    mdLay, latuple, link_, A, S, area, n, box = [[],[0,0,0,0],0], [0,0,0,0,0,[0,0]], [], [0,0], 0, 0, 0, [0,0,0,0]
+    mdLay, latuple, link_, A, S, area, n, box = [[],np.array([.0,.0,.0,.0]),0], [0,0,0,0,0,[0,0]], [],[0,0],0,0,0, [0,0,0,0]
     iRt = root[3][1] if isinstance(root,list) else root.mdLay[1][2:4]   # add to rdnt in root.mdLay.Et or root Et
     # add uplinks:
     for dP in dP_:
@@ -271,7 +273,7 @@ def comp_latuple(_latuple, latuple, rn, fagg=0):  # 0der params
     if fagg:  # add norm m,d, ret=[ret,Ret]:
         mval, dval = sum(ret[::2]),sum(ret[1::2])
         mrdn, drdn = dval>mval, mval>dval
-        ret = [ret, [mval,dval,mrdn,drdn], 1]  # if fagg only
+        ret = [ret, np.array([mval,dval,mrdn,drdn]), 1]  # if fagg only
     return ret
 
 def get_match(_par, par):
