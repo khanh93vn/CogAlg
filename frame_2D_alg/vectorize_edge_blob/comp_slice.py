@@ -82,14 +82,13 @@ def add_md_(HE, He,  irdnt=[]):  # p may be derP, sum derLays
     else:
         HE[:] = deepcopy(He)
 
-def comp_md_(_H, H, rn=1, frev=0):
+def comp_md_(_H, H, rn=1):
 
     vm, vd, rm, rd = 0,0,0,0
     derLay = []
     for i, (_d, d) in enumerate(zip(_H[1::2], H[1::2])):  # compare ds in md_ or ext
         d *= rn  # normalize by compared accum span
         diff = _d - d
-        if frev: diff = -diff  # from link with reversed dir
         match = min(abs(_d), abs(d))
         if (_d < 0) != (d < 0): match = -match  # negate if only one compared is negative
         vm += match - aves[i]  # fixed param set?
@@ -354,7 +353,7 @@ if __name__ == "__main__":
             _, _, _, _, _, _, _, _, (y0, x0, yn, xn), _, _ = PPm
             (y0, x0), (yn, xn) = ((y0, x0), (yn, xn)) - yx0
             plt.plot([x0, x0, xn, xn, x0], [y0, yn, yn, y0, y0], '-k', alpha=0.4)
-        
+
         print("Drawing PPd boxes...")
         for PPd in PPd_:
             _, _, _, _, _, _, _, _, (y0, x0, yn, xn), _, _ = PPd
