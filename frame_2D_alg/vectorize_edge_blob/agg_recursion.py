@@ -1,57 +1,50 @@
 import numpy as np
-from copy import deepcopy, copy
 from itertools import combinations, zip_longest
+from copy import deepcopy, copy
+from frame_blobs import CBase
 from .slice_edge import comp_angle, CsliceEdge
 from .comp_slice import comp_slice, comp_latuple, add_lat, aves
-from utils import extend_box
-from frame_blobs import CBase
 
 '''
-This code is ostensibly for clustering edge segments within high-gradient blob, but it's far too complex for the case.
-That's because this is a prototype for open-ended compositional recursion, clustering blobs, graphs of blobs, etc.
-Edge-specific processing will likely be a small subset of this file, it's not really a priority right now.
-
-Blob edges may be represented by higher-composition patterns, etc., if top param-layer match,
-in combination with spliced lower-composition patterns, etc, if only lower param-layers match.
-This may form closed edge patterns around flat core blobs, which defines stable objects. 
-
-Graphs (predictive patterns) are formed from edges that match over < extendable max distance, 
-then internal cross-comp rng/der is incremented per relative M/D: induction from prior cross-comp
-(no lateral prediction skipping: it requires overhead that can only be justified in vertical feedback) 
+This code is ostensibly for clustering segments within edge: high-gradient blob, but it's far too complex for the case.
+That's because this is a prototype for open-ended compositional recursion: clustering blobs, graphs of blobs, etc.
+We will later prune it down to lighter edge-specific version.
+-
+Primary incremental-range (rng+) fork cross-comp leads to clustering edge segments, initially PPs, that match over < max distance. 
+Secondary incr-derivation (der+) fork cross-compares links from primary cross-comp, if >ave ~(abs_diff * primary_xcomp_match): 
+variance patterns borrow value from co-projected match patterns, because their projections cancel-out.
 - 
-Primary value is match, diff.patterns borrow value from proximate match patterns, canceling their projected match. 
-Thus graphs are assigned adjacent alt-fork graphs, to which they lend predictive value.
-But alt match patterns borrow already borrowed value, which may be too tenuous to track, we use average borrowed value.
+Thus graphs should be assigned adjacent alt-fork (der+ to rng+) graphs, to which they lend predictive value.
+But alt match patterns borrow already borrowed value, which are too tenuous to track, we use average borrowed value.
+Clustering criterion within each fork is summed match of >ave vars (<ave vars are not compared and don't add comp costs).
 -
-Clustering criterion is also M|D, summed across >ave vars if selective comp  (<ave vars are not compared, don't add costs).
-Clustering is exclusive per fork,ave, with fork selected per var| derLay| aggLay 
-Fuzzy clustering is centroid-based only, connectivity-based clusters will merge.
-Param clustering if MM, along derivation sequence, or centroid-based if global?
-
-There are concepts that include same matching vars: size, density, color, stability, etc, but in different combinations.
-Weak value vars are combined into higher var, so derivation fork can be selected on different levels of param composition.
-Clustering by variance: lend|borrow, contribution or counteraction to similarity | stability, such as metabolism? 
+Clustering is exclusive per fork,ave, with fork selected per variable | derLay | aggLay 
+Fuzzy clustering can only be centroid-based, because overlapping connectivity-based clusters will merge.
+Param clustering if MM, compared along derivation sequence, or combinatorial?
 -
-graph G:
-Agg+ cross-comps top Gs and forms higher-order Gs, adding up-forking levels to their node graphs.
-Sub+ re-compares nodes within Gs, adding intermediate Gs, down-forking levels to root Gs, and up-forking levels to node Gs.
+Summed-graph representation is nested in a dual tree of down-forking elements: node_, and up-forking clusters: root_.
+That resembles a neuron, which has dendritic tree as input and axonal tree as output. 
+But we have recursively nested param sets packed in each level of the trees, which don't exist in neurons.
 -
-Generic graph is a dual tree with common root: down-forking elements and up-forking clusters of this graph. 
-This resembles a neuron, which has dendritic tree as input and axonal tree as output. 
-But we have recursively structured param sets packed in each level of these trees, which don't exist in neurons.
-
-Diagrams: 
+diagrams: 
 https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/generic%20graph.drawio.png
 https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/agg_recursion_unfolded.drawio.png
+-
+notation:
+prefix  f denotes flag
+postfix t denotes tuple, multiple ts is a nested tuple
+prefix  _ denotes prior of two same-name variables, multiple _s for relative precedence
+postfix _ denotes array of same-name elements, multiple _s is nested array
+capitalized variables are usually summed small-case variables
 '''
 ave = 3
 ave_d = 4
 ave_L = 4
 max_dist = 2
-ave_rn = 1000  # scope disparity
+ave_rn = 1000  # max scope disparity
 ccoef  = 10  # scaling match ave to clustering ave
 
-class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | derH, their layers and sublayers
+class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | derH, their layers and sub-layers
 
     name = "H"
     def __init__(He, node_=None, md_t=None, n=0, Et=None, H=None, root=None, i=None, i_=None):
@@ -125,7 +118,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
         HE.accum_lay(He, irdnt)
         return HE.update_root(He)
 
-    def update_root(HE, He):  # should be batched or done in calling function, not recursive
+    def update_root(HE, He):  # should be batched or done in the calling function, this recursive version is a placeholder
 
         root = HE.root
         while root is not None:
@@ -152,7 +145,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
             rm += vd > vm; rd += vm >= vd
             derLay += [match, diff]  # flat
 
-        return CH(H=derLay, Et=np.array([vm,vd,rm,rd]), n=1)
+        return CH(H=derLay, Et=np.array([vm,vd,rm,rd],dtype='float'), n=1)
 
     def comp_H(_He, He, rn=1, dir=1):  # unpack each layer of CH down to numericals and compare each pair
 
@@ -196,7 +189,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
                             for lay in He.H: _He.H += [CH().copy(lay)]  # can't deepcopy CH.root
                         else: _He.H = deepcopy(He.H)  # md_
                 elif attr == "md_t":
-                    _He.md_t += [CH().copy(md_) for md_ in He.md_t]  # can't deepcopy CH.root
+                    _He.md_t += [CH().copy(md_) for md_ in He.md_t]
                 elif attr == "node_":
                     _He.node_ = copy(He.node_)
                 else:
@@ -217,8 +210,6 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         # maps to node_H / agg+|sub+:
         G.derH = CH(root=G) if derH is None else derH  # sum from nodes, then append from feedback
         G.extH = CH(root=G) if extH is None else extH  # sum from rim_ elays, H maybe deleted
-        G.lrim_ = []  # +ve only
-        G.nrim_ = []
         G.rim_ = []  # direct external links, nested per rng
         G.rng = rng
         G.n = n   # external n (last layer n)
@@ -257,8 +248,6 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         l.H_ = [] if H_ is None else H_  # if agg++| sub++?
         l.Vt = [0,0]  # for rim-overlap modulated segmentation, init derH.Et[:2]
         l.n = 1  # min(node_.n)
-        l.lrim_ = []
-        l.nrim_ = []
         # add rimt_, elay | extH if der+
     def __bool__(l): return bool(l.derH.H)
 
@@ -289,134 +278,141 @@ def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cl
                 if len(G_) > 10:
                     agg_recursion(edge, G_, fd=0)  # discontinuous PP_ xcomp, cluster
 
-def agg_recursion(root, iQ, fd):  # breadth-first rng++ cross-comp -> eval cluster, fd recursion
+def agg_recursion(root, iQ, fd):  # breadth-first rng+ cross-comp -> eval clustering, recursion per fd fork: rng+ | der+
 
     Q = []
-    for e in iQ:  # reset | init only?
-        if fd: e.rimt_ = []  # e = CL
-        e.root_, e.visited_, e.aRad, e.merged, e.extH = [],[], 0,0, CH()
+    for e in iQ:
+        if isinstance(e, list): continue  # skip Gts: weak
+        e.root_, e.extH = [], CH()
         Q += [e]
-    # cross-comp root link_|node_, initially edge PP_:
-    N__,L__, Et,rng = rng_link_(Q) if fd else rng_node_(Q)
-    m,d,mr,dr = Et
-    fvd = d > ave_d * dr*(rng+1); fvm = m > ave * mr*(rng+1)
+    # cross-comp link_ or node_:
+    N__,L__, Et, rng = comp_link_(Q) if fd else comp_node_(Q)
+
+    m,d,mr,dr = Et; fvd = d > ave_d * dr*(rng+1); fvm = m > ave * mr*(rng+1)
     if fvd or fvm:
         L_ = [L for L_ in L__ for L in L_]  # root += L.derH:
         if fd: root.derH.append_(CH().append_(CH().copy(L_[0].derH)))  # new rngLay, aggLay
         else:  root.derH.H[-1].append_(L_[0].derH)  # append last aggLay
         for L in L_[1:]:
             root.derH.H[-1].H[-1].add_H(L.derH)  # accum Lay
-        # rng_link_
-        if fvd and len(L_) > ave_L:  # comp L, sub-cluster by dL: mL is redundant to mN?
-            agg_recursion(root, L_, fd=1)  # appends last aggLay, L_=lG_ if segment
+        # comp_link_
+        if fvd and len(L_) > ave_L:  # comp L if DL, sub-cluster LLs by mL:
+            agg_recursion(root, L_, fd=1)  # appends last aggLay, L_ = lG_
         if fvm:
             cluster_N__(root, N__, fd)  # cluster rngLays in root.node_,
             for N_ in N__:  # replace root.node_ with nested H of graphs
-                if len(N_) > ave_L:  # rng_node_
-                    agg_recursion(root, N_, fd=0)  # adds higher aggLay / recursive call
+                if len(N_) > ave_L:  # comp_node_
+                    agg_recursion(root, N_, fd=0)  # forms higher-composition graphs
 '''
      if flat derH:
         root.derH.append_(CH().copy(L_[0].derH))  # init
         for L in L_[1:]: root.derH.H[-1].add_H(L.derH)  # accum
 '''
 
-def rng_node_(_N_):  # rng+ forms layer of rim_ and extH per N, appends N__,L__,Et, ~ graph CNN without backprop
+def comp_node_(_N_):  # rng+ forms layer of rim_ and extH per N, appends N__,L__,Et, ~ graph CNN without backprop
 
-    _Gt_,N__,L__, ET = [],[],[], np.array([.0,.0,.0,.0])
-
-    # form _Gt_: prior N pair + co-positionals:
+    N__,L__,ET = [],[], np.array([.0,.0,.0,.0])  # rng H
+    _Gp_ = []  # [G pair + co-positionals]
     for _G, G in combinations(_N_, r=2):
         rn = _G.n / G.n
-        if rn > ave_rn: continue  # no comp x L scope disparity
+        if rn > ave_rn: continue  # scope disparity
         radii = G.aRad + _G.aRad
         dy,dx = np.subtract(_G.yx,G.yx)
         dist = np.hypot(dy,dx)
-        _Gt_ += [[_G,G, rn, dy,dx, radii,dist]]
-
+        _Gp_ += [(_G,G, rn, dy,dx, radii, dist)]
     icoef = .5  # internal M proj_val / external M proj_val
-    rng = 1  # for clarity, redundant to len N__
-    while True:  # if prior loop vM
-        Gt_,L_, Et = set(),set(), np.array([.0,.0,.0,.0])
-        for Gt in _Gt_:
-            _G,G, rn, dy,dx, radii, dist = Gt
-            if _G.nrim_ and G.nrim_ and any([_nrim & nrim for _nrim,nrim in zip(_G.nrim_,G.nrim_)]):  # skip indirectly connected Gs, no direct match priority?
+    rng = 1  # len N__
+    while True:  # prior rng vM
+        Gp_,N_,L_, Et = [],set(),[], np.array([.0,.0,.0,.0])
+        for Gp in _Gp_:
+            _G,G, rn, dy,dx, radii, dist = Gp
+            _nrim = set([(Lt[0].nodet[1] if Lt[0].nodet[0] is _G else Lt[0].nodet[0]) for rim in _G.rim_ for Lt in rim])
+            nrim = set([(Lt[0].nodet[1] if Lt[0].nodet[0] is G else Lt[0].nodet[0]) for rim in G.rim_ for Lt in rim])
+            if _nrim & nrim:  # not sure: skip indirectly connected Gs, no direct match priority?
                 continue
             M = (_G.mdLay.Et[0]+G.mdLay.Et[0]) *icoef**2 + (_G.derH.Et[0]+G.derH.Et[0])*icoef + (_G.extH.Et[0]+G.extH.Et[0])
             # comp if < max distance of likely matches *= prior G match * radius:
             if dist < max_dist * (radii*icoef**3) * M:
+                drng = len(_G.rim_) - len(G.rim_)
+                if drng > 0:    G.rim_ += [[None] * drng]
+                elif drng < 0: _G.rim_ += [[None] * drng]
                 Link = CL(nodet=[_G,G], S=2, A=[dy,dx], box=extend_box(G.box,_G.box))
                 et = comp_N(Link, rn, rng)
+                L_ += [Link]  # include -ve links
                 if et is not None:
-                    Et += et; L_ += [Link]  # include -ve links
-                    if et[0] > ave * et[2] * (rng+1):  # eval to extend search
-                        Gt_.update({_G,G})
-            else: Gt_ += [Gt]
-        if Et[0] > ave * Et[2]:  # current loop vM
-            N__ += [Gt_]; L__ += [L_]; ET += Et
-            rng += 1  # sub-cluster / rng N_
-            _Gt_ = [Gt for Gt in Gt_ if (Gt[0] in _Gt_ or Gt[1] in _Gt_)]
-            # re-evaluate not-compared pairs with one incremented N.M
-        else:
+                    N_.update({_G, G}); Et += et  # for clustering
+            else:
+                Gp_ += [Gp]  # re-evaluate not-compared pairs with one incremented N.M:
+        if Et[0] > ave * Et[2]:  # current-rng vM
+            rng += 1
+            N__+= [N_]; L__+= [L_]; ET += Et  # sub-cluster pL_,N_
+            _Gp_ = [Gp for Gp in Gp_ if (Gp[0] in N_ or Gp[1] in N_)]  # one incremented N.M
+        else:  # low projected rng+ vM
             break
     return N__,L__,ET,rng
 
-def rng_link_(iL_):  # comp CLs: der+'rng+ in root.link_ rim_t node rims: directional and node-mediated link tracing
 
-    L__,LL__,ET = [],[], np.array([.0,.0,.0,.0])  # all links between Ls in potentially extended L__
+def comp_link_(iL_):  # comp CLs via directional node-mediated link tracing: der+'rng+ in root.link_ rim_t node rims
+
     fd = isinstance(iL_[0].nodet[0], CL)
-    _mL_t_ = [] # init _mL_t_: [[n.rimt_[0][0]+n.rimt_[0][1] if fd else n.rim_[0] for n in iL.nodet] for iL in iL_]
     for L in iL_:
-        mL_t = []
-        for n in L.nodet:
-            L_ = []
-            for (_L,rev) in (n.rimt_[0][0] + n.rimt_[0][1] if fd else n.rim_[0]):  # all rims are inside root node_
-                if _L is not L:
-                    L_ += [[L,rev]]; L.visited_ += [L]
-            mL_t += [L_]
-        _mL_t_ += [mL_t]
-    _L_ = iL_; med = 1  # rng = n intermediate nodes
+        L.mL_t, L.rimt_, L.aRad, L.visited_ = [[],[]],[],0,[L]
+        # init mL_t (mediated Ls):
+        for rev, n, mL_ in zip((0,1), L.nodet, L.mL_t):
+            rim_ = n.rimt_ if fd else n.rim_
+            for _L,_rev in rim_[0][0] + rim_[0][1] if fd else rim_[0]:
+                if _L.derH.Et[0] > ave * _L.derH.Et[2]:
+                    mL_ += [(_L, rev^_rev)]  # direction of L relative to _L
+    _L_, L__, LL__,ET = iL_,[],[], np.array([.0,.0,.0,.0])
+    med = 1
     while True:
-        L_,LL_,Et = set(),[], np.array([.0,.0,.0,.0])
-        for L, mL_t in zip(_L_,_mL_t_):  # packed comparands
-            for rev, rim in zip((0,1), mL_t):
-                for _L,_rev in rim:  # reverse _L med by nodet[1]
+        # xcomp _L_:
+        L_,LL_, Et = set(),[], np.array([.0,.0,.0,.0])
+        for L in _L_:
+            for mL_ in L.mL_t:
+                for _L, rev in mL_:  # rev is relative to L
                     rn = _L.n / L.n
-                    if rn > ave_rn: continue  # no comp x L scope disparity
+                    if rn > ave_rn: continue  # scope disparity
                     Link = CL(nodet=[_L,L], S=2, A=np.subtract(_L.yx,L.yx), box=extend_box(_L.box, L.box))
                     # comp L,_L:
-                    et = comp_N(Link, rn, rng=med, dir = 1 if (rev^_rev) else -1)  # d = -d if one L is reversed
-                    LL_ += [Link]  # include -ve, L.rim_t += Link, order: nodet < L < rimt_, mN.rim || L
-                    if et is not None: Et += et
-        Med = med + 1  # rng+ pre-eval loop:
-        if Et[0] > ave * Et[2] * Med:
-            L_, mL_t_, rEt = set(),[], np.array([.0,.0,.0,.0])
-            for L, _mL_t in zip(_L_,_mL_t_):  # mediators
+                    et = comp_N(Link, rn, rng=med, dir = -1 if rev else 1)  # d = -d if L is reversed relative to _L
+                    LL_ += [Link]  # include -ves, L.rim_t += Link, order: nodet < L < rimt_, mN.rim || L
+                    if et is not None:
+                        L_.update({_L,L}); Et += et
+        L__+=[L_]; LL__+=[LL_]; ET += Et
+        # rng+ eval:
+        Med = med + 1
+        if Et[0] > ave * Et[2] * Med:  # project prior-loop value - new cost
+            nxt_L_, nxt_Et = set(), np.array([.0,.0,.0,.0])
+            for L in L_:
                 mL_t, lEt = [set(),set()], np.array([.0,.0,.0,.0])  # __Ls per L
-                for rev, rim in zip((0,1),_mL_t):
-                    for _L,_rev in rim:
-                        for i, n in enumerate(_L.nodet):
+                for mL_,_mL_ in zip(mL_t, L.mL_t):
+                    for _L, rev in _mL_:
+                        for _rev, n in zip((0,1), _L.nodet):
                             rim_ = n.rimt_ if fd else n.rim_
-                            if len(rim_) == med:  # appended in comp loop
-                                rim = rim_[-1][0]+rim_[-1][1] if fd else rim_[-1]
-                                for __L, rev in rim:
-                                    if __L is L or __L in L.visited_ or __L not in iL_: continue
+                            if len(rim_) == med:  # append in comp loop
+                                for __L,__rev in rim_[-1][0]+rim_[-1][1] if fd else rim_[-1]:
+                                    if __L in L.visited_ or __L not in iL_: continue
                                     L.visited_ += [__L]; __L.visited_ += [L]
                                     et = __L.derH.Et
                                     if et[0] > ave * et[2] * Med:  # /__L
-                                        mL_t[i].add((__L, 1-i)); lEt += et
-                                        # incrementally mediated direction L_
-                if lEt[0] > ave * lEt[2] * Med:
-                    L_.add(L); mL_t_ += [mL_t]; rEt += lEt  # rng+/ L is different from comp/ L above
-            # refined rng+ eval:
-            if rEt[0] > ave * rEt[2] * Med:
-                L__ += [L_]; LL__ += [LL_]; ET += rEt
-                _L_ = L_; _mL_t_ = mL_t_
-                med = Med
+                                        mL_.add((__L, rev^_rev^__rev))  # combine reversals: 2 * 2 mNs, 1st 2 are pre-combined
+                                        lEt += et
+                if lEt[0] > ave * lEt[2] * Med:  # rng+/ L is different from comp/ L above
+                    L.mL_t = mL_t; nxt_L_.add(L); nxt_Et += lEt
+            # refine eval:
+            if nxt_Et[0] > ave * nxt_Et[2] * Med:
+                _L_ = nxt_L_; med = Med
             else:
                 break
         else:
             break
-    return L__, LL__, ET, med # =rng
+    return L__, LL__, ET, med  # =rng
+
+def extend_box(box, _box):  # add 2 boxes
+    y0, x0, yn, xn = box; _y0, _x0, _yn, _xn = _box
+    return min(y0, _y0), min(x0, _x0), max(yn, _yn), max(xn, _xn)
+
 
 def comp_N(Link, rn, rng, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=Link
 
@@ -424,7 +420,8 @@ def comp_N(Link, rn, rng, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=
     dir = 1 if dir is None else dir  # convert from None into numeric
     _N, N = Link.nodet
     _L,L = (2,2) if fd else (len(_N.node_),len(N.node_)); _S,S = _N.S,N.S; _A,A = _N.A,N.A
-    A = [d * dir for d in A]  # reverse angle direction if N is left link
+    # reverse angle direction if N is left link:
+    A = [d * dir for d in A]
     mdext = comp_ext(_L,L, _S,S/rn, _A,A)
     md_t = [mdext]; Et = mdext.Et.copy(); n = mdext.n
     if not fd:  # CG
@@ -438,25 +435,25 @@ def comp_N(Link, rn, rng, dir=None):  # dir if fd, Link.derH=dH, comparand rim+=
     if _N.derH and N.derH:
         dderH = _N.derH.comp_H(N.derH, rn, dir=dir)  # comp shared layers
         elay.append_(dderH, flat=1)
-    # spec: rng_node_(node_|link_), of different agg orders, combinatorial?
-    Link.derH = elay; elay.root = Link; Link.n = min(_N.n,N.n); Link.nodet = [_N,N]; Link.yx = np.add(_N.yx,N.yx) /2
-    # prior S,A
+    # spec: comp_node_(node_|link_), of different agg orders, combinatorial?
+    Link.derH = elay; elay.root = Link; Link.n = min(_N.n,N.n); Link.nodet = [_N,N]; Link.yx = np.add(_N.yx,N.yx) /2  # prior S,A
+    Et = elay.Et
+    fv = Et[0] > ave * Et[2] * (rng+1)
     for rev, node in zip((0,1),(N,_N)):  # reverse Link direction for N
-        # include negative links to form L_:
+        # L_ includes negative Ls
         if (len(node.rimt_) if fd else len(node.rim_)) < rng:
             if fd: node.rimt_ = [[[(Link,rev)],[]]] if dir else [[[],[(Link,rev)]]]  # add rng layer
             else:  node.rim_ += [[(Link, rev)]]
         else:
             if fd: node.rimt_[-1][1-rev] += [(Link,rev)]  # add in last rng layer, opposite to _N,N dir
             else:  node.rim_[-1] += [(Link, rev)]
-        # cluster +ve:
-        if elay.Et[0] > ave * elay.Et[2] * rng:
-            if len(node.lrim_) < rng:  # add layer
-                node.extH.append_(elay); node.lrim_ += [{Link}]; node.nrim_ += [{(_N,N)[rev]}]  # _node
+        if fv:  # select for next rng:
+            if len(node.extH.H) < rng:  # init rng layer
+                node.extH.append_(elay) # node.lrim_ += [{Link}]; node.nrim_ += [{(_N,N)[rev]}]  # _node
             else:  # append last layer
-                node.extH.H[-1].add_H(elay); node.lrim_[-1].add(Link); node.nrim_[-1].add((_N,N)[rev])
-
-            return elay.Et  # conditional
+                node.extH.H[-1].add_H(elay)  # node.lrim_[-1].add(Link); node.nrim_[-1].add((_N,N)[rev])
+    if fv:
+        return Et
 
 def comp_ext(_L,L,_S,S,_A,A):  # compare non-derivatives:
 
@@ -468,82 +465,91 @@ def comp_ext(_L,L,_S,S,_A,A):  # compare non-derivatives:
 
     return CH(H=[mL,dL, mS,dS, mA,dA], Et=np.array([M,D,M>D,D<=M]), n=0.5)
 
-def cluster_from_G(G, _nrim, _lrim, rng):
 
-    node_, link_, Et = {G}, set(), np.array([.0,.0,.0,.0])  # m,r only?
-    while _lrim:
-        nrim, lrim = set(), set()
-        for _G,_L in zip(_nrim, _lrim):
-            if _G.merged or not _G.root_ or len(_G.lrim_) <= rng:
-                continue  # root_ is empty if _G not in N__
-            for g in node_:  # compare external _G to all internal nodes, add if any match
-                L = next(iter(g.lrim_[rng] & _G.lrim_[rng]), None)  # intersect = [+link] | None
-                if L:
-                    if ((g.extH.Et[0]-ave*g.extH.Et[2]) + (_G.extH.Et[0]-ave*_G.extH.Et[2])) * (L.derH.Et[0]/ave) > ave * ccoef:
-                        # merge roots,
-                        # else: node_.add(_G); link_.add(_L); Et += _L.derH.Et
-                        _node_,_link_,_Et,_merged = _G.root_[-1]
-                        if _merged: continue
-                        node_.update(_node_)
-                        link_.update(_link_| {_L})  # add external L
-                        Et += _L.derH.Et + _Et
-                        for n in _node_: n.merged = 1
-                        _G.root_[-1][3] = 1
-                        nrim.update(set(_G.nrim_[rng]) - node_)
-                        lrim.update(set(_G.lrim_[rng]) - link_)
-                        _G.merged = 1
-                        break
-        _nrim,_lrim = nrim, lrim
-    return node_, link_, Et
+def cluster_N__(root, N__, fd):  # form rng graphs by merging lower-rng graphs if >ave rim: cross-graph rng links
 
-def cluster_N__(root, N__, fd):  # cluster G__|L__ by value density of +ve links per node
-    '''
-    Single-linkage clustering by link LV: relative similarity sim(N1,N2) * surround (sur) density of the nodes:
-    LV = (sim(N1,N2) / ave) * ((N1_sur_Sim - ave * N2_sur_Rng) + (N2_sur_Sim - ave * N2_sur_Rng))
-    The density was computed over variable distance, incremented depending on aggregate similarity over previously computed shorter distance
-    Or cluster by complete linkage: relative sum strength of all shared links?
-    '''
-    Gt__ = []  # init Gt for each N, may be unpacked and present multiple layers:
+    Gt__ = []
     for rng, N_ in enumerate(N__):
-        Gt_ = []
-        for N in N_:
-            if N.root_: continue  # Gt was initialized in lower N__[i]
-            Gt = [{N}, set(), np.array([.0,.0,.0,.0]), 0]
-            N.root_ = [rng, Gt]  # 1st element is rng of the lowest root?
-            Gt_ += [Gt]
-        Gt__ += [Gt_]
-    # cluster rngLay:
-    for rng, Gt_ in enumerate(Gt__, start=1):
+        # init Gt_ from N.root_[-1]
+        Gt_ = init_Gt_(N_, fd, rng)
         if len(Gt_) < ave_L:
-            continue
-        for G in set.union(*N__[:rng+1]):  # in all lower Gs
-            G.merged = 0
-        for _node_,_link_,_Et, mrg in Gt_:
-            if mrg: continue
-            Node_, Link_, Et = set(),set(), np.array([.0,.0,.0,.0])  # m,r only?
-            for G in _node_:
-                if not G.merged and len(G.nrim_) > rng:
-                    node_ = G.nrim_[rng]- Node_
-                    if not node_: continue  # no new rim nodes
-                    node_,link_,et = cluster_from_G(G, node_, G.lrim_[rng]-Link_, rng)
-                    Node_.update(node_)
-                    Link_.update(link_)
-                    Et += et
-            if Et[0] > Et[2] * ave:  # additive current-layer V: form higher Gt
-                Node_.update(_node_); Link_.update(_link_)
-                Gt = [Node_, Link_, Et+_Et, 0]
-                for n in Node_:
-                    n.root_.append(Gt)
+            Gt__ += [N_]
+            break
+        # eval to merge connected Gts
+        Gt__ += [merge_Gt_(Gt_)]
     n__ = []
-    for i, Gt_ in enumerate(Gt__):  # selective convert Gts to CGs
+    # eval to convert Gts to CGs:
+    for rng, Gt_ in enumerate(Gt__, start=1):
+        if isinstance(Gt_, set): continue  # recycled N_
         n_ = []
-        for Gt in Gt_:
-            if Gt[2][0] > Gt[2][2] * ave:  # eval additive Et
-                n_ += [sum2graph(root, [list(Gt[0]), list(Gt[1]), Gt[2]], fd, rng=i)]
-            else:
-                n_ += Gt[0]  # weak Gt node_
+        for node_,link_,et, _,_ in Gt_:
+            M, R = et[0::2]
+            if M > R * ave * rng:  # all rngs val
+                n_ += [sum2graph(root, [node_,link_,et], fd, rng)]
+            else:  # weak Gt
+                n_ += [[node_,link_,et]]  # skip in current-agg xcomp, unpack if extended lower-agg xcomp
         n__ += [n_]
-    N__[:] = n__
+    N__[:] = n__  # replace Ns with Gts, if any
+
+def init_Gt_(N_, fd, rng):  # init higher root Gt_ from N.root_[-1]
+
+    for N in N_:
+        if not N.root_:  # true in N__[0]
+            rim_ = N.rimt_ if fd else N.rim_
+            rim = set([Lt[0] for Lt in (rim_[rng][0]+rim_[rng][1] if fd else rim_[rng]) if Lt[0].derH.Et[0] > ave * Lt[0].derH.Et[2] * (rng+1)])
+            _Gt = [[N], set(), np.array([.0,.0,.0,.0]), rim, 1]  # mrg = 1 to skip below
+            N.root_ = [_Gt]
+    _Gt_ = []
+    for N in N_:
+        if N.root_[-1] not in _Gt_: _Gt_ += [N.root_[-1]]  # unique roots, lower or initialized above
+    Gt_ = []
+    for _Gt in _Gt_:
+        node_, link_, et, rim, mrg = _Gt
+        if mrg:  # initialized above
+            _Gt[-1] = 0; Gt_ += [_Gt]
+        else:  # init with lower root
+            Rim = set()
+            for n in node_:
+                rim_ = n.rimt_ if fd else n.rim_
+                if len(rim_) > rng:
+                    rim = set([Lt[0] for Lt in (rim_[rng][0]+rim_[rng][1] if fd else rim_[rng]) if Lt[0].derH.Et[0] > ave * Lt[0].derH.Et[2] * (rng+1)])
+                    Rim.update(rim)
+            Gt = [node_.copy(), link_.copy(), et.copy(), Rim, 0]  # Rim can't be empty
+            for n in node_: n.root_ += [Gt]
+            Gt_ += [Gt]
+    return Gt_
+
+def merge_Gt_(Gt_):  # eval connected Gts for merging in higher-rng Gts
+    GT_ = []
+
+    for Gt in Gt_:
+        node_,link_,et, rim,mrg = Gt
+        if mrg: continue
+        while any(rim):  # extend node_,link_, replace rim
+            ext_rim = set()
+            for _L in rim:
+                G,_G = _L.nodet if _L.nodet[0] in node_ else list(reversed(_L.nodet)) # one is outside node_
+                if _G.root_[-1] is Gt: continue  # merged in prior loop
+                _node_, _link_, _et, _rim, _ = _G.root_[-1]
+                crim = (rim | ext_rim) & _rim  # intersect with extended rim
+                xrim = _rim - crim   # exclusive _rim
+                cV = 0  # common val
+                for __L in crim:  # common Ls
+                    M, R = __L.derH.Et[0::2]
+                    v = M - ave * R
+                    if v > 0: cV += M  # cluster by +ve links only
+                if cV / (_et[0]+1) > ave * ccoef:  # /_M: lower-rng cohesion ~ behavioral independence, may be break up combined G?
+                    _G.root_[-1][-1] = 1  # set mrg
+                    ext_rim.update(xrim)  # add new links
+                    for _node in _node_:
+                        if _node not in node_:
+                            _node.root_[-1] = Gt; node_ += [_node]
+                    link_.update(_link_|{_L})  # external L
+                    et += _L.derH.Et + _et
+            rim = ext_rim
+        GT_ += [Gt]
+
+    return GT_
 
 def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
