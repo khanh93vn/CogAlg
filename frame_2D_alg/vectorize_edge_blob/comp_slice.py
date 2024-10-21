@@ -4,6 +4,7 @@ from itertools import zip_longest
 import sys
 sys.path.append("..")
 from frame_blobs import CBase, imread
+from slice_edge import CP, comp_angle, CsliceEdge
 
 '''
 comp_slice traces edge axis by cross-comparing vertically adjacent Ps: horizontal slices across an edge blob.
@@ -37,15 +38,13 @@ PP_aves = ave_PPm, ave_PPd = 50, 50
 P_aves = ave_Pm, ave_Pd = 10, 10
 ave_Gm = 50
 ave_L = 5
-if __name__ == "__main__": from slice_edge import CP, comp_angle, CsliceEdge
-else: from .slice_edge import CP, comp_angle, CsliceEdge
 
-class CcompSliceFrame(CsliceEdge):
+class CcompSlice(CsliceEdge):
     # replace CBlob:
     class CEdge(CsliceEdge.CEdge):
         def vectorize(edge):  # overrides in CsliceEdge.CEdge.vectorize
             edge.slice_edge()
-            if edge.latuple[-1] * (len(edge.P_)-1) > ave_PPm:  # eval PP, rdn=1
+            if edge.G*(edge.L - 1) > ave_PPm:  # eval PP, rdn=1
                 comp_slice(edge)
     CBlob = CEdge
 
@@ -279,7 +278,7 @@ if __name__ == "__main__":
 
     image_file = '../images/raccoon_eye.jpeg'
     image = imread(image_file)
-    frame = CcompSliceFrame(image).segment()
+    frame = CcompSlice(image).segment()
 
     # ----- verification -----
     # draw PPms as graphs of Ps and dPs

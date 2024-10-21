@@ -1,9 +1,11 @@
 import numpy as np
 from itertools import combinations, zip_longest
 from copy import deepcopy, copy
-from frame_blobs import CBase
-from .slice_edge import comp_angle, CsliceEdge
-from .comp_slice import comp_slice, comp_latuple, add_lat, aves, comp_md_, add_md_
+import sys
+sys.path.append("..")
+from frame_blobs import CBase, imread
+from slice_edge import comp_angle, CsliceEdge
+from comp_slice import CcompSlice, comp_slice, comp_latuple, add_lat, aves, comp_md_, add_md_
 
 '''
 This code is ostensibly for clustering segments within edge: high-gradient blob, but it's far too complex for the case.
@@ -217,32 +219,35 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         # add rimt_, elay | extH if der+
     def __bool__(l): return bool(l.derH.H)
 
-def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cluster:
+class CaggRecursion(CcompSlice):
+    
+    class CEdge(CcompSlice.CEdge):   # override vectorize() from comp_slice
 
-    frame = CsliceEdge(image).segment()
-    for edge in frame.blob_:
-        if (hasattr(edge, 'P_') and
-            edge.latuple[-1] * (len(edge.P_)-1) > ave):
-            comp_slice(edge)
-            # init for agg+:
-            edge.mdLay = CH(H=edge.mdLay[0], Et=edge.mdLay[1], n=edge.mdLay[2])
-            edge.derH = CH(H=[CH()]); edge.derH.H[0].root = edge.derH; edge.fback_ = []
-            if edge.mdLay.Et[0] * (len(edge.node_)-1)*(edge.rng+1) > ave * edge.mdLay.Et[2]:
-                G_ = []
-                for N in edge.node_:  # no comp node_, link_ | PPd_ for now
-                    H,Et,n = N[3] if isinstance(N,list) else N.mdLay  # N is CP
-                    if H and Et[0] > ave * Et[2]:  # convert PP|P to G:
-                        if isinstance(N,list):
-                            root, P_,link_,(H,Et,n),lat,A,S,area,box,[y,x],n = N  # PPt
-                        else:  # single CP
-                            root=edge; P_=[N]; link_=[]; (H,Et,n)=N.mdLay; lat=N.latuple; [y,x]=N.yx; n=N.n
-                            box = [y,x-len(N.dert_), y,x]
-                        PP = CG(fd=0, root_=root, node_=P_,link_=link_,mdLay=[H, Et, n],latuple=lat, box=box,yx=[y,x],n=n)
-                        y0,x0,yn,xn = box
-                        PP.aRad = np.hypot(*np.subtract(PP.yx,(yn,xn)))
-                        G_ += [PP]
-                if len(G_) > 10:
-                    agg_recursion(edge, G_, fd=0)  # discontinuous PP_ xcomp, cluster
+        def vectorize(edge):  # vectorization in 3 composition levels of xcomp, cluster:
+            edge.slice_edge()
+            if edge.G*(edge.L - 1) > ave:   # edge.L is len(edge.P_)
+                comp_slice(edge)
+                # init for agg+:
+                edge.mdLay = CH(H=edge.mdLay[0], Et=edge.mdLay[1], n=edge.mdLay[2])
+                edge.derH = CH(H=[CH()]); edge.derH.H[0].root = edge.derH; edge.fback_ = []
+                if edge.mdLay.Et[0] * (len(edge.node_)-1)*(edge.rng+1) > ave * edge.mdLay.Et[2]:
+                    G_ = []
+                    for N in edge.node_:  # no comp node_, link_ | PPd_ for now
+                        H,Et,n = N[3] if isinstance(N,list) else N.mdLay  # N is CP
+                        if H and Et[0] > ave * Et[2]:  # convert PP|P to G:
+                            if isinstance(N,list):
+                                root, P_,link_,(H,Et,n),lat,A,S,area,box,[y,x],n = N  # PPt
+                            else:  # single CP
+                                root=edge; P_=[N]; link_=[]; (H,Et,n)=N.mdLay; lat=N.latuple; [y,x]=N.yx; n=N.n
+                                box = [y,x-len(N.dert_), y,x]
+                            PP = CG(fd=0, root_=root, node_=P_,link_=link_,mdLay=[H, Et, n],latuple=lat, box=box,yx=[y,x],n=n)
+                            y0,x0,yn,xn = box
+                            PP.aRad = np.hypot(*np.subtract(PP.yx,(yn,xn)))
+                            G_ += [PP]
+                    if len(G_) > 1:
+                        agg_recursion(edge, G_, fd=0)  # discontinuous PP_ xcomp, cluster
+
+    CBlob = CEdge
 
 def agg_recursion(root, iQ, fd):  # breadth-first rng+ cross-comp -> eval clustering, recursion per fd fork: rng+ | der+
 
@@ -256,7 +261,8 @@ def agg_recursion(root, iQ, fd):  # breadth-first rng+ cross-comp -> eval cluste
 
     m,d,mr,dr = Et; fvd = d > ave_d * dr*(rng+1); fvm = m > ave * mr*(rng+1)
     if fvd or fvm:
-        L_ = [L for L_ in L__ for L in L_]  # comp flat or nested?
+        if fd: L_ = [L for L_ in L__ for L in L_] # if comp_link_
+        else:  L_ = L__  # if comp_node_
         L = L_[0]  # root += L.derH
         if fd: root.derH.append_(CH().append_(CH().copy(L.derH)))  # new rngLay, aggLay
         else:  root.derH.H[-1].append_(L.derH)  # append last aggLay
@@ -332,9 +338,9 @@ def cluster_rng_(_L_):  # cluster while <ave ddist regardless of M, proximity is
                 if drng > 0:
                     while drng - 1 > 0:
                         N.rim_ += [[]]; N.extH.H += [[]]; drng -= 1  # empty rngLay
-                    N.rim_+= [[L,rev]]; N.extH.append(CH().add_H(L.derH))  # add rngLay
+                    N.rim_+= [[[L,rev]]]; N.extH.append_(CH().add_H(L.derH))  # add rngLay
                 else:  # append rngLay
-                    N.rim_[rng-1] += [L,rev]; N.extH.H[rng-1].add_H(L.derH)  # always N.rim_[-1], N.extH.H[-1]?
+                    N.rim_[rng-1] += [[L,rev]]; N.extH.H[rng-1].add_H(L.derH)  # always N.rim_[-1], N.extH.H[-1]?
                 if N not in N_: N_ += [N]
         # merge weak N_ in lower N_, if any:
         elif m < ave and rng > 1:
@@ -348,7 +354,7 @@ def cluster_rng_(_L_):  # cluster while <ave ddist regardless of M, proximity is
     if N_:
         N__ += [[N_,m]]  # last rngLay
 
-    return N__, M
+    return N__  # adding M causes error in cluster_N__ due to inconsistent N__ structure
 
 def comp_link_(iL_):  # comp CLs via directional node-mediated link tracing: der+'rng+ in root.link_ rim_t node rims
 
@@ -462,11 +468,10 @@ def cluster_N__(root, N__, fd):  # form rng graphs by merging lower-rng graphs i
 
     Gt__ = []
     for rng, (N_,m) in enumerate(N__):  # bottom-up
-        if m > ave:  # init Gt_ from N.root_[-1]
-            Gt_ = init_Gt_(N_, fd, rng)
-            if len(Gt_) < ave_L:
-                Gt__ += [N_]; break
-        else:
+        if m <= ave:
+            Gt__ += [N_]; break
+        Gt_ = init_Gt_(N_, fd, rng) # init Gt_ from N.root_[-1]
+        if len(Gt_) < ave_L:
             Gt__ += [N_]; break
         Gt__ += [merge_Gt_(Gt_)]  # eval to merge connected Gts
     n__ = []
@@ -474,7 +479,9 @@ def cluster_N__(root, N__, fd):  # form rng graphs by merging lower-rng graphs i
     for rng, Gt_ in enumerate(Gt__, start=1):
         if isinstance(Gt_, set): continue  # recycled N_
         n_ = []
-        for node_,link_,et, _,_ in Gt_:
+        for Gt in Gt_:
+            if isinstance(Gt, CG): continue # recycled N. Or break?
+            node_,link_,et, _,_ = Gt
             M, R = et[0::2]
             if M > R * ave * rng:  # all rngs val
                 n_ += [sum2graph(root, [node_,link_,et], fd, rng)]
@@ -487,8 +494,8 @@ def init_Gt_(N_, fd, rng):  # init higher root Gt_ from N.root_[-1]
 
     for N in N_:
         if not N.root_:  # true in N__[0]
-            rim_ = N.rimt_ if fd else N.rim_
-            rim = set([Lt[0] for Lt in (rim_[rng][0]+rim_[rng][1] if fd else rim_[rng])])
+            if fd: rim = set([Lt[0] for rim_ in N.rimt_[rng] for Lt in rim_])
+            else: rim = set([Lt[0] for Lt in N.rim_[rng]])
             _Gt = [[N], set(), np.array([.0,.0,.0,.0]), rim, 1]  # mrg = 1 to skip below
             N.root_ = [_Gt]
     _Gt_ = []
@@ -575,3 +582,11 @@ def sum2graph(root, grapht, fd, rng):  # sum node and link params into graph, ag
                     if G not in alt_G.alt_graph_:
                         G.alt_graph_ += [alt_G]
     return graph
+
+if __name__ == "__main__":
+    image_file = '../images/raccoon_eye.jpeg'
+    image = imread(image_file)
+    frame = CaggRecursion(image).segment()
+
+    # ----- verification -----
+    

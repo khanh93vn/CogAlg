@@ -117,6 +117,9 @@ class CsliceEdge(CFrame):
                         else:            bi__[P].remove(_P)
 
             edge.pre__ = bi__  # prelinks
+        
+        @property
+        def L(edge): return len(edge.P_)
 
     CBlob = CEdge
 
