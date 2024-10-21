@@ -201,6 +201,25 @@ def rng_link_(iL_):  # comp CLs via directional node-mediated link tracing: der+
 
 def cluster_N__2(root, N__, fd):  # cluster G__|L__ by value density of +ve links per node
 
+    N__ = []
+    N_,et = iN__.pop()
+    rng = len(iN__)
+    while iN__:
+        _N_,_et = iN__.pop()  # top-down
+        if _et[0] < ave and et[0] < ave:  # merge weak rngs, higher into lower (or we can merge weak N_ to either strong or weak _N_ too?)
+            for n in N_:
+                if n not in _N_: _N_.add(n)  # lower rng
+                if isinstance(n, CL):
+                    n.rimt_[rng-1][0] += n.rimt_[rng][0]; n.rimt_[rng-1][1] += n.rimt_[rng][1]; n.rimt_.pop(rng)  # merged rimt
+                else:
+                    n.rim_[rng-1] += n.rim_[rng]; n.rim_.pop(rng)  # merged rim
+                n.extH.H[rng-1].add_H(n.extH.H[rng]); n.extH.H.pop(rng)  # merged extH
+            _et += et
+        else:
+            N__ += [[_N_,_et]]; N_ = _N_; _et = et
+        rng -= 1
+    N__ += [[_N_,_et] if '_N_' in locals() else [N_,et]]  # 1st N_, [N_,et] if no while: single N_ in iN__
+
     Gt__ = []
     for rng, N_ in enumerate(N__, start=1):  # all Ls and current-rng Gts are unique
         Gt_ = []   # init Gts for merging
@@ -358,4 +377,46 @@ in sum2graph:
         graph.A = np.add(graph.A,link.angle)  # np.add(graph.A, [-link.angle[0],-link.angle[1]] if rev else link.angle)
 '''
 
+def add_md_C(HE, He, irdnt=[]):  # sum dextt | dlatt | dlayt
 
+    HE.H[:] = [V + v for V, v in zip_longest(HE.H, He.H, fillvalue=0)]
+    HE.n += He.n  # combined param accumulation span
+    HE.Et += He.Et
+    if any(irdnt): HE.Et[2:] = [E + e for E, e in zip(HE.Et[2:], irdnt)]
+    return HE
+
+def accum_lay(HE, He, irdnt):
+    if HE.md_t:
+        for MD_C, md_C in zip(HE.md_t, He.md_t):  # dext_C, dlat_C, dlay_C
+            MD_C.add_md_C(md_C)
+
+def comp_md_C(_He, He, rn=1, dir=1):
+
+    vm, vd, rm, rd = 0,0,0,0
+    derLay = []
+    for i, (_d, d) in enumerate(zip(_He.H[1::2], He.H[1::2])):  # compare ds in md_ or ext
+        d *= rn  # normalize by compared accum span
+        diff = (_d - d) * dir  # in comp link: -1 if reversed nodet else 1
+        match = min(abs(_d), abs(d))
+        if (_d < 0) != (d < 0): match = -match  # negate if only one compared is negative
+        vm += match - aves[i]  # fixed param set?
+        vd += diff
+        rm += vd > vm; rd += vm >= vd
+        derLay += [match, diff]  # flat
+
+    return CH(H=derLay, Et=np.array([vm,vd,rm,rd],dtype='float'), n=1)
+'''
+    for rev, node in zip((0,1),(N,_N)):  # reverse Link direction for N
+        # L_ includes negative Ls
+        if (len(node.rimt_) if fd else len(node.rim_)) < rng:
+            if fd: node.rimt_ += [[[(Link,rev)],[]]] if dir else [[[],[(Link,rev)]]]  # add rng layer
+            else:  node.rim_ += [[(Link, rev)]]
+        else:
+            if fd: node.rimt_[-1][1-rev] += [(Link,rev)]  # add in last rng layer, opposite to _N,N dir
+            else:  node.rim_[-1] += [(Link, rev)]
+        if fv:  # select for next rng:
+            if len(node.extH.H) < rng:  # init rng layer
+                node.extH.append_(elay) # node.lrim_ += [{Link}]; node.nrim_ += [{(_N,N)[rev]}]  # _node
+            else:  # append last layer
+                node.extH.H[-1].add_H(elay)  # node.lrim_[-1].add(Link); node.nrim_[-1].add((_N,N)[rev])
+'''
