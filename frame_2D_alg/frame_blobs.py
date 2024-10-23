@@ -66,7 +66,7 @@ class CFrame(CBase):
         frame.i__, frame.latuple, frame.blob_ = i__, [0, 0, 0, 0], []
         frame.rdn = frame.rng = 1
 
-    def segment(frame):
+    def run(frame):
         dert__ = frame.comp_pixel()
         frame.flood_fill(dert__)
         return frame
@@ -146,7 +146,7 @@ class CFrame(CBase):
             frame.latuple[-4:] = I, Dy, Dx, G
             frame.blob_ += [blob]
             if blob.sign and blob.G < ave*blob.area + aveR*blob.root.rdn:  # sign and G < ave*L + aveR*rdn
-                rnode_ = CrNode_(blob).segment()    # recursive eval cross-comp per blob
+                rnode_ = CrNode_(blob).run()    # recursive eval cross-comp per blob
                 if rnode_: blob.rnode_ = rnode_  # rnode_ is added dynamically, only positive blobs may have rnode_
 
         @property
@@ -169,7 +169,7 @@ class CrNode_(CFrame):
         rnode_.rdn = blob.root.rdn + 1.5
         rnode_.rng = blob.root.rng + 1
 
-    def segment(rnode_):  # recursive evaluation of cross-comp rng+ per blob
+    def run(rnode_):  # recursive evaluation of cross-comp rng+ per blob
         rnode_.rdn += 1.5; rnode_.rng += 1  # update rdn, rng
         dert__ = rnode_.comp_r()  # return None if blob is too small
         if not dert__: return   # terminate if blob is too small
@@ -234,7 +234,7 @@ if __name__ == "__main__":
 
     image_file = './images//raccoon_eye.jpeg'
     image = imread(image_file)
-    frame = CFrame(image).segment()
+    frame = CFrame(image).run()
 
     # verification (intra):
     for blob in unpack_blob_(frame):

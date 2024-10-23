@@ -42,7 +42,7 @@ https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/agg_re
 
 def vectorize_root(image):  # vectorization in 3 composition levels of xcomp, cluster:
 
-    frame = CsliceEdge(image).segment()
+    frame = CsliceEdge(image).run()
 
     for edge in frame.blob_:
         if edge.latuple[-1] * (len(edge.P_)-1) > G_aves[0]:  # eval G, rdn=1

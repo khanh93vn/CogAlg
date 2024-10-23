@@ -358,7 +358,7 @@ if __name__ == "__main__":
     image_file = '../images/raccoon_eye.jpeg'
     image = imread(image_file)
 
-    frame = CsliceEdge(image).segment()
+    frame = CsliceEdge(image).run()
     # verification:
     import matplotlib.pyplot as plt
 

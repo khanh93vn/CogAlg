@@ -278,7 +278,7 @@ if __name__ == "__main__":
 
     image_file = '../images/raccoon_eye.jpeg'
     image = imread(image_file)
-    frame = CcompSlice(image).segment()
+    frame = CcompSlice(image).run()
 
     # ----- verification -----
     # draw PPms as graphs of Ps and dPs
