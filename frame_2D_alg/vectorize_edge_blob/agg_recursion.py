@@ -1,8 +1,8 @@
 import sys
 sys.path.append("..")
-from frame_blobs import CBase, imread
-from slice_edge import comp_angle, CsliceEdge
-from comp_slice import CcompSlice, comp_slice, comp_latuple, add_lat, aves, comp_md_, add_md_
+from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_
+from slice_edge import slice_edge, comp_angle, aveG
+from comp_slice import comp_slice, comp_latuple, add_lat, aves, comp_md_, add_md_
 from itertools import combinations, zip_longest
 from copy import deepcopy, copy
 import numpy as np
@@ -218,13 +218,12 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
         # add rimt, elay | extH in der+
     def __bool__(l): return bool(l.derH.H)
 
-class CaggRecursion(CcompSlice):
-    
-    class CEdge(CcompSlice.CEdge):   # override vectorize() from comp_slice
-
-        def vectorize(edge):  # vectorization in 3 composition levels of xcomp, cluster:
-            edge.slice_edge()
-            if edge.G*(edge.L - 1) > ave:   # edge.L is len(edge.P_)
+def vectorize_root(frame):
+    blob_ = unpack_blob_(frame)
+    for blob in blob_:
+        if not blob.sign and blob.G > aveG * blob.root.rdn:
+            edge = slice_edge(blob)
+            if edge.G*(len(edge.P_) - 1) > ave:  # eval PP, rdn=1
                 comp_slice(edge)
                 # init for agg+:
                 edge.mdLay = CH(H=edge.mdLay[0], Et=edge.mdLay[1], n=edge.mdLay[2])
@@ -246,7 +245,6 @@ class CaggRecursion(CcompSlice):
                     if len(G_) > 1:
                         agg_recursion(edge, G_, fd=0)  # discontinuous PP_ xcomp, cluster
 
-    CBlob = CEdge
 
 def agg_recursion(root, iQ, fd):  # breadth-first rng+ cross-comp -> eval clustering, recursion per fd fork: rng+ | der+
 
@@ -518,3 +516,14 @@ def sum2graph(root, grapht, fd, nest):  # sum node and link params into graph, a
                     if G not in alt_G.alt_graph_:
                         G.alt_graph_ += [alt_G]
     return graph
+
+if __name__ == "__main__":
+
+    image_file = '../images/raccoon_eye.jpeg'
+    image = imread(image_file)
+
+    frame = frame_blobs_root(image)
+    intra_blob_root(frame)
+    vectorize_root(frame)
+
+    # ----- verification -----

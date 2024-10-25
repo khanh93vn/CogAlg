@@ -4,7 +4,10 @@ from itertools import combinations
 from math import atan2, cos, floor, pi
 import sys
 sys.path.append("..")
-from frame_blobs import CBase, CFrame, imread, unpack_blob_
+from frame_blobs import (
+    frame_blobs_root, intra_blob_root,
+    CBase, imread, unpack_blob_,
+)
 
 '''
 In natural images, objects look very fuzzy and frequently interrupted, only vaguely suggested by initial blobs and contours.
@@ -28,100 +31,6 @@ ave_dist = 3
 max_dist = 15
 ave_dangle = .95  # vertical difference between angles: -1->1, abs dangle: 0->1, ave_dangle = (min abs(dangle) + max abs(dangle))/2,
 ave_olp = 5
-
-class CsliceEdge(CFrame):
-
-    class CEdge(CFrame.CBlob): # replaces CBlob
-
-        def term(blob):  # extension of CsubFrame.CBlob.term(), evaluate for vectorization right after rng+ in intra_blob
-            super().term()
-            if not blob.sign and blob.G > aveG * blob.root.rdn:
-                blob.vectorize()
-
-        def vectorize(blob):  # overridden in comp_slice, agg_recursion
-            blob.slice_edge()
-
-        def slice_edge(edge):
-            axisd = edge.select_max()   # select max
-            yx_ = sorted(axisd.keys(), key=lambda yx: edge.dert_[yx][-1])  # sort by g
-
-            # form P per non-overlapped max yx
-            edge.P_ = []; edge.rootd = {}
-            while yx_:
-                yx = yx_.pop(); axis = axisd[yx]  # get max of maxes (highest g)
-                edge.P_ += [CP(edge, yx, axis)]   # form P
-                yx_ = [yx for yx in yx_ if yx not in edge.rootd]    # remove merged maxes if any
-            edge.P_.sort(key=lambda P: P.yx, reverse=True)
-            edge.trace()
-            # del edge.rootd    # still being used for visual verification
-            return edge
-
-        def select_max(edge):
-            axisd = {}  # map yx to axis
-            for (y, x), (i, gy, gx, g) in edge.dert_.items():
-                sa, ca = gy/g, gx/g
-                # check neighbors
-                new_max = True
-                for dy, dx in [(-sa, -ca), (sa, ca)]:
-                    _y, _x = round(y+dy), round(x+dx)
-                    if (_y, _x) not in edge.dert_: continue  # skip if pixel not in edge blob
-                    _i, _gy, _gx, _g = edge.dert_[_y, _x]  # get g of neighbor
-                    if g < _g:
-                        new_max = False
-                        break
-                if new_max: axisd[y, x] = sa, ca
-            return axisd
-
-        def trace(edge):  # fill and trace across slices
-
-            adjacent_ = [(P, y,x) for P in edge.P_ for y,x in edge.rootd if edge.rootd[y,x] is P]
-            bi__ = defaultdict(list)  # prelinks (bi-lateral)
-            while adjacent_:
-                _P, _y,_x = adjacent_.pop(0)  # also pop _P__
-                _pre_ = bi__[_P]
-                for y,x in [(_y-1,_x),(_y,_x+1),(_y+1,_x),(_y,_x-1)]:
-                    try:  # if yx has _P, try to form link
-                        P = edge.rootd[y,x]
-                        pre_ = bi__[P]
-                        if _P is not P and _P not in pre_ and P not in _pre_:
-                            pre_ += [_P]
-                            _pre_ += [P]
-                    except KeyError:    # if yx empty, keep tracing
-                        if (y,x) not in edge.dert_: continue   # stop if yx outside the edge
-                        edge.rootd[y,x] = _P
-                        adjacent_ += [(_P, y,x)]
-            # Remove redundant links
-            for P in edge.P_:
-                yx = P.yx
-                for __P, _P in combinations(bi__[P], r=2):
-                    if __P not in bi__[P] or _P not in bi__[P]: continue
-                    __yx, _yx = __P.yx, _P.yx   # center coords
-                    # starts & ends:
-                    __yx1 = np.subtract(__P.yx_[0], __P.axis)
-                    __yx2 = np.add(__P.yx_[-1], __P.axis)
-                    _yx1 = np.subtract(_P.yx_[0], _P.axis)
-                    _yx2 = np.add(_P.yx_[-1], _P.axis)
-
-                    if xsegs(yx, _yx, __yx1, __yx2):
-                        # remove link(_P, P) (which crossed __P):
-                        bi__[P].remove(_P)
-                        bi__[_P].remove(P)
-                    elif xsegs(yx, __yx, _yx1, _yx2):
-                        # remove link(__P, P) (which crossed _P):
-                        bi__[P].remove(__P)
-                        bi__[__P].remove(P)
-            for P in edge.P_:
-                for _P in bi__[P]:
-                    if P in bi__[_P]:
-                        if _P.yx < P.yx: bi__[_P].remove(P)
-                        else:            bi__[P].remove(_P)
-
-            edge.pre__ = bi__  # prelinks
-        
-        @property
-        def L(edge): return len(edge.P_)
-
-    CBlob = CEdge
 
 class CP(CBase):
 
@@ -161,6 +70,88 @@ class CP(CBase):
         P.yx = tuple(np.mean([P.yx_[0], P.yx_[-1]], axis=0))
         P.latuple = I, G, M, Ma, L, (Dy, Dx)
 
+def vectorize_root(frame):
+    blob_ = unpack_blob_(frame)
+    for blob in blob_:
+        if not blob.sign and blob.G > aveG * blob.root.rdn:
+            slice_edge(blob)
+
+def slice_edge(edge):
+    axisd = select_max(edge)   # select max
+    yx_ = sorted(axisd.keys(), key=lambda yx: edge.dert_[yx][-1])  # sort by g
+
+    # form P per non-overlapped max yx
+    edge.P_ = []; edge.rootd = {}
+    while yx_:
+        yx = yx_.pop(); axis = axisd[yx]  # get max of maxes (highest g)
+        edge.P_ += [CP(edge, yx, axis)]   # form P
+        yx_ = [yx for yx in yx_ if yx not in edge.rootd]    # remove merged maxes if any
+    edge.P_.sort(key=lambda P: P.yx, reverse=True)
+    trace(edge)
+    # del edge.rootd    # still being used for visual verification
+    return edge
+
+def select_max(edge):
+    axisd = {}  # map yx to axis
+    for (y, x), (i, gy, gx, g) in edge.dert_.items():
+        sa, ca = gy/g, gx/g
+        # check neighbors
+        new_max = True
+        for dy, dx in [(-sa, -ca), (sa, ca)]:
+            _y, _x = round(y+dy), round(x+dx)
+            if (_y, _x) not in edge.dert_: continue  # skip if pixel not in edge blob
+            _i, _gy, _gx, _g = edge.dert_[_y, _x]  # get g of neighbor
+            if g < _g:
+                new_max = False
+                break
+        if new_max: axisd[y, x] = sa, ca
+    return axisd
+
+def trace(edge):  # fill and trace across slices
+
+    adjacent_ = [(P, y,x) for P in edge.P_ for y,x in edge.rootd if edge.rootd[y,x] is P]
+    bi__ = defaultdict(list)  # prelinks (bi-lateral)
+    while adjacent_:
+        _P, _y,_x = adjacent_.pop(0)  # also pop _P__
+        _pre_ = bi__[_P]
+        for y,x in [(_y-1,_x),(_y,_x+1),(_y+1,_x),(_y,_x-1)]:
+            try:  # if yx has _P, try to form link
+                P = edge.rootd[y,x]
+                pre_ = bi__[P]
+                if _P is not P and _P not in pre_ and P not in _pre_:
+                    pre_ += [_P]
+                    _pre_ += [P]
+            except KeyError:    # if yx empty, keep tracing
+                if (y,x) not in edge.dert_: continue   # stop if yx outside the edge
+                edge.rootd[y,x] = _P
+                adjacent_ += [(_P, y,x)]
+    # Remove redundant links
+    for P in edge.P_:
+        yx = P.yx
+        for __P, _P in combinations(bi__[P], r=2):
+            if __P not in bi__[P] or _P not in bi__[P]: continue
+            __yx, _yx = __P.yx, _P.yx   # center coords
+            # starts & ends:
+            __yx1 = np.subtract(__P.yx_[0], __P.axis)
+            __yx2 = np.add(__P.yx_[-1], __P.axis)
+            _yx1 = np.subtract(_P.yx_[0], _P.axis)
+            _yx2 = np.add(_P.yx_[-1], _P.axis)
+
+            if xsegs(yx, _yx, __yx1, __yx2):
+                # remove link(_P, P) (which crossed __P):
+                bi__[P].remove(_P)
+                bi__[_P].remove(P)
+            elif xsegs(yx, __yx, _yx1, _yx2):
+                # remove link(__P, P) (which crossed _P):
+                bi__[P].remove(__P)
+                bi__[__P].remove(P)
+    for P in edge.P_:
+        for _P in bi__[P]:
+            if P in bi__[_P]:
+                if _P.yx < P.yx: bi__[_P].remove(P)
+                else:            bi__[P].remove(_P)
+
+    edge.pre__ = bi__  # prelinks
 
 # --------------------------------------------------------------------------------------------------------------
 # utility functions
@@ -221,7 +212,10 @@ if __name__ == "__main__":
     image_file = '../images/raccoon_eye.jpeg'
     image = imread(image_file)
 
-    frame = CsliceEdge(image).run()
+    frame = frame_blobs_root(image)
+    intra_blob_root(frame)
+    vectorize_root(frame)
+
     # verification:
     import matplotlib.pyplot as plt
 

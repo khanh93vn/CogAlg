@@ -3,8 +3,8 @@ from copy import deepcopy, copy
 from itertools import zip_longest
 import sys
 sys.path.append("..")
-from frame_blobs import CBase, imread
-from slice_edge import CP, comp_angle, CsliceEdge
+from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_
+from slice_edge import CP, slice_edge, comp_angle, aveG
 
 '''
 comp_slice traces edge axis by cross-comparing vertically adjacent Ps: horizontal slices across an edge blob.
@@ -39,15 +39,6 @@ P_aves = ave_Pm, ave_Pd = 10, 10
 ave_Gm = 50
 ave_L = 5
 
-class CcompSlice(CsliceEdge):
-    # replace CBlob:
-    class CEdge(CsliceEdge.CEdge):
-        def vectorize(edge):  # overrides in CsliceEdge.CEdge.vectorize
-            edge.slice_edge()
-            if edge.G*(edge.L - 1) > ave_PPm:  # eval PP, rdn=1
-                comp_slice(edge)
-    CBlob = CEdge
-
 class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
     name = "dP"
     def __init__(l, nodet=None, mdLay=None, Et=None, root=None, span=None, angle=None, yx=None, latuple=None):
@@ -66,7 +57,6 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
         l.prim = []
         # n = 1?
     def __bool__(l): return bool(l.mdLay[0])  # l.mdLay.H
-
 
 def add_md_(HE, He,  irdnt=[]):  # p may be derP, sum derLays
 
@@ -93,6 +83,15 @@ def comp_md_(_H, H, rn=1, dir=1):
         derLay += [match, diff]  # flat
 
     return [derLay, np.array([vm,vd,rm,rd], dtype='float'), 1]  # [H, Et, n]
+
+
+def vectorize_root(frame):
+    blob_ = unpack_blob_(frame)
+    for blob in blob_:
+        if not blob.sign and blob.G > aveG * blob.root.rdn:
+            edge = slice_edge(blob)
+            if edge.G*(len(edge.P_) - 1) > ave_PPm:  # eval PP, rdn=1
+                comp_slice(edge)
 
 
 def comp_slice(edge):  # root function
@@ -278,7 +277,10 @@ if __name__ == "__main__":
 
     image_file = '../images/raccoon_eye.jpeg'
     image = imread(image_file)
-    frame = CcompSlice(image).run()
+
+    frame = frame_blobs_root(image)
+    intra_blob_root(frame)
+    vectorize_root(frame)
 
     # ----- verification -----
     # draw PPms as graphs of Ps and dPs
