@@ -4,11 +4,7 @@ from itertools import combinations
 from math import atan2, cos, floor, pi
 import sys
 sys.path.append("..")
-from frame_blobs import (
-    frame_blobs_root, intra_blob_root,
-    CBase, imread, unpack_blob_,
-)
-
+from frame_blobs import frame_blobs_root, intra_blob_root, CBase, imread, unpack_blob_
 '''
 In natural images, objects look very fuzzy and frequently interrupted, only vaguely suggested by initial blobs and contours.
 Potential object is proximate low-gradient (flat) blobs, with rough / thick boundary of adjacent high-gradient (edge) blobs.
@@ -38,8 +34,8 @@ class CP(CBase):
         super().__init__()
         y, x = yx
         P.axis = ay, ax = axis
-        pivot = i,gy,gx,g = edge.dert_[y,x]  # dert is None if (_y, _x) not in edge.dert_: return` in `interpolate2dert`
-        ma = ave_dangle  # ? max value because P direction is the same as dert gradient direction
+        pivot = i,gy,gx,g = edge.dert_[y,x]  # dert is None if _y,_x not in edge.dert_: return` in `interpolate2dert`
+        ma = ave_dangle  # max if P direction = dert g direction
         m = ave_g - g
         pivot += ma,m
         edge.rootd[y, x] = P
@@ -71,36 +67,36 @@ class CP(CBase):
         P.latuple = I, G, M, Ma, L, (Dy, Dx)
 
 def vectorize_root(frame):
+
     blob_ = unpack_blob_(frame)
     for blob in blob_:
         if not blob.sign and blob.G > aveG * blob.root.rdn:
             slice_edge(blob)
 
 def slice_edge(edge):
-    axisd = select_max(edge)   # select max
-    yx_ = sorted(axisd.keys(), key=lambda yx: edge.dert_[yx][-1])  # sort by g
 
-    # form P per non-overlapped max yx
+    axisd = select_max(edge)
+    yx_ = sorted(axisd.keys(), key=lambda yx: edge.dert_[yx][-1])  # sort by g
     edge.P_ = []; edge.rootd = {}
+    # form P/ local max yx:
     while yx_:
-        yx = yx_.pop(); axis = axisd[yx]  # get max of maxes (highest g)
+        yx = yx_.pop(); axis = axisd[yx]  # get max of g maxes
         edge.P_ += [CP(edge, yx, axis)]   # form P
         yx_ = [yx for yx in yx_ if yx not in edge.rootd]    # remove merged maxes if any
     edge.P_.sort(key=lambda P: P.yx, reverse=True)
     trace(edge)
-    # del edge.rootd    # still being used for visual verification
+    # del edge.rootd  # for visual verification
     return edge
 
 def select_max(edge):
     axisd = {}  # map yx to axis
     for (y, x), (i, gy, gx, g) in edge.dert_.items():
         sa, ca = gy/g, gx/g
-        # check neighbors
         new_max = True
-        for dy, dx in [(-sa, -ca), (sa, ca)]:
+        for dy, dx in [(-sa, -ca), (sa, ca)]:  # check neighbors
             _y, _x = round(y+dy), round(x+dx)
             if (_y, _x) not in edge.dert_: continue  # skip if pixel not in edge blob
-            _i, _gy, _gx, _g = edge.dert_[_y, _x]  # get g of neighbor
+            _i, _gy, _gx, _g = edge.dert_[_y, _x]  # neighboring g
             if g < _g:
                 new_max = False
                 break
@@ -125,24 +121,23 @@ def trace(edge):  # fill and trace across slices
                 if (y,x) not in edge.dert_: continue   # stop if yx outside the edge
                 edge.rootd[y,x] = _P
                 adjacent_ += [(_P, y,x)]
-    # Remove redundant links
+    # remove redundant links
     for P in edge.P_:
         yx = P.yx
         for __P, _P in combinations(bi__[P], r=2):
             if __P not in bi__[P] or _P not in bi__[P]: continue
             __yx, _yx = __P.yx, _P.yx   # center coords
-            # starts & ends:
+            # start -> end:
             __yx1 = np.subtract(__P.yx_[0], __P.axis)
             __yx2 = np.add(__P.yx_[-1], __P.axis)
             _yx1 = np.subtract(_P.yx_[0], _P.axis)
             _yx2 = np.add(_P.yx_[-1], _P.axis)
-
+            # remove link(_P,P) crossing __P:
             if xsegs(yx, _yx, __yx1, __yx2):
-                # remove link(_P, P) (which crossed __P):
                 bi__[P].remove(_P)
                 bi__[_P].remove(P)
+            # remove link(__P,P) crossing _P):
             elif xsegs(yx, __yx, _yx1, _yx2):
-                # remove link(__P, P) (which crossed _P):
                 bi__[P].remove(__P)
                 bi__[__P].remove(P)
     for P in edge.P_:
@@ -173,10 +168,8 @@ def interpolate2dert(edge, y, x):
             k = (1 - abs(_y-y)) * (1 - abs(_x-x))
             I += i*k; Dy += dy*k; Dx += dx*k; G += g*k
             K += k
-
     if K != 0:
         return I/K, Dy/K, Dx/K, G/K
-
 
 def comp_angle(_A, A):  # rn doesn't matter for angles
 
@@ -208,30 +201,24 @@ def xsegs(yx1, yx2, yx3, yx4):
     return (v1*v2 <= 0 and v3*v4 <= 0)
 
 if __name__ == "__main__":
-
     image_file = '../images/raccoon_eye.jpeg'
     image = imread(image_file)
 
     frame = frame_blobs_root(image)
     intra_blob_root(frame)
     vectorize_root(frame)
-
     # verification:
     import matplotlib.pyplot as plt
-
     # settings
     num_to_show = 5
     show_gradient = True
     show_slices = True
-
-    # unpack and sort edges
+    # unpack and sort edges:
     edge_ = sorted(unpack_edge_(frame), key=lambda edge: len(edge.yx_), reverse=True)
-
     # show first largest n edges
     for edge in edge_[:num_to_show]:
         yx_ = np.array(edge.yx_)
         yx0 = yx_.min(axis=0) - 1
-
         # show edge-blob
         shape = yx_.max(axis=0) - yx0 + 2
         mask_nonzero = tuple(zip(*(yx_ - yx0)))
@@ -239,15 +226,11 @@ if __name__ == "__main__":
         mask[mask_nonzero] = True
         plt.imshow(mask, cmap='gray', alpha=0.5)
         plt.title(f"area = {edge.area}")
-
-        # show gradient
         if show_gradient:
             vu_ = [(-gy/g, gx/g) for i, gy, gx, g in edge.dert_.values()]
             y_, x_ = zip(*(yx_ - yx0))
             v_, u_ = zip(*vu_)
             plt.quiver(x_, y_, u_, v_, scale=100)
-
-        # show slices
         if show_slices:
             for P in edge.P_:
                 y_, x_ = zip(*(P.yx_ - yx0))
@@ -264,7 +247,6 @@ if __name__ == "__main__":
                     assert _P.yx < P.yx     # verify up-link
                     _yp, _xp = _P.yx - yx0
                     plt.plot([_xp, xp], [_yp, yp], "ko--", alpha=0.5)
-
                 yx_ = [yx for yx in edge.rootd if edge.rootd[yx] is P]
                 if yx_:
                     y_, x_ = zip(*(yx_ - yx0))

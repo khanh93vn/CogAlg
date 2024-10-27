@@ -84,15 +84,14 @@ def comp_md_(_H, H, rn=1, dir=1):
 
     return [derLay, np.array([vm,vd,rm,rd], dtype='float'), 1]  # [H, Et, n]
 
-
 def vectorize_root(frame):
+
     blob_ = unpack_blob_(frame)
     for blob in blob_:
         if not blob.sign and blob.G > aveG * blob.root.rdn:
             edge = slice_edge(blob)
             if edge.G*(len(edge.P_) - 1) > ave_PPm:  # eval PP, rdn=1
                 comp_slice(edge)
-
 
 def comp_slice(edge):  # root function
 
@@ -118,8 +117,7 @@ def comp_slice(edge):  # root function
 
 def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and contiguously link mediated
 
-    rng = 1  # cost of links added per rng+
-    _Pt_ = edge.pre__.items() # includes prelink
+    rng = 1; _Pt_ = edge.pre__.items() # includes prelink
 
     while True:  # extend mediated comp rng by adding prelinks
         Pt_ = []  # with new prelinks
@@ -130,7 +128,8 @@ def rng_recursion(edge):  # similar to agg+ rng_recursion, but looping and conti
             for _P in _pre_:  # prelinks
                 dy,dx = np.subtract(P.yx,_P.yx) # dy,dx between node centers
                 if abs(dy)+abs(dx) <= rng*2:  # <max Manhattan distance
-                    if len(_P.rim_) < rng-1: continue
+                    if len(_P.rim_) < rng-1:  # cost of links *= rng
+                        continue
                     link = comp_P(_P,P, angle=[dy,dx], distance=np.hypot(dy,dx),fder=0)
                     if link:  # mlink
                         V += link.mdLay[1][0]  # Et[0]
@@ -190,8 +189,7 @@ def comp_link_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
 
 def form_PP_(root, iP_):  # form PPs of dP.valt[fd] + connected Ps val
 
-    for P in iP_: P.merged = 0
-    PPt_ = []
+    PPt_ = []; for P in iP_: P.merged = 0
 
     for P in iP_:  # for dP in link_ if fd
         if P.merged: continue
@@ -274,14 +272,12 @@ def accum_box(box, y, x):
     return min(y0, y), min(x0, x), max(yn, y), max(xn, x)
 
 if __name__ == "__main__":
-
     image_file = '../images/raccoon_eye.jpeg'
     image = imread(image_file)
 
     frame = frame_blobs_root(image)
     intra_blob_root(frame)
     vectorize_root(frame)
-
     # ----- verification -----
     # draw PPms as graphs of Ps and dPs
     # draw PPds as graphs of dPs and ddPs
@@ -289,20 +285,18 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     from slice_edge import unpack_edge_
     num_to_show = 5
-
     edge_ = sorted(
         filter(lambda edge: hasattr(edge, "node_") and edge.node_, unpack_edge_(frame)),
         key=lambda edge: len(edge.yx_), reverse=True)
     for edge in edge_[:num_to_show]:
         yx_ = np.array(edge.yx_)
         yx0 = yx_.min(axis=0) - 1
-        # show edge-blob
+        # show edge blob
         shape = yx_.max(axis=0) - yx0 + 2
         mask_nonzero = tuple(zip(*(yx_ - yx0)))
         mask = np.zeros(shape, bool)
         mask[mask_nonzero] = True
-
-        # flatten data
+        # flatten
         P_, dP_, PPm_, PPd_ = [], [], [], []
         for node in edge.node_:
             if isinstance(node, CP): P_ += [node]
@@ -320,12 +314,10 @@ if __name__ == "__main__":
 
         plt.imshow(mask, cmap='gray', alpha=0.5)
         # plt.title("")
-
         print("Drawing Ps...")
         for P in P_:
             (y, x) = P.yx - yx0
             plt.plot(x, y, "ok")
-
         print("Drawing dPs...")
         nodet_set = set()
         for dP in dP_:

@@ -25,7 +25,7 @@ from matplotlib import pyplot as plt
     thus should be cross-compared between blobs on the next level of search.
     - assign_adjacents:
     Each blob is assigned internal and external sets of opposite-sign blobs it is connected to.
-    Frame_blobs is a root function for all deeper processing in 2D alg.
+    Frame_blobs is a start for all deeper processing in 2D alg.
     -
     Please see illustrations:
     https://github.com/boris-kz/CogAlg/blob/master/frame_2D_alg/Illustrations/blob_params.drawio
@@ -74,7 +74,7 @@ class CFrame(CBase):
         while fill_yx_:  # fill_yx_ is popped per filled pixel, in form_blob
             if not perimeter_:  # init blob
                 blob = frame.CBlob(frame); perimeter_ += [fill_yx_[0]]
-            blob.form(fill_yx_, perimeter_, root__, dert__)  # https://en.wikipedia.org/wiki/Flood_fill
+            blob.fill_blob(fill_yx_, perimeter_, root__, dert__)  # https://en.wikipedia.org/wiki/Flood_fill
             if not perimeter_: blob.term()
 
     def __repr__(frame): return f"frame(id={frame.id})"
@@ -90,7 +90,7 @@ class CBlob(CBase):
         blob.dert_ = {}  # keys: (y, x). values: (i, dy, dx, g)
         blob.adj_ = []  # adjacent blobs
 
-    def form(blob, fill_yx_, perimeter_, root__, dert__):
+    def fill_blob(blob, fill_yx_, perimeter_, root__, dert__):
         y, x = perimeter_.pop()  # pixel coord
         if (y, x) not in dert__: return  # out of bound
         i,dy,dx,g,s = dert__[y,x]
@@ -129,7 +129,7 @@ class CBlob(CBase):
 def frame_blobs_root(image):
     dert__ = comp_pixel(image)
     frame = CFrame(image)
-    
+
     # Flood-fill 1 pixel at a time
     flood_fill(frame, dert__)
 
@@ -189,7 +189,7 @@ def intra_blob_root(frame):
 def rblob(blob):
     if not blob.sign or blob.G >= ave*blob.area + aveR*blob.root.rdn:
         return
-    
+
     # sign and G < ave*L + aveR*rdn:
     rnode_ = CrNode_(blob)
     dert__ = comp_r(rnode_)     # return None if blob is too small
