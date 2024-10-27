@@ -520,7 +520,9 @@ def sum2graph(root, grapht, fd, nest):  # sum node and link params into graph, a
     return graph
 
 if __name__ == "__main__":
-    image_file = '../images/raccoon_eye.jpeg'
+
+    # image_file = '../images//raccoon_eye.jpeg'
+    image_file = '../images//toucan_small.jpg'
     image = imread(image_file)
 
     frame = frame_blobs_root(image)

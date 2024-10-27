@@ -279,7 +279,9 @@ def min_dist(a, b, pad=0.5):
     return a, b
 
 if __name__ == "__main__":
-    image_file = '../images/raccoon_eye.jpeg'
+    
+    # image_file = '../images//raccoon_eye.jpeg'
+    image_file = '../images//toucan_small.jpg'
     image = imread(image_file)
 
     frame = frame_blobs_root(image)

@@ -256,9 +256,10 @@ def unpack_blob_(frame):
 
 if __name__ == "__main__":
 
-    image_file = './images//raccoon_eye.jpeg'
+    # image_file = './images//raccoon_eye.jpeg'
+    image_file = './images//toucan_small.jpg'
     image = imread(image_file)
-    frame = frame_blobs_root(image) # with intra_blob
+    frame = frame_blobs_root(image) # without intra_blob
     intra_blob_root(frame)
 
     # verification (intra):
