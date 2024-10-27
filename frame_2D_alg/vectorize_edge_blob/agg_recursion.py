@@ -274,7 +274,8 @@ def agg_recursion(root, iQ, fd):  # breadth-first rng+ cross-comp -> eval cluste
         if fvm:
             for N in N_:  # nest exceptional rims, flat by default
                 rim = N.rimt if fd else N.rim; rim[:] = [rim[:]]
-                elay = CH(); for L,_ in rim: elay.add_H(L.derH)
+                elay = CH()
+                for L,_ in rim[0]: elay.add_H(L.derH)
                 N.extH.append_(elay)
             G_ = cluster_N_(root, L_, fd)  # divisive connectivity clustering
             if len(G_) > ave_L:  # root.node_[:] = nested G_, if any:
@@ -439,7 +440,7 @@ def cluster_N_(root, L_, fd, nest=2):  # nest=1 is global, top-down segment iL_ 
         ddist = _L.dist - L.dist  # positive
         if ddist < ave_L or et[0] < ave or len(L_[i:]) < ave_L:  # ~=dist Ns or either side of L is weak
             et += L.derH.Et
-            for n, rev in zip((0,1), L.nodet):  # reverse Link direction for 2nd N
+            for rev, n in zip((0,1), L.nodet):  # reverse Link direction for 2nd N
                 if n not in N_:
                     # accum dist segment, redundant to prior layers in rim,extH.H?
                     rim = n.rimt if fd else n.rim
@@ -525,3 +526,5 @@ if __name__ == "__main__":
     frame = frame_blobs_root(image)
     intra_blob_root(frame)
     vectorize_root(frame)
+
+    # ----- verification -----
