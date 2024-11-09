@@ -98,9 +98,9 @@ def comp_slice(edge):  # root function
     edge.mdLay = [[], np.array([.0,.0,.0,.0]),0]  # H, Et, n
     for P in edge.P_:  # add higher links
         P.mdLay = [[],np.array([.0,.0,.0,.0]),0]  # for accumulation in sum2PP later (in lower P)
-        P.rim_ = []; P.lrim = []; P.prim = []
+        P.rim = []; P.lrim = []; P.prim = []
 
-    form_links(edge)  # vertical P cross-comp -> PP clustering, if lateral overlap
+    comp_P_(edge)  # vertical P cross-comp -> PP clustering, if lateral overlap
     edge.node_ = form_PP_(edge, edge.P_)
 
     for PPm in edge.node_:  # eval sub-clustering, not recursive
@@ -115,21 +115,16 @@ def comp_slice(edge):  # root function
             mdLay = PPm.mdLay  # PPm is actually CP
         add_md_(edge.mdLay, mdLay)
 
-def form_links(edge):  # form links from prelinks
+def comp_P_(edge):  # form links from prelinks
 
     edge.rng = 1
-    V = 0
-    for P,_pre_ in edge.pre__.items():
-        rng_link_ = []
+    for P, _pre_ in edge.pre__.items():
         for _P in _pre_:  # prelinks
             dy,dx = np.subtract(P.yx,_P.yx) # dy,dx between node centers
             if abs(dy)+abs(dx) <= edge.rng * 2:  # <max Manhattan distance
                 link = comp_P(_P,P, angle=[dy,dx], distance=np.hypot(dy,dx),fder=0)
-                if link:  # mlink
-                    V += link.mdLay[1][0]  # Et[0]
-                    rng_link_ += [link]
-        if rng_link_: P.rim_ += [rng_link_]
-    
+                if link:
+                    P.rim += [link]
     del edge.pre__
 
 def comp_P(_P,P, angle=None, distance=None, fder=0):  # comp dPs if fd else Ps
@@ -165,11 +160,10 @@ def comp_link_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
     link_ = PP[2]
     for dP in link_:
         if dP.mdLay[1][1] > aves[1]:
-            for _rim_ in dP.nodet[0].rim_:  # link.nodet is CP # for nmed, _rim_ in enumerate(dP.nodet[0].rim_):
-                for _dP in _rim_:
-                    if _dP not in link_: continue  # skip removed node links
-                    comp_P(_dP,dP, fder=1)
-                    # if dlink: dlink.nmed = nmed  # link mediation order, not used?
+            for _dP in dP.nodet[0].rim:  # link.nodet is CP # for nmed, _rim_ in enumerate(dP.nodet[0].rim_):
+                if _dP not in link_: continue  # skip removed node links
+                comp_P(_dP,dP, fder=1)
+                # if dlink: dlink.nmed = nmed  # link mediation order, not used?
 
 def form_PP_(root, iP_):  # form PPs of dP.valt[fd] + connected Ps val
 
