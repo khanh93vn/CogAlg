@@ -157,3 +157,47 @@ def agg_recursion(root, iQ, fd):  # parse the deepest Lay of root derH, breadth-
                     setattr(_He, attr, deepcopy(value))
         return _He
 
+def cluster_N_(root, _L_, fd, nest=1):  # top-down segment L_ by >ave ratio of L.dists
+    ave_rL = 1.2  # define segment and sub-cluster
+
+    _L_ = sorted(_L_, key=lambda x: x.dist, reverse=True)
+    _L = _L_[0]; L_ = [_L], et = _L.derH.Et
+    L__ = []
+    # segment _L_ by contiguous dist, long links first:
+    for i, L in enumerate(_L_[1:]):
+        rel_dist = _L.dist / L.dist  # >1
+        if rel_dist < ave_rL or et[0] < ave or len(_L_[i:]) < ave_L:  # ~=dist Ns or either side of L is weak
+            L_ += [L]; et += L.derH.Et
+        else:  # terminate dist segment
+            L__ += [L_]; L_=[L]; et = L.derH.Et
+        _L = L
+    L__ += [L_]  # last segment
+    G__ = []
+    for L_ in L__:  # cluster Ns via Ls in dist segment
+        Gt_ = []
+        for L in L_:
+            node_, link_, et = [n for n in L.nodet if not n.merged], {L}, copy(L.derH.Et)  # init Gt
+            _eL_ = {eL for N in L.nodet for eL,_ in get_rim(N,fd) if eL in L_}  # init current-dist ext Ls
+            while _eL_:
+                eL_ = set()  # extended rim Ls
+                for _eL in _eL_:  # cluster node-connected ext Ls
+                    et += _eL.derH.Et
+                    node_ += [n for n in _eL.nodet if not n.merged and n not in node_]
+                    link_.add(_eL)
+                    for eL in {eL for N in _eL.nodet for eL,_ in get_rim(N, fd)}:
+                        if eL not in link_ and eL in L_: eL_.add(eL)
+                _eL_ = eL_
+            Gt = [node_, link_, et]  # maxL is per segment, not G
+            for n in node_: n.merged = 1
+            Gt_ += [Gt]
+        G_ = []
+        for Gt in Gt_:
+            for n in Gt[0]: n.merged = 0  # reset per segment
+            M, R = Gt[2][0::2]  # Gt: node_,link_,et,max_dist
+            if M > R * ave * nest:  # rdn+1 in lower segments
+                G_ += [sum2graph(root, Gt, fd, nest)]
+                # add root_G node_ += G, G.root += root_G?
+        nest += 1
+        G__ += G_
+
+    return G__[0]  # top Gs only, lower Gs should be nested in their node_
