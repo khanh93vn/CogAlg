@@ -19,7 +19,6 @@ and inverse gradient deviation of flat blobs. But the latter is implicit here: h
 A stable combination of a core flat blob with adjacent edge blobs is a potential object.
 '''
 # filters:
-octant = 0.3826834323650898  # radians per octant
 aveG = 10  # for vectorize
 ave_g = 30  # change to Ave from the root intra_blob?
 ave_mL = 2
@@ -86,7 +85,7 @@ def slice_edge(edge):
         yx_ = [yx for yx in yx_ if yx not in edge.rootd]    # remove merged maxes if any
     edge.P_.sort(key=lambda P: P.yx, reverse=True)
     trace(edge)
-    # del edge.rootd  # for visual verification
+    if __name__ != "__main__": del edge.rootd   # keep for visual verification in slice_edge only
     return edge
 
 def select_max(edge):
