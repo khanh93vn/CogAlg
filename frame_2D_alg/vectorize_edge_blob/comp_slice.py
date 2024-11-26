@@ -59,7 +59,6 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
     def __bool__(l):
         return any(l.mdLay[0])  # l.mdLay.H
 
-# reframe for np.array?
 def comp_md_(_md_, md_, rn=1, dir=1):  # replace dir with rev?
 
     vm, vd, rm, rd = 0,0,0,0
@@ -130,22 +129,23 @@ def comp_link_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
                 # if dlink: dlink.nmed = nmed  # link mediation order, not used?
 
 def comp_P(_P,P, angle, distance):
-    # rng+: comp Ps
+
     rn = len(_P.dert_) / len(P.dert_)
     md_ = comp_latuple(_P.latuple, P.latuple, rn)
     vm = sum(md_[::2]); vd = sum(np.abs(md_[1::2]))
     rm = 1 + vd > vm; rd = 1 + vm >= vd
     n = (len(_P.dert_)+len(P.dert_)) / 2  # der value = ave compared n?
     derLay = np.array([md_, np.array([vm,vd,rm,rd]), n], dtype=object)
+
     return form_dP(_P, P, derLay, angle, distance, fd=0)
-    
 
 def comp_dP(_dP, dP):
-    # der+: comp dPs
+
     rn = _dP.mdLay[2] / dP.mdLay[2]  # mdLay.n
     derLay = comp_md_(_dP.mdLay[0], dP.mdLay[0], rn=rn)  # comp md_latuple: H
     angle = np.subtract(dP.yx,_dP.yx)  # dy,dx of node centers
     distance = np.hypot(*angle)  # between node centers
+
     return form_dP(_dP, dP, derLay, angle, distance, fd=1)
 
 def form_dP(_node, node, derLay, angle, distance, fd):
@@ -164,8 +164,7 @@ def form_PP_(root, iP_):  # form PPs of dP.valt[fd] + connected Ps val
 
     PPt_ = []
     for P in iP_: P.merged = 0
-
-    for P in iP_:  # for dP in link_ if fd
+    for P in iP_:  # dP in link_ if fd
         if P.merged: continue
         if not P.lrim:
             PPt_ += [P]; continue

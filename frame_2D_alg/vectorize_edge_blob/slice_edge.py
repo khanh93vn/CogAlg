@@ -201,7 +201,7 @@ def xsegs(yx1, yx2, yx3, yx4):
     return (v1*v2 <= 0 and v3*v4 <= 0)
 
 if __name__ == "__main__":
-    
+
     # image_file = '../images//raccoon_eye.jpeg'
     image_file = '../images//toucan_small.jpg'
     image = imread(image_file)
