@@ -74,7 +74,7 @@ def comp_md_(_md_, md_, rn=1, dir=1):  # replace dir with rev?
         derLay += [match, diff]  # flat
     prj_d = abs(vd) * (vm/ave)
     prj_m = vm - (prj_d / 2)
-    return np.array([np.array(derLay, dtype=float), np.array([prj_m,prj_d], dtype=float), 1],dtype=object)  # [md_, Et, n]
+    return np.array([np.array(derLay, dtype=float), np.array([vm,vd], dtype=float), 1],dtype=object)  # [md_, Et, n]
 
 def vectorize_root(frame):
 
@@ -122,7 +122,7 @@ def comp_P_(edge):  # form links from prelinks
                 n = (len(_P.dert_)+len(P.dert_)) / 2  # der value = ave compared n?
                 prj_d = abs(vd) * (vm/ave)
                 prj_m = vm - prj_d / 2
-                derLay = np.array([md_, np.array([prj_m,prj_d]), n], dtype=object)
+                derLay = np.array([md_, np.array([vm,vd]), n], dtype=object)
                 link = convert_to_dP(_P, P, derLay, angle, distance, fd=0)
                 if link:
                     P.rim += [link]
