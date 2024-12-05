@@ -1,10 +1,8 @@
 import numpy as np
-from copy import deepcopy, copy
-from itertools import zip_longest
 import sys
 sys.path.append("..")
 from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_
-from slice_edge import CP, slice_edge, comp_angle, new_latuple, aveG
+from slice_edge import CP, slice_edge, comp_angle, aveG
 
 '''
 comp_slice traces edge axis by cross-comparing vertically adjacent Ps: horizontal slices across an edge blob.
@@ -47,7 +45,7 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
 
         l.nodet = nodet  # e_ in kernels, else replaces _node,node: not used in kernels?
         l.latuple = np.array([.0,.0,.0,.0,.0, np.zeros(2)], dtype=object) if latuple is None else latuple  # sum node_
-        l.mdLay = np.array([np.zeros(12), np.zeros(2), 0], dtype=object) if mdLay is None else mdLay
+        l.mdLay = np.array([np.zeros(14), np.zeros(2), 0], dtype=object) if mdLay is None else mdLay
         l.angle = angle  # dy,dx between node centers
         l.span = span  # distance between node centers
         l.yx = yx  # sum node_
@@ -88,9 +86,9 @@ def vectorize_root(frame):
 
 def comp_slice(edge):  # root function
 
-    edge.mdLay = np.array([np.zeros(12), np.zeros(2),0],dtype=object)  # md_, Et, n
+    edge.mdLay = np.array([np.zeros(14), np.zeros(2),0],dtype=object)  # md_, Et, n
     for P in edge.P_:  # add higher links
-        P.mdLay = np.array([np.zeros(12), np.zeros(2),0],dtype=object)  # to accumulate in sum2PP
+        P.mdLay = np.array([np.zeros(14), np.zeros(2),0],dtype=object)  # to accumulate in sum2PP
         P.rim = []; P.lrim = []; P.prim = []
 
     comp_P_(edge)  # vertical P cross-comp -> PP clustering, if lateral overlap
@@ -155,7 +153,8 @@ def convert_to_dP(_node, node, derLay, angle, distance, fd):
     if Et[fd] > aves[fd]:
         node.lrim += [link]; _node.lrim += [link]
         node.prim +=[_node]; _node.prim +=[node]
-    return link
+        return link
+    if fd: return link
 
 def form_PP_(root, iP_):  # form PPs of dP.valt[fd] + connected Ps val
 
@@ -183,7 +182,7 @@ def form_PP_(root, iP_):  # form PPs of dP.valt[fd] + connected Ps val
 
 def sum2PP(root, P_, dP_):  # sum links in Ps and Ps in PP
 
-    mdLay = np.array([np.zeros(12),np.zeros(2),0], dtype=object)
+    mdLay = np.array([np.zeros(14),np.zeros(2),0], dtype=object)
     latuple = np.array([.0,.0,.0,.0,.0,np.zeros(2)], dtype=object)
     link_, A, S, area, n, box = [],[0,0], 0,0,0, [np.inf,np.inf,0,0]
     # add uplinks:
