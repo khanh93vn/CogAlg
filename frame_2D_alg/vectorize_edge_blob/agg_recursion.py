@@ -3,14 +3,18 @@ sys.path.append("..")
 import numpy as np
 from copy import copy, deepcopy
 from functools import reduce
-from itertools import combinations
-from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_
-from comp_slice import comp_latuple, comp_md_
-from trace_edge import comp_node_, comp_link_, sum2graph, get_rim, CH, CG, ave, ave_d, ave_L, vectorize_root, comp_area, extend_box
+from frame_blobs import frame_blobs_root, intra_blob_root, imread
+from comp_slice import comp_latuple
+from trace_edge import comp_node_, comp_link_, comp_lay, sum2graph, get_rim, CH, CG, ave, ave_d, ave_L, vectorize_root, comp_area, extend_box
 '''
 Cross-compare and cluster Gs within a frame, potentially unpacking their node_s first,
 alternating agglomeration and centroid clustering.
-'''
+notation:
+prefix  f denotes flag
+postfix t denotes tuple, multiple ts is a nested tuple
+prefix  _ denotes prior of two same-name variables, multiple _s for relative precedence
+postfix _ denotes array of same-name elements, multiple _s is nested array
+capitalized vars are summed small-case vars '''
 
 def agg_cluster_(frame):  # breadth-first (node_,L_) cross-comp, clustering, recursion
 
@@ -31,13 +35,13 @@ def agg_cluster_(frame):  # breadth-first (node_,L_) cross-comp, clustering, rec
         mlay = CH().add_H([L.derH for L in L_])  # mfork, else no new layer
         frame.derH = CH(H=[mlay], md_t=deepcopy(mlay.md_t), n=mlay.n, root=frame, Et=copy(mlay.Et)); mlay.root=frame.derH
         vd = d - ave_d * r
-        if vd > 0:
+        if vd > 0:  # no cross-projection
             for L in L_:
                 L.root_ = [frame]; L.extH = CH(); L.rimt = [[],[]]
-            lN_,lL_,md = comp_link_(L_)  # comp new L_, root.link_ was compared in root-forming for alt clustering
+            lN_,lL_, md = comp_link_(L_)  # comp new L_, root.link_ was compared in root-forming for alt clustering
             vd *= md / ave
-            frame.derH.append_(CH().add_H([L.derH for L in lL_]))  # dfork
-            # recursive der+ eval_: cost > ave_match, add by feedback if < _match?
+            if lL_:  # recursive der+ eval_: cost > ave_match, add by feedback if < _match?
+                frame.derH.append_(CH().add_H([L.derH for L in lL_]))  # dfork
         else:
             frame.derH.H += [[]]  # empty to decode rng+|der+, n forks per layer = 2^depth
         # + aggLays, derLays, exemplars:
@@ -109,7 +113,7 @@ def find_centroids(graph):
     def centroid(dnode_, node_, C=None):  # sum|subtract and average Rim nodes
 
         if C is None:
-            C = CG(); C.L = 0; C.M = 0  # setattr ave len node_ and summed match to nodes
+            C = CG(); C.L = 0; C.M = 0  # setattr summed len node_ and match to nodes
         for n in dnode_:
             s = n.sign; n.sign=1  # single-use sign
             C.n += n.n * s; C.Et += n.Et * s; C.rng = n.rng * s; C.aRad += n.aRad * s
@@ -125,43 +129,43 @@ def find_centroids(graph):
 
     def comp_C(C, N):  # compute match without new derivatives: global cross-comp is not directional
 
-        rn = C.n / N.n
+        # rn = C.n / N.n
         mL = min(C.L,len(N.node_)) - ave_L
         mA = comp_area(C.box, N.box)[0]
-        mLat = comp_latuple(C.latuple, N.latuple, rn,fagg=1)[1][0]
-        mLay = comp_md_(C.mdLay[0], N.mdLay[0], rn)[1][0]
-        mH = C.derH.comp_H(N.derH, rn).Et[0] if C.derH and N.derH else 0
+        mLat = comp_latuple(C.latuple, N.latuple, C.n, N.n)[2][0]
+        mLay = comp_lay(C.mdLay, N.mdLay,rn=1)[2][0]
+        mH = C.derH.comp_H(N.derH).Et[0] if C.derH and N.derH else 0
         # comp node_, comp altG from converted adjacent flat blobs?
         return mL + mA + mLat + mLay + mH
 
     def centroid_cluster(N):  # refine and extend cluster with extN_
 
         _N_ = {n for L,_ in N.rim for n in L.nodet if not n.fin}
-        n_ = _N_| {N}  # include seed node
+        N.fin = 1; n_ = _N_| {N}  # include seed node
         C = centroid(n_,n_)
         while True:
-            N_,negN_,extN_, M, dM, extM = [],[],[], 0,0,0  # included, removed, extended nodes and values
+            N_,dN_,extN_, M, dM, extM = [],[],[], 0,0,0  # included, changed, queued nodes and values
             for _N in _N_:
                 m = comp_C(C,_N)
                 vm = m - ave  # deviation
                 if vm > 0:
                     N_ += [_N]; M += m
-                    if _N.m: dM += m - _N.m  # was in C.node_
-                    else:    dM += vm  # new node
+                    if _N.m:
+                        dM += m - _N.m  # was in C.node_, add adjustment
+                    else:
+                        dN_ += [_N]; dM += vm  # new node
                     _N.m = m  # to sum in C
                     for link, _ in _N.rim:
                         n = link.nodet[0] if link.nodet[1] is _N else link.nodet[1]
                         if n.fin or n.m: continue  # in other C or in C.node_
-                        extN_ += [n]; extM += n.derH.Et[0]  # add external Ns for next loop
-                elif _N.m:  # was in C.node_
-                    _N.sign=-1; _N.m = 0; negN_+=[_N]; dM += -vm  # dM += abs m deviation
-                    # subtract from C
-            if dM > ave and M + extM > ave:  # update val and reform val, terminate reforming if low
-                extN_ = set(extN_)
-                dN_ = extN_ | set(negN_)
-                if dN_: # recompute if any changes in node_
-                    C = centroid(dN_,N_,C)
-                _N_ = set(N_)|extN_  # both old and new nodes will be compared to new C
+                        extN_ += [n]; extM += n.Et[0]  # external N for next loop
+                elif _N.m:  # was in C.node_, subtract from C
+                    _N.sign=-1; _N.m=0; dN_+=[_N]; dM += -vm  # dM += abs m deviation
+
+            if dM > ave and M + extM > ave:  # update for next loop, terminate if low reform val
+                if dN_: # recompute C if any changes in node_
+                    C = centroid(set(dN_),N_,C)
+                _N_ = set(N_) | set(extN_)  # next loop compares both old and new nodes to new C
                 C.M = M; C.node_ = N_
             else:
                 if C.M > ave * 10:
@@ -172,9 +176,9 @@ def find_centroids(graph):
                     for n in C.node_: n.m = 0
                     return N  # keep seed node
 
-    # find representative centroids for complemented Gs: m-core + d-contour, initially within an edge
-    N_ = sorted(graph.subG_, key=lambda n: n.Et[0], reverse=True)
-    subG_, clustered_ = [], set()
+    # find representative centroids for complemented Gs: m-core + d-contour, initially from unpacked edge
+    N_ = sorted([N for N in graph.subG_ if any(N.Et)], key=lambda n: n.Et[0], reverse=True)
+    subG_ = []
     for N in N_:
         N.sign, N.m, N.fin = 1, 0, 0  # setattr: C update sign, inclusion val, prior C inclusion flag
     for i, N in enumerate(N_):  # replace some of connectivity cluster by exemplar centroids
