@@ -114,34 +114,30 @@ def comp_dP_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
             _P, P = dP.nodet  # _P is prior / lower?
             rn = len(P.dert_)/len(_P.dert_)
             for _dP in P.rim:  # no med
-                if _dP not in link_:
-                    continue  # skip removed node links
-                derLat, et = comp_md_(_dP.mdLat[1], dP.mdLat[1], rn)
-                angle = np.subtract(dP.yx,_dP.yx)  # dy,dx of node centers
+                if _dP is dP or _dP not in link_: continue  # skip removed node links
+                _node, node = (_dP, dP) if (*_dP.yx,) < (*dP.yx,) else (dP, _dP)
+                derLat, et = comp_md_(_node.mdLat[1], node.mdLat[1], rn)
+                angle = np.subtract(node.yx,_node.yx)  # dy,dx of node centers
                 distance = np.hypot(*angle)  # between node centers
-                llink_ += [convert_to_dP(_dP, dP, derLat, angle, distance, et, fd=1)]
+                llink_ += [convert_to_dP(_node, node, derLat, angle, distance, et, fd=1)]
     return llink_
 
 def comp_md_(_d_,d_, rn=.1, dir=1):  # dir may be -1
 
-    M, D = 0,0; md_, dd_ = [],[]
-    for i, (_d, d) in enumerate(zip(_d_, d_)):  # compare ds in md_ or ext
-        d *= rn  # normalize by compared accum span
-        diff = (_d - d) * dir
-        match = min(abs(_d), abs(d))
-        if (_d < 0) != (d < 0): match = -match  # negate if only one compared is negative
-        md_ += [match]; M += match  # maybe negative
-        dd_ += [diff];  D += abs(diff)  # potential compression
-        # proj / eval
-    return np.array([np.array(md_),np.array(dd_)]), np.array([M,D])  # [m_,d_], Et
+    d_ = d_*rn  # normalize by compared accum span
+    dd_ = (_d_ - d_) * dir
+    md_ = np.minimum(np.abs(_d_), np.abs(d_))
+    md_[(_d_ < 0) != (d_ < 0)] *= -1        # negate if only one compared is negative
+    M = md_.sum(); D = dd_.sum()
+    return np.array([np.array(md_), np.array(dd_)]), np.array([M, D])  # [m_,d_], Et
 
 def convert_to_dP(_P,P, derLay, angle, distance, Et, fd):
 
     link = CdP(nodet=[_P,P], Et=Et, mdLat=derLay, angle=angle, span=distance, yx=np.add(_P.yx, P.yx)/2)
     if Et[fd] > aves[fd]:
         _P.mdLat += link.mdLat; P.mdLat += link.mdLat  # regardless of clustering?
-        _P.lrim += [link]; P.lrim += [link]
-        _P.prim +=[P]; P.prim +=[_P]  # all Ps are dPs if fd
+    _P.lrim += [link]; P.lrim += [link]
+    _P.prim += [P];    P.prim +=[_P]  # all Ps are dPs if fd
 
     return link
 
@@ -218,7 +214,7 @@ def comp_latuple(_latuple, latuple, _n,n):  # 0der params
 
     d_ = np.array([dL, dI, dG, dM, dMa, dA])
     m_ = np.array([mL, mI, mG, mM, mMa, mA])
-    et = np.array([np.sum(m_), np.sum(np.abs(d_))])
+    et = np.array([m_.sum(), np.abs(d_).sum()])
 
     return np.array([m_,d_]), et
 
@@ -306,7 +302,7 @@ if __name__ == "__main__":
 
         print("Drawing PPm boxes...")
         for PPm in PPm_:
-            _, _, _, _, _, _, _, _, (y0, x0, yn, xn), _, _ = PPm
+            _, _, _, _, _, _, _, _, (y0, x0, yn, xn), _ = PPm
             (y0, x0), (yn, xn) = ((y0, x0), (yn, xn)) - yx0
             y0, yn = min_dist(y0, yn)
             x0, xn = min_dist(x0, xn)
@@ -314,7 +310,7 @@ if __name__ == "__main__":
 
         print("Drawing PPd boxes...")
         for PPd in PPd_:
-            _, _, _, _, _, _, _, _, (y0, x0, yn, xn), _, _ = PPd
+            _, _, _, _, _, _, _, _, (y0, x0, yn, xn), _ = PPd
             (y0, x0), (yn, xn) = ((y0, x0), (yn, xn)) - yx0
             y0, yn = min_dist(y0, yn)
             x0, xn = min_dist(x0, xn)
