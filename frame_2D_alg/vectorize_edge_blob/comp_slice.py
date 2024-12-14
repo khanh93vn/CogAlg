@@ -3,7 +3,6 @@ import sys
 sys.path.append("..")
 from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_
 from slice_edge import CP, slice_edge, comp_angle, aveG
-from functools import reduce
 '''
 comp_slice traces edge axis by cross-comparing vertically adjacent Ps: horizontal slices across an edge blob.
 These are low-M high-Ma blobs, vectorized into outlines of adjacent flat (high internal match) blobs.
@@ -65,7 +64,6 @@ def vectorize_root(frame):
         if not blob.sign and blob.G > aveG * blob.root.rdn:
             edge = slice_edge(blob)
             if edge.G*(len(edge.P_) - 1) > ave_PPm:  # eval PP, rdn=1
-                for P in edge.P_: P.mdLay = np.array([np.zeros(6), np.zeros(6)])
                 comp_slice(edge)
 
 def comp_slice(edge):  # root function
@@ -93,12 +91,11 @@ def comp_slice(edge):  # root function
 def comp_P_(edge):  # form links from prelinks
 
     edge.rng = 1
-    for P, _pre_ in edge.pre__.items():
-        for _P in _pre_:
+    for _P, pre_ in edge.pre__.items():
+        for P in pre_:
             # prelinks
             dy,dx = np.subtract(P.yx,_P.yx)  # between node centers
-            if abs(dy)+abs(dx) <= edge.rng * 2:
-                # <max Manhattan distance
+            if abs(dy)+abs(dx) <= edge.rng * 2: # <max Manhattan distance
                 angle=[dy,dx]; distance=np.hypot(dy,dx)
                 derLay, et = comp_latuple(_P.latuple, P.latuple, len(_P.dert_), len(P.dert_))
                 P.rim += [convert_to_dP(_P,P, derLay, angle, distance, et)]
@@ -111,12 +108,10 @@ def comp_dP_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
     for _dP in link_:
         M, n = PP[-2][0], PP[-1]
         if _dP.Et[1] * (M / n / ave) > aves[1]:
+            _P, P = _dP.nodet  # _P is lower
+            rn = len(P.dert_) / len(_P.dert_)
             for dP in P.rim:  # higher links
                 if dP not in link_: continue  # skip removed node links
-                _P, P = dP.nodet  # _P is lower
-                rn = len(P.dert_) / len(_P.dert_)
-                # do we need this:
-                _node, node = (_dP, dP) if (*_dP.yx,) < (*dP.yx,) else (dP, _dP)
                 mdVer, et = comp_md_(_node.vertuple[1], node.vertuple[1], rn)
                 angle = np.subtract(node.yx,_node.yx)  # dy,dx of node centers
                 distance = np.hypot(*angle)  # between node centers
@@ -130,7 +125,7 @@ def comp_md_(_d_,d_, rn=.1, dir=1):  # dir may be -1
     md_ = np.minimum(np.abs(_d_), np.abs(d_))
     md_[(_d_ < 0) != (d_ < 0)] *= -1  # negate if only one compared is negative
 
-    return np.array([np.array(md_), np.array(dd_)]), np.array([md_.sum(), dd_.sum()])  # [m_,d_], Et
+    return np.array([md_, dd_]), np.array([md_.sum(), dd_.sum()])  # [m_,d_], Et
 
 def convert_to_dP(_P,P, derLay, angle, distance, Et):
 
@@ -148,8 +143,6 @@ def form_PP_(root, iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
     for P in iP_: P.merged = 0
     for P in iP_:  # dP from link_ if fd
         if P.merged: continue
-        if not P.lrim:
-            PPt_ += [P]; continue
         _prim_ = P.prim; _lrim_ = P.lrim
         _P_ = {P}; link_ = set(); Et = np.zeros(2); n = 0
         while _prim_:
@@ -162,6 +155,8 @@ def form_PP_(root, iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
                 lrim_.update(set(_P.lrim) - link_)
                 _P.merged = 1
             _prim_, _lrim_ = prim_, lrim_
+        if not link_:
+            PPt_ += [P]; continue
         PPt = sum2PP(root, list(_P_), list(link_), Et, n)
         PPt_ += [PPt]
 
@@ -258,7 +253,7 @@ if __name__ == "__main__":
             if isinstance(node, CP): P_ += [node]
             else: PPm_ += [node]
         for PPm in PPm_:
-            # root, P_, link_, mdLay, latuple, A, S, area, box, yx, n = PPm
+            # root, P_, link_, vertuple, latuple, A, S, box, yx, Et, n = PPm
             assert len(PPm[2]) > 0  # link_ can't be empty
             P_ += PPm[1]
             for link in PPm[2]:
@@ -295,7 +290,7 @@ if __name__ == "__main__":
 
         print("Drawing PPm boxes...")
         for PPm in PPm_:
-            _, _, _, _, _, _, _, _, (y0, x0, yn, xn), _ = PPm
+            _, _, _, _, _, _, _, (y0, x0, yn, xn), _, _, _ = PPm
             (y0, x0), (yn, xn) = ((y0, x0), (yn, xn)) - yx0
             y0, yn = min_dist(y0, yn)
             x0, xn = min_dist(x0, xn)
@@ -303,7 +298,7 @@ if __name__ == "__main__":
 
         print("Drawing PPd boxes...")
         for PPd in PPd_:
-            _, _, _, _, _, _, _, _, (y0, x0, yn, xn), _ = PPd
+            _, _, _, _, _, _, _, (y0, x0, yn, xn), _, _, _ = PPd
             (y0, x0), (yn, xn) = ((y0, x0), (yn, xn)) - yx0
             y0, yn = min_dist(y0, yn)
             x0, xn = min_dist(x0, xn)

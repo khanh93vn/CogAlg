@@ -141,13 +141,8 @@ def trace(edge):  # fill and trace across slices
             elif xsegs(yx, __yx, _yx1, _yx2):
                 bi__[P].remove(__P)
                 bi__[__P].remove(P)
-    for P in edge.P_:
-        for _P in bi__[P]:
-            if P in bi__[_P]:
-                if _P.yx < P.yx: bi__[_P].remove(P)
-                else:            bi__[P].remove(_P)
 
-    edge.pre__ = bi__  # prelinks
+    edge.pre__ = {_P:[P for P in bi__[_P] if _P.yx < P.yx] for _P in edge.P_}
 
 # --------------------------------------------------------------------------------------------------------------
 # utility functions
@@ -223,6 +218,7 @@ if __name__ == "__main__":
     edge_ = sorted(unpack_edge_(frame), key=lambda edge: len(edge.yx_), reverse=True)
     # show first largest n edges
     for edge in edge_[:num_to_show]:
+        assert len(edge.P_) == len({P.yx for P in edge.P_})     # verify that P.yx is unique
         yx_ = np.array(edge.yx_)
         yx0 = yx_.min(axis=0) - 1
         # show edge-blob
@@ -250,7 +246,7 @@ if __name__ == "__main__":
                 for _P in edge.pre__[P]:
                     assert _P.id not in pre_set     # verify pre-link uniqueness
                     pre_set.add(_P.id)
-                    assert _P.yx < P.yx     # verify up-link
+                    assert _P.yx > P.yx     # verify up-link
                     _yp, _xp = _P.yx - yx0
                     plt.plot([_xp, xp], [_yp, yp], "ko--", alpha=0.5)
                 yx_ = [yx for yx in edge.rootd if edge.rootd[yx] is P]
