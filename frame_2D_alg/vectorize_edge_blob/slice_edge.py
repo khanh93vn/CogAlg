@@ -106,30 +106,27 @@ def select_max(edge):
 
 def trace_P_adjacency(edge):  # fill and trace across slices
 
-    perimeter_ = [(P, y,x) for P in edge.P_ for y,x in edge.rootd if edge.rootd[y,x] is P]
-    prelink__ = defaultdict(list)  # uplinks
-    while perimeter_:   # breadth-first search for neighbors
-        _P, _y,_x = perimeter_.pop(0)  # also pop _P__
+    margin_rim = [(P, y,x) for P in edge.P_ for y,x in edge.rootd if edge.rootd[y,x] is P]
+    prelink__ = defaultdict(list)  # bilateral
+    while margin_rim:   # breadth-first search for neighbors
+        _P, _y,_x = margin_rim.pop(0)  # also pop _P__
         _margin = prelink__[_P]  # empty list per _P
         for y,x in [(_y-1,_x),(_y,_x+1),(_y+1,_x),(_y,_x-1)]:  # adjacent pixels
-            if (y, x) not in edge.dert_: continue   # yx is outside the edge
-            if (y, x) not in edge.rootd:       # assign root, keep tracing
+            if (y,x) not in edge.dert_: continue   # yx is outside the edge
+            if (y,x) not in edge.rootd:  # assign root, keep tracing
                 edge.rootd[y, x] = _P
-                perimeter_ += [(_P, y, x)]
+                margin_rim += [(_P, y, x)]
                 continue
             # form link if yx has _P
             P = edge.rootd[y,x]
             margin = prelink__[P]  # empty list per P
             if _P is not P and _P not in margin and P not in _margin:
-                margin += [_P]  # _P is higher
-                _margin += [P]  # P is higher
-
-
+                margin += [_P]; _margin += [P]
     # remove crossed links
     for _P in edge.P_:
         _yx = _P.yx
         for P, __P in combinations(prelink__[_P], r=2):
-            if {__P, P}.intersection(prelink__[_P]) != {__P, P}: continue   # might have already been removed in loop
+            if {__P,P}.intersection(prelink__[_P]) != {__P, P}: continue   # already removed
             yx, __yx = P.yx, __P.yx
             # get aligned line segments:
             yx1 = np.subtract(P.yx_[0], P.axis)
@@ -138,11 +135,9 @@ def trace_P_adjacency(edge):  # fill and trace across slices
             __yx2 = np.add(__P.yx_[-1], __P.axis)
             # remove crossed uplinks:
             if xsegs(yx, _yx, __yx1, __yx2):
-                prelink__[P].remove(_P)
-                prelink__[_P].remove(P)
+                prelink__[P].remove(_P); prelink__[_P].remove(P)
             elif xsegs(_yx, __yx, yx1, yx2):
-                prelink__[_P].remove(__P)
-                prelink__[__P].remove(_P)
+                prelink__[_P].remove(__P); prelink__[__P].remove(_P)
     # for comp_slice:
     edge.pre__ = {_P:[P for P in prelink__[_P] if _P.yx > P.yx] for _P in prelink__}
 
