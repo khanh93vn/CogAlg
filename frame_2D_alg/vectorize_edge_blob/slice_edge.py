@@ -19,8 +19,8 @@ and inverse gradient deviation of flat blobs. But the latter is implicit here: h
 A stable combination of a core flat blob with adjacent edge blobs is a potential object.
 '''
 # filters:
-ave = 206
-aveG = 10  # for vectorize
+ave_I = 100
+ave_G = 100
 ave_g = 30  # change to Ave from the root intra_blob?
 ave_mL = 2
 ave_dist = 3
@@ -29,19 +29,18 @@ ave_dangle = .95  # vertical difference between angles: -1->1, abs dangle: 0->1,
 ave_olp = 5
 
 class CP(CBase):
-
     def __init__(P, yx, axis):
         super().__init__()
         P.yx = yx
         P.axis = ay, ax = axis
-        P.yx_,P.dert_ = [],[]
-        P.latuple = None            # place-holder
+        P.yx_, P.dert_ = [],[]
+        P.latuple = None  # I,G, M,D, L, [Dy, Dx]
 
 def vectorize_root(frame):
 
     blob_ = unpack_blob_(frame)
     for blob in blob_:
-        if not blob.sign and blob.G > aveG * blob.root.rdn:
+        if not blob.sign and blob.G > ave_G * blob.root.rdn:
             slice_edge(blob)
 
 def slice_edge(edge):
@@ -94,14 +93,16 @@ def form_P(P, edge):
             if (round(y),round(x)) not in edge.dert_: break
             try: i,gy,gx,g = interpolate2dert(edge, y, x)
             except TypeError: break  # out of bound (TypeError: cannot unpack None)
-            if edge.rootd.get((ky,kx)) is not None: break  # skip overlapping P
+            if edge.rootd.get((ky,kx)) is not None:
+                break  # skip overlapping P
             mangle, dangle = comp_angle((_gy,_gx),(gy,gx))
             if mangle < ave_dangle: break  # terminate P if angle miss
             m = min(_i,i) + min(_g,g) + mangle
             d = abs(-i-i) + abs(_g-g) + dangle
-            if m < ave: break  # terminate P if total miss, blob should be more permissive than P                # update P:
+            if m < ave_I + ave_G + ave_dangle: break  # need separate weights?  terminate P if total miss, blob should be more permissive than P
+            # update P:
             edge.rootd[ky, kx] = P
-            I += i; Dy += dy; Dx += dx; G += g; M += m; D+=d; L += 1
+            I+=i; Dy+=dy; Dx+=dx; G+=g; M+=m; D+=d; L+=1
             P.yx_ += [(y,x)]; P.dert_ += [(i,gy,gx,g)]
             # for next loop:
             y += dy; x += dx
@@ -114,7 +115,8 @@ def form_P(P, edge):
 def trace_P_adjacency(edge):  # fill and trace across slices
 
     margin_rim = [(P, y,x) for P in edge.P_ for y,x in edge.rootd if edge.rootd[y,x] is P]
-    prelink__ = defaultdict(list)  # bilateral
+    prelink__ = defaultdict(list)
+    # bilateral
     while margin_rim:   # breadth-first search for neighbors
         _P, _y,_x = margin_rim.pop(0)  # also pop _P__
         _margin = prelink__[_P]  # empty list per _P
