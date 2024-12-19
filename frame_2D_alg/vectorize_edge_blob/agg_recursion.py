@@ -5,7 +5,7 @@ from copy import copy, deepcopy
 from functools import reduce
 from frame_blobs import frame_blobs_root, intra_blob_root, imread
 from comp_slice import comp_latuple, comp_md_
-from vect_edge import comp_node_, comp_link_, sum2graph, get_rim, CH, CG, ave, ave_d, ave_L, vectorize_root, comp_area, extend_box
+from vect_edge import comp_node_, comp_link_, sum2graph, get_rim, CH, CG, ave, ave_d, ave_L, vectorize_root, comp_area, extend_box, val_
 '''
 Cross-compare and cluster Gs within a frame, potentially unpacking their node_s first,
 alternating agglomeration and centroid clustering.
@@ -16,40 +16,29 @@ prefix  _ denotes prior of two same-name variables, multiple _s for relative pre
 postfix _ denotes array of same-name elements, multiple _s is nested array
 capitalized vars are summed small-case vars '''
 
-def agg_cluster_(frame):  # breadth-first (node_,L_) cross-comp, clustering, recursion
+def cross_comp(frame):  # breadth-first (node_,L_) cross-comp, clustering, recursion
 
-    def cluster_eval(G, N_, fd):
-
-        pL_ = {l for n in N_ for l,_ in get_rim(n, fd)}
+    N_,L_,Et = comp_node_(frame.subG_)  # cross-comp exemplars, extrapolate to their node_s?
+    # mfork
+    if val_(Et, fo=1) > 0:
+        mlay = CH().add_H([L.derH for L in L_])
+        frame.derH.append_(mlay)  # redo with append to He.layt and recursive feedback
+        pL_ = {l for n in N_ for l,_ in get_rim(n, fd=0)}
         if len(pL_) > ave_L:
-            sG_ = cluster_N_(G, pL_, fd)  # optionally divisive clustering
-            frame.subG_ = sG_
-            for sG in sG_:
-                if len(sG.subG_) > ave_L:
-                    find_centroids(sG)  # centroid clustering in sG.node_ or subG_?
-    '''
-    cross-comp G_) GG_) GGG_., interlaced with exemplar centroid selection 
-    '''
-    N_,L_, (m,d,r,n) = comp_node_(frame.subG_)  # cross-comp exemplars, extrapolate to their node_s?
-    if m > ave * r:
-        mlay = CH().add_H([L.derH for L in L_])  # mfork, else no new layer
-        frame.derH = CH(H=[mlay], root=frame, Et=copy(mlay.Et)); mlay.root=frame.derH
-        vd = d * (m/ave) - ave_d * r
-        if vd > 0:
+            cluster_N_(frame, pL_, fd=0)  # optional divisive clustering, may call alternating centroid clustering and agg_cluster
+        # dfork, derH.layt has 1|2 forks
+        if val_(Et, mEt=Et,fo=1) > 0:  # same root for L_, root.link_ was compared in root-forming for alt clustering
             for L in L_:
                 L.extH, L.root, L.mL_t, L.rimt, L.aRad, L.visited_, L.Et = CH(), frame, [[],[]], [[],[]], 0, [L], copy(L.derH.Et)
-            lN_,lL_, md = comp_link_(L_, [m,d,r,n])  # comp new L_, root.link_ was compared in root-forming for alt clustering
-            vd *= md / ave
-            if lL_:  # recursive der+ eval_: cost > ave_match, add by feedback if < _match?
-                frame.derH.append_(CH().add_H([L.derH for L in lL_]))  # dfork
-        else:
-            frame.derH.H += [[]]  # empty to decode rng+|der+, n forks per layer = 2^depth
-        # + aggLays, derLays, exemplars:
-        cluster_eval(frame, N_, fd=0)
-        if vd > 0: cluster_eval(frame, lN_, fd=1)
+            lN_,lL_,dEt = comp_link_(L_,Et)
+            if val_(dEt, mEt=Et, fo=1) > 0:
+                dlay = CH().add_H([L.derH for L in lL_])
+                frame.derH.append_(dlay)
+                plL_ = {l for n in lN_ for l,_ in get_rim(n, fd=1)}
+                if len(plL_) > ave_L:
+                    cluster_N_(frame, plL_, fd=1)
 
-
-def cluster_N_(root, L_, fd, nest=1):  # top-down segment L_ by >ave ratio of L.dists
+def cluster_N_(root, L_, fd, nest=0):  # top-down segment L_ by >ave ratio of L.dists
 
     L_ = sorted(L_, key=lambda x: x.dist, reverse=True)  # lower-dist links
     _L = L_[0]
@@ -60,42 +49,40 @@ def cluster_N_(root, L_, fd, nest=1):  # top-down segment L_ by >ave ratio of L.
         if rel_dist < 1.2 or et[0] < ave or len(L_[i:]) < ave_L:  # ~=dist Ns or either side of L is weak
             _L = L; et += L.derH.Et
             for n in L.nodet: N_.add(n)  # in current dist span
-        else: break  # terminate contiguous-distance segment
+        else:
+            break  # terminate contiguous-distance segment
     min_dist = _L.dist
     Gt_ = []
     for N in N_:  # cluster current distance segment
-        if len(N.root_) > nest: continue  # merged, root_[0] = edge
-        node_,link_, et = set(),set(), np.zeros(4)
-        Gt = [node_,link_,et,min_dist]; N.root_ += [Gt]
+        if len(N.root) > nest: continue  # merged, root[0] = edge
+        node_,link_, et = set(), set(), np.zeros(4)
+        Gt = [node_,link_,et,min_dist]; N.root += [Gt]
         _eN_ = {N}
         while _eN_:
             eN_ = set()
             for eN in _eN_:  # cluster rim-connected ext Ns, all in root Gt
+                try: eN.root += [Gt]
+                except TypeError: eN.root = [eN.root, Gt]  # convert to list
                 node_.add(eN)  # of all rim
-                eN.root_ += [Gt]
                 for L,_ in get_rim(eN, fd):
                     if L not in link_:
                         # if L.derH.Et[0]/ave * n.extH m/ave or L.derH.Et[0] + n.extH m*.1: density?
-                        eN_.update([n for n in L.nodet if len(n.root_) <= nest])
+                        eN_.update([n for n in L.nodet if len(n.root) <= nest])
                         if L.dist >= min_dist:
                             link_.add(L); et += L.derH.Et
             _eN_ = eN_
-        sub_L_ = set()  # form subG_ from shorter-L seg per Gt, depth-first:
-        for N in node_:  # cluster in N_
-            sub_L_.update({l for l,_ in get_rim(N,fd) if l.dist < min_dist})
-        if len(sub_L_) > ave_L:
-            subG_ = cluster_N_(Gt, sub_L_, fd, nest+1)
-        else: subG_ = []
-        Gt += [subG_]; Gt_ += [Gt]
-    G_ = []
-    for Gt in Gt_:
-        node_, link_, et, minL, subG_ = Gt; Gt[0] = list(node_)
-        if et[0] > et[2] * ave * nest:  # rdn incr/ dist decr
-            G_ += [sum2graph(root, Gt, fd, nest)]
-        else:
-            # unpack Gt
-            for n in node_: n.root_.pop()
-    return G_
+        # cluster shorter links, depth-first:
+        sub_L_ = {l for n in node_ for l,_ in get_rim(n,fd) if l.dist < min_dist}
+        Et = np.sum([sL.derH.Et for sL in sub_L_], axis=1)
+        Et[3] += nest  # overlap
+        if len(sub_L_) > ave_L and val_(Et, fo=1) > 0:
+            cluster_N_(Gt, sub_L_, fd, nest+1)
+            # sub-clusters are nested in Gt
+        Gt[0] = list(node_)
+        Gt_ += [Gt]
+    # per dist segment:
+    root.subG_ = [sum2graph(root, Gt, fd, nest) for Gt in Gt_]
+    find_centroids(root)
 
 ''' Hierarchical clustering should alternate between two phases: generative via connectivity and compressive via centroid.
 
@@ -119,11 +106,12 @@ def find_centroids(graph):
             C.Et += n.Et * s; C.rng = n.rng * s; C.aRad += n.aRad * s
             C.L += len(n.node_) * s
             C.latuple += n.latuple * s
-            C.vertuple += n.vertuple * s
+            C.vert += n.vert * s
+            C.yx += n.yx
             if n.derH: C.derH.add_H(n.derH, dir=s, fc=1)
             if n.extH: C.extH.add_H(n.extH, dir=s, fc=1)
         # get averages:
-        k = len(dnode_); C.Et/=k; C.latuple/=k; C.vertuple/=k; C.aRad/=k
+        k = len(dnode_); C.Et/=k; C.latuple/=k; C.vertuple/=k; C.aRad/=k; C.yx /= k
         if C.derH: C.derH.norm_(k)  # derH/=k
         C.box = reduce(extend_box, (n.box for n in node_))
         return C
@@ -132,11 +120,11 @@ def find_centroids(graph):
 
         mL = min(C.L,len(N.node_)) - ave_L
         mA = comp_area(C.box, N.box)[0]
-        mLat = comp_latuple(C.latuple, N.latuple, C.Et[3], N.Et[3])[1][0]
-        mVer = comp_md_(C.vertuple[1], N.vertuple[1])[1][0]
+        mLat = comp_latuple(C.latuple, N.latuple, C.Et[2], N.Et[2])[1][0]
+        mVert = comp_md_(C.vert[1], N.vert[1])[1][0]
         mH = C.derH.comp_H(N.derH).Et[0] if C.derH and N.derH else 0
         # comp node_, comp altG from converted adjacent flat blobs?
-        return mL + mA + mLat + mVer + mH
+        return mL + mA + mLat + mVert + mH
 
     def centroid_cluster(N):  # refine and extend cluster with extN_
 
@@ -150,10 +138,8 @@ def find_centroids(graph):
                 vm = m - ave  # deviation
                 if vm > 0:
                     N_ += [_N]; M += m
-                    if _N.m:
-                        dM += m - _N.m  # was in C.node_, add adjustment
-                    else:
-                        dN_ += [_N]; dM += vm  # new node
+                    if _N.m: dM += m - _N.m  # was in C.node_, add adjustment
+                    else:  dN_ += [_N]; dM += vm  # new node
                     _N.m = m  # to sum in C
                     for link, _ in _N.rim:
                         n = link.nodet[0] if link.nodet[1] is _N else link.nodet[1]
@@ -170,7 +156,9 @@ def find_centroids(graph):
             else:
                 if C.M > ave * 10:
                     for n in C.node_:
-                        n.fin = 1; n.root_ += [C]; delattr(n,"sign")
+                        try: n.root += [C]
+                        except TypeError: n.root = [n.root, C]
+                        n.fin = 1; delattr(n,"sign")
                     return C  # centroid cluster
                 else:  # unpack C.node_
                     for n in C.node_: n.m = 0
@@ -190,7 +178,7 @@ def find_centroids(graph):
                 break
     graph.subG_ = subG_  # mix of Ns and Cs: exemplars of their network?
     if len(graph.subG_) > ave_L:
-        agg_cluster_(graph)  # selective connectivity clustering between exemplars, extrapolated to their node_
+        cross_comp(graph)  # selective connectivity clustering between exemplars, extrapolated to their node_
 
 
 if __name__ == "__main__":
@@ -208,4 +196,4 @@ if __name__ == "__main__":
                 find_centroids(edge)  # no find_centroids in trace_edge
                 subG_ += edge.subG_  # unpack edge, or keep if connectivity cluster, or in flat blob altG_?
         frame.subG_ = subG_
-        agg_cluster_(frame)  # connectivity clustering
+        cross_comp(frame)  # calls connectivity clustering
