@@ -40,7 +40,7 @@ def vectorize_root(frame):
 
     blob_ = unpack_blob_(frame)
     for blob in blob_:
-        if not blob.sign and blob.G > ave_G * blob.root.rdn:
+        if not blob.sign and blob.G > ave_G * blob.root.olp:
             slice_edge(blob)
 
 def slice_edge(edge):

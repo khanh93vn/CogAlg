@@ -171,7 +171,7 @@ class CrNode_(CFrame):
     def __init__(rnode_, blob):
         super().__init__(blob.root.i__)  # init params, extra params init below:
         rnode_.root = blob
-        rnode_.olp= blob.root.olp + 1.5
+        rnode_.olp = blob.root.olp + 1.5
         rnode_.rng = blob.root.rng + 1
 
 def intra_blob_root(frame):
