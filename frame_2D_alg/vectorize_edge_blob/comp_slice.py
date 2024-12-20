@@ -119,7 +119,7 @@ def comp_md_(_d_,d_, rn=.1, dir=1):  # dir may be -1
     d_ = d_ * rn  # normalize by compared accum span
     dd_ = (_d_ - d_ * dir)  # np.arrays
     md_ = np.minimum(np.abs(_d_), np.abs(d_))
-    md_[(_d_ < 0) != (d_ < 0)] *= -1  # negate if only one compared is negative
+    md_[(_d_<0) != (d_<0)] *= -1  # negate if only one compared is negative
     ''' 
     sequential version:
     md_, dd_ = [],[]
@@ -127,7 +127,7 @@ def comp_md_(_d_,d_, rn=.1, dir=1):  # dir may be -1
         d = d * rn
         dd_ += [_d - d * dir]
         md = min(abs(_d),abs(d))
-        md_ += [-md if _d<0 != d<0 else md]
+        md_ += [-md if _d<0 != d<0 else md]  # negate if only one compared is negative
     md_, dd_ = np.array(md_), np.array(dd_)
     '''
     return np.array([md_,dd_]), np.array([md_.sum(),dd_.sum()])  # [m_,d_], Et
@@ -181,6 +181,7 @@ def sum2PP(root, P_, dP_, Et):  # sum links in Ps and Ps in PP
         for dP in dP_:
             if dP.nodet[0] not in P_ or dP.nodet[1] not in P_: continue  # peripheral link
             link_ += [dP]
+            vert += dP.vertuple
             a = dP.angle; A = np.add(A,a); S += np.hypot(*a)  # span, links are contiguous but slanted
     else:  # single P PP
         S,A = P_[0].latuple[4:]  # [I, G, M, D, L, (Dy, Dx)]
