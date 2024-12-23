@@ -96,23 +96,23 @@ def comp_P_(edge):  # form links from prelinks
             if abs(dy)+abs(dx) <= edge.rng * 2: # <max Manhattan distance
                 angle=[dy,dx]; distance=np.hypot(dy,dx)
                 derLay, et = comp_latuple(_P.latuple, P.latuple, len(_P.dert_), len(P.dert_))
-                P.rim += [convert_to_dP(_P,P, derLay, angle, distance, et)]  # up only
+                _P.rim += [convert_to_dP(_P,P, derLay, angle, distance, et)]  # up only
     del edge.pre__
 
 def comp_dP_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
 
-    link_ = PP[2]
+    root, P_, link_, vert, lat, A, S, box, yx, (M, _, n, _) = PP
+    dP_ave = ave_mG*n*ave/M
     for _dP in link_:
-        M, n = PP[-2][0], PP[-1][-2]
-        if _dP.Et[1] * (M / n / ave) > aves[1]:  # _dP D borrows from normalized PP M, no eval per whole link_?
+        if _dP.Et[1] > dP_ave:  # _dP D borrows from normalized PP M, no eval per whole link_?
             _P, P = _dP.nodet  # _P is lower
             rn = len(P.dert_) / len(_P.dert_)
             for dP in P.rim:  # higher links
                 if dP not in link_: continue  # skip removed node links
-                mdVer, et = comp_md_(_P.vertuple[1], P.vertuple[1], rn)
-                angle = np.subtract(P.yx,_P.yx)  # dy,dx of node centers
+                mdVer, et = comp_md_(_dP.vertuple[1], dP.vertuple[1], rn)
+                angle = np.subtract(dP.yx,_dP.yx)  # dy,dx of node centers
                 distance = np.hypot(*angle)  # between node centers
-                dP.rim += [convert_to_dP(_P, P, mdVer, angle, distance, et)]  # up only
+                _dP.rim += [convert_to_dP(_dP, dP, mdVer, angle, distance, et)]  # up only
 
 def comp_md_(_d_,d_, rn=.1, dir=1):  # dir may be -1
 
@@ -211,8 +211,8 @@ def comp_latuple(_latuple, latuple, _n,n):  # 0der params
     dL = _L - L*rn;  mL = min(_L, L*rn)  # vL = mL - ave_mL
     mA, dA = comp_angle((_Dy,_Dx),(Dy,Dx))  # vA = mA - ave_mA
 
-    d_ = np.array([dL, dI, dG, dM, dD, dA])
-    m_ = np.array([mL, mI, mG, mM, mM, mA])
+    d_ = np.array([dI, dG, dM, dD, dL, dA])
+    m_ = np.array([mI, mG, mM, mD, mL, mA])
     et = np.array([np.sum(m_), np.sum(np.abs(d_))])
 
     return np.array([m_,d_]), et
@@ -223,8 +223,7 @@ def accum_box(box, y, x):  # extend box with kernel
 
 def min_dist(a, b, pad=0.5):
     if np.abs(a - b) < 1e-5:
-        a -= 0.5
-        b += 0.5
+        return a-pad, b+pad
     return a, b
 
 if __name__ == "__main__":
@@ -308,5 +307,7 @@ if __name__ == "__main__":
             y0, yn = min_dist(y0, yn)
             x0, xn = min_dist(x0, xn)
             plt.plot([x0, x0, xn, xn, x0], [y0, yn, yn, y0, y0], '-r', alpha=0.4)
+        print("Max PPd size:", max((0, *(len(PPd[1]) for PPd in PPd_))))
+        print("Max PPd link_ size:", max((0, *(len(PPd[2]) for PPd in PPd_))))
 
         plt.show()
