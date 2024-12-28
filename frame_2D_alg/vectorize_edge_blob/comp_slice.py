@@ -54,10 +54,7 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
         l.rim = []
         l.lrim = []
         l.prim = []
-        # l.med = 0  # comp rng: n of mediating Ps between node_ Ps
-        # n = 1?
-    def __bool__(l):
-        return np.any(l.vertuple)
+    def __bool__(l): return l.nodet
 
 def vectorize_root(frame):
 
@@ -101,10 +98,10 @@ def comp_P_(edge):  # form links from prelinks
 
 def comp_dP_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
 
-    root, P_, link_, vert, lat, A, S, box, yx, (M, _, n, _) = PP
-    dP_ave = ave_mG*n*ave/M
+    root, P_, link_, vert, lat, A, S, box, yx, (M,_,n,_) = PP
+    rM = M / (ave * n)  # dP D borrows from normalized PP M
     for _dP in link_:
-        if _dP.Et[1] > dP_ave:  # _dP D borrows from normalized PP M, no eval per whole link_?
+        if _dP.Et[1] * rM > ave_d:
             _P, P = _dP.nodet  # _P is lower
             rn = len(P.dert_) / len(_P.dert_)
             for dP in P.rim:  # higher links
