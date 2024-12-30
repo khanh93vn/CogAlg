@@ -1,5 +1,3 @@
-import sys
-sys.path.append("..")
 from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_
 from slice_edge import slice_edge, comp_angle, ave_G
 from comp_slice import comp_slice, comp_latuple, comp_md_
@@ -11,11 +9,11 @@ import numpy as np
 This code is initially for clustering segments within edge: high-gradient blob, but too complex for that.
 It's mostly a prototype for open-ended compositional recursion: clustering blobs, graphs of blobs, etc.
 -
-rng+ fork: incremental-range cross-comp nodes, cluster edge segments, initially PPs, that match over < max distance. 
-der+ fork: incremental-derivation cross-comp links from node cross-comp, if abs_diff * rel_match > ave 
+rng+ fork: incremental-range cross-comp nodes: edge segments at < max distance, cluster if they match. 
+der+ fork: incremental-derivation cross-comp links, from node cross-comp, if abs_diff * rel_adjacent_match 
 (variance patterns borrow value from co-projected match patterns because their projections cancel-out)
 - 
-Thus graphs should be assigned adjacent alt-fork (der+ to rng+) graphs, to which they lend predictive value.
+So graphs should be assigned adjacent alt-fork (der+ to rng+) graphs, to which they lend predictive value.
 But alt match patterns borrow already borrowed value, which is too tenuous to track, we use average borrowed value.
 Clustering criterion within each fork is summed match of >ave vars (<ave vars are not compared and don't add comp costs).
 -
@@ -54,7 +52,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
         super().__init__()
         He.Et = np.zeros(4) if Et is None else Et
         He.tft = [] if tft is None else tft  # top fork tuple: arrays m_t, d_t
-        He.lft = [] if lft is None else lft  # lower fork tuple: CH /comp N_,L_, each mediates its own tft and lft
+        He.lft = [] if lft is None else lft  # lower fork tuple: CH /comp N_,L_, each has tft and lft
         He.fd_ = [] if fd_ is None else fd_  # 0: sum CGs, 1: sum CLs, + concat from comparands
         He.root = None if root is None else root  # N or higher-composition He
         He.node_ = [] if node_ is None else node_  # concat bottom nesting order if CG, may be redundant to G.node_
@@ -80,8 +78,7 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
 
         for fd, tt in enumerate(He.tft):  # nested array tuples
             C.tft += [tt * -1 if rev and (fd or fc) else deepcopy(tt)]
-        # empty in bottom layer:
-        for fork in He.lft:
+        for fork in He.lft:  # empty in bottom layer
             C.lft += [fork.copy_(root=C, rev=rev, fc=fc)]
 
         if not i: return C
@@ -100,7 +97,6 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
                         if F: F.add_tree(f,rev,fc)  # unpack both forks
                         else:
                             f.root=HE; HE.lft += [f]; HE.Et += f.Et
-                            if not HE.tft: HE.tft = f.tft  # init with mfork?
 
                 HE.node_ += [node for node in He.node_ if node not in HE.node_]  # empty in CL derH?
                 HE.Et += He.Et * -1 if rev and fc else He.Et
@@ -164,24 +160,17 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.vert = kwargs.get('vert', np.array([np.zeros(6), np.zeros(6)]))  # vertical m_d_ of latuple
         G.box = kwargs.get('box', np.array([np.inf,np.inf,-np.inf,-np.inf]))  # y0,x0,yn,xn
         G.yx = kwargs.get('yx', np.zeros(2))  # init PP.yx = [(y0+yn)/2,(x0,xn)/2], then ave node yx
-        G.altG = kwargs.get('altG', CG(altG=G))  # adjacent gap+overlap graphs, vs. contour in frame_graphs (prevent cyclic)
-
-        # initialize:
-        G.rng = 1
+        # G.altG = CG(altG=G) if kwargs.get('altG', None) is None else kwargs.get('altG')  # prevent cyclic
+        G.rim = []  # flat links of any rng, may be nested in clustering
+        G.nest = 0  # nesting in nodes
         G.aRad = 0  # average distance between graph center and node center
-        G.subG_, G.subL_ = [], []    # selectively clustered node_ and link_
-        G.rim = []      # flat links of any rng, may be nested in clustering
         # maps to node_tree / agg+|sub+:
-        G.derH = CH()   # sum from nodes, then append from feedback
-        G.extH = CH()   # sum from rim_ elays, H maybe deleted
-        # G.fback_ = []  # if fb buffering
-        # id_tree: list = z([[]])  # indices in all layers(forks, if no fback merge
-        # depth: int = 0  # n sub_G levels over base node_, max across forks
-        # nval: int = 0  # of open links: base alt rep
+        G.derH = CH()  # sum from nodes, then append from feedback
+        G.extH = CH()  # sum from rims
+        G.altG_ = []  # adjacent gap+overlap alt-fork graphs, forming a contour
+        # fd_ | fork_tree: list = z([[]])  # indices in all layers(forks, if no fback merge
+        # G.fback_ = []  # fb buffer
     def __bool__(G): return bool(G.node_)  # never empty
-    def compute_aRad(G): G.aRad = np.hypot(*(G.yx-G.yx_).T).mean()
-    @property
-    def yx_(G): return [node.yx for node in G.node_]
 
 class CL(CBase):  # link or edge, a product of comparison between two nodes or links
     name = "link"
@@ -189,19 +178,15 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
     def __init__(l, nodet, derH, yx, angle, dist, box):
         super().__init__()
         # CL = binary tree of Gs, depth+/der+: CL nodet is 2 Gs, CL + CLs in nodet is 4 Gs, etc., unpack sequentially
-        # inputs:
         l.derH = derH
         l.nodet = nodet  # e_ in kernels, else replaces _node,node: not used in kernels
         l.angle = angle  # dy,dx between nodet centers
         l.dist = dist  # distance between nodet centers
         l.box = box  # sum nodet, not needed?
         l.yx = yx
-        # initialize:
-        l.lft_ = []  # if agg++| sub++?
         # add med, rimt, elay | extH in der+
     def __bool__(l): return bool(l.nodet)
 
-# not updated:
 def vectorize_root(frame):
 
     blob_ = unpack_blob_(frame)
@@ -213,33 +198,29 @@ def vectorize_root(frame):
                 if blob.Et[0] * (len(blob.node_)-1)*(blob.rng+1) > ave:
                     # init for agg+:
                     if not hasattr(frame, 'derH'):
-                        frame.derH = CH(root=frame, Et=np.zeros(4), tft=[]); frame.root = None; frame.subG_ = []
-                    Y,X,_,_,_,_ = blob.latuple
-                    yx = np.divide([Y, X], blob.area)
-                    y_, x_ = zip(*blob.dert_.keys())
-                    box = [min(y_), min(x_), max(y_), max(x_)]
+                        frame.derH = CH(root=frame, Et=np.zeros(4), tft=[]); frame.root = None; frame.node_ = []  # distinct from base blob_
                     lat = np.array([.0,.0,.0,.0,.0,np.zeros(2)],dtype=object); vert = np.array([np.zeros(6), np.zeros(6)])
                     for PP in blob.node_:
                         vert += PP[3]; lat += PP[4]
-                    edge = CG(root=frame, node_=blob.node_, vert=vert,latuple=lat, box=box,yx=yx, Et=blob.Et)
+                    y_,x_ = zip(*blob.dert_.keys()); box = [min(y_),min(x_),max(y_),max(x_)]
+                    edge = CG(root=frame, node_=blob.node_, vert=vert,latuple=lat, box=box, yx=np.divide([blob.latuple[:2]], blob.area), Et=blob.Et)
                     G_ = []
                     for N in edge.node_:  # no comp node_, link_ | PPd_ for now
                         P_, link_, vert, lat, A, S, box, [y,x], Et = N[1:]  # PPt
                         if Et[0] > ave:   # no altG until cross-comp
-                            PP = CG(fd=0, Et=Et,root=edge, node_=P_,link_=link_, vert=vert,latuple=lat, box=box,yx=[y,x])
-                            PP.compute_aRad()
+                            PP = CG(fd=0, Et=Et,root=edge, node_=P_,link_=link_, vert=vert, latuple=lat, box=box, yx=[y,x])
+                            y0,x0,yn,xn = box; PP.aRad = np.hypot((yn-y0)/2,(xn-x0)/2)  # approx
                             G_ += [PP]
-                    edge.subG_ = G_
+                    edge.node_ = G_
                     if len(G_) > ave_L:
-                        cluster_edge(edge); frame.subG_ += [edge]; frame.derH.add_tree(edge.derH)
+                        cluster_edge(edge); frame.node_ += [edge]; frame.derH.add_tree(edge.derH)
                         # add altG: summed converted adj_blobs of converted edge blob
                         # if len(edge.subG_) > ave_L: agg_recursion(edge)  # unlikely
 
 def val_(Et, mEt=[], fo=0):
-
     m, d, n, o = Et
     if any(mEt):
-        mm,_,mn,_ = mEt  # cross-induction from root G, not affected by overlap
+        mm,_,mn,_ = mEt  # cross-induction from root mG, not affected by overlap
         val = d * (mm / (ave * mn)) - ave_d * n * (o if fo else 1)
     else:
         val = m - ave * n * (o if fo else 1)  # * overlap in cluster eval, not comp eval
@@ -247,23 +228,42 @@ def val_(Et, mEt=[], fo=0):
 
 def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set of clusters in >ave G blob, unpack by default?
 
+    def cluster_PP_(edge, fd):
+        G_ = []
+        N_ = copy(edge.link_ if fd else edge.subG_)
+        while N_:  # flood fill
+            node_,link_, et = [],[], np.zeros(4)
+            N = N_.pop(); _eN_ = [N]
+            while _eN_:
+                eN_ = []
+                for eN in _eN_:  # rim-connected ext Ns
+                    node_ += [eN]
+                    for L,_ in get_rim(eN, fd):
+                        if L not in link_:
+                            for eN in L.nodet:  # eval by link.derH.Et + extH.Et * ccoef > ave?
+                                if eN in N_:
+                                    eN_ += [eN]; N_.remove(eN)  # merged
+                            link_+= [L]; et += L.derH.Et
+                _eN_ = eN_
+            if val_(et) > 0:
+                G_ += [sum2graph(edge, [node_,link_,et], fd)]
+            else:
+                G_ += node_  # unpack weak Gts
+        if fd: edge.link_ = G_
+        else:  edge.node_ = G_  # vs init PP_
     # comp PP_:
     N_,L_,Et = comp_node_(edge.subG_)
-    edge.subG_ = N_
-    edge.link_ = L_
     if val_(Et, fo=1) > 0:  # cancel by borrowing d?
-        mlay = CH().add_tree([L.derH for L in L_])
-        H = edge.derH; mlay.root=H; H.Et += mlay.Et; H.lft = [mlay]; H.tft = mlay.tft  # init with mfork
+        mlay = CH().add_tree([L.derH for L in L_]); H=edge.derH; mlay.root=H; H.Et += mlay.Et; H.lft = [mlay]  # init with mfork
         if len(N_) > ave_L:
             cluster_PP_(edge, fd=0)
         if val_(Et, mEt=Et, fo=1) > 0:  # likely not from the same links
             for L in L_:
-                L.extH, L.root, L.mL_t, L.rimt, L.aRad, L.visited_, L.Et = CH(), [edge], [[],[]], [[],[]], 0, [L], copy(L.derH.Et)
+                L.extH, L.root, L.mL_t, L.rimt, L.aRad, L.visited_, L.Et = CH(), edge, [[],[]], [[],[]], 0, [L], copy(L.derH.Et)
             # comp dPP_:
             lN_,lL_,dEt = comp_link_(L_, Et)
             if val_(dEt, fo=1) > 0:
-                dlay = CH().add_tree([L.derH for L in lL_])
-                H = edge.derH; dlay.root=H; H.Et += dlay.Et; H.lft += [dlay]
+                dlay = CH().add_tree([L.derH for L in lL_]); dlay.root=H; H.Et += dlay.Et; H.lft += [dlay] # append dfork
                 if len(lN_) > ave_L:
                     cluster_PP_(edge, fd=1)
 
@@ -358,30 +358,6 @@ def comp_link_(iL_, iEt):  # comp CLs via directional node-mediated link tracing
         else: break
     return out_L_, LL_, ET
 
-def cluster_PP_(edge, fd):
-    Gt_ = []
-    N_ = copy(edge.link_ if fd else edge.subG_)
-    while N_:  # flood fill
-        node_,link_, et = [],[], np.zeros(4)
-        N = N_.pop(); _eN_ = [N]
-        while _eN_:
-            eN_ = []
-            for eN in _eN_:  # rim-connected ext Ns
-                node_ += [eN]
-                for L,_ in get_rim(eN, fd):
-                    if L not in link_:
-                        for eN in L.nodet:  # eval by link.derH.Et + extH.Et * ccoef > ave?
-                            if eN in N_:
-                                eN_ += [eN]; N_.remove(eN)  # merged
-                        link_+= [L]; et += L.derH.Et
-            _eN_ = eN_
-        Gt = [node_,link_,et]; Gt_ += [Gt]
-    # convert select Gt+minL+subG_ to CGs:
-    subG_ = [sum2graph(edge, [node_,link_,et], fd, nest=1) for node_,link_,et in Gt_ if val_(et) > 0]
-    if subG_:
-        if fd: edge.subL_ = subG_
-        else:  edge.subG_ = subG_  # higher aggr, mediated access to init edge.subG_
-
 def extend_box(_box, box):  # extend box with another box
     y0, x0, yn, xn = box; _y0, _x0, _yn, _xn = _box
     return min(y0, _y0), min(x0, _x0), max(yn, _yn), max(xn, _xn)
@@ -418,11 +394,11 @@ def comp_N(_N,N, rn, angle=None, dist=None, dir=1):  # dir if fd, Link.derH=dH, 
     lay = CH(fd_=[fd], tft=[m_t,d_t], Et=Et)
     if _N.derH and N.derH:
         derH = _N.derH.comp_tree(N.derH, rn, root=lay)  # comp shared layers
-        lay.Et += derH.Et; lay.lft = [derH]; lay.tft = derH.tft  # this is mfork?
+        lay.Et += derH.Et; lay.lft = [derH]
     # spec: comp_node_(node_|link_), combinatorial, node_ nested / rng-)agg+?
     Et = copy(lay.Et)
     if not fd and _N.altG and N.altG:  # not for CL, eval M?
-        alt_Link = comp_N(_N.altG, N.altG, _N.altG.Et[2]/N.altG.Et[2])  # no angle,dist, init alternating PPds | dPs?
+        alt_Link = comp_N(_N.altG, N.altG, _N.altG.Et[2]/N.altG.Et[2])  # init alternating PPds | dPs?
         lay.altH = alt_Link.derH
         Et += lay.altH.Et
     Link = CL(nodet=[_N,N], derH=lay, yx=np.add(_N.yx,N.yx)/2, angle=angle,dist=dist,box=extend_box(N.box,_N.box))
@@ -437,80 +413,68 @@ def comp_N(_N,N, rn, angle=None, dist=None, dir=1):  # dir if fd, Link.derH=dH, 
 
 def get_rim(N,fd): return N.rimt[0] + N.rimt[1] if fd else N.rim  # add nesting in cluster_N_?
 
-def sum2graph(root, grapht, fd, nest):  # sum node and link params into graph, aggH in agg+ or player in sub+
+def sum2graph(root, grapht, fd, maxL=None, nest=0):  # sum node and link params into graph, aggH in agg+ or player in sub+
 
-    node_, link_, Et = grapht[:3]
-    fsub = len(grapht) == 5  # called from divisive cluster_N
-    graph = CG(fd=fd, Et=Et*icoef, root=root[-1] if fsub else root, node_=node_, link_=link_, rng=nest)
-    # arg Et is internalized; only immediate root assign to G?
-    if fsub:  # called from cluster_N
-        minL, subG_ = grapht[3:]
-        if fd: graph.subL_ = subG_
-        else:  graph.subG_ = subG_
-        graph.minL = minL
-    yx = np.array([0,0])
+    node_, link_, Et = grapht
+    graph = CG(fd=fd, Et=Et*icoef, root=root, link_=link_, maxL=maxL, nest=nest)  # internal nesting
+    # arg Et is weaker if internal
+    yx = np.array([0,0]); yx_ = []
     derH = CH(root=graph)
+    root_ = []
     for N in node_:
+        if nest:  # G is dist-nested in cluster_N_, cluster roots instead of nodes
+            while N.root.nest < nest: N = N.root  # incr/elevation, term if ==nest
+            if N in root_: continue  # roots overlap
+            root_ += [N]
         graph.box = extend_box(graph.box, N.box)  # pre-compute graph.area += N.area?
         yx = np.add(yx, N.yx)
+        yx_ += [N.yx]
         if isinstance(node_[0],CG):
             graph.latuple += N.latuple; graph.vert += N.vert
         if N.derH:
             derH.add_tree(N.derH, graph)
         graph.Et += N.Et * icoef ** 2  # deeper, lower weight
-        if nest:
-            if nest==1: N.root = [N.root]  # initial conversion
-            N.root += root + [graph]  # root is root_ in distance-layered cluster_N_
-        else: N.root = graph  # single root
+        N.root = graph
+    graph.node_ = root_ if nest else node_  # link_ is still current-dist links only?
     # sum link_ derH:
     derLay = CH().add_tree([link.derH for link in link_],root=graph)  # root added in copy_ within add_tree
     if derH:
         derLay.lft += [derH]; derLay.Et += derH.Et
     graph.derH = derLay
     L = len(node_)
-    yx = np.divide(yx,L); graph.yx = yx
-    # ave distance from graph center to node centers:
-    graph.compute_aRad()
-    # for CG nodes only:
-    if isinstance(N,CG) and fd:
-        # assign alt graphs from d graph, after both m and d graphs are formed
-        for node in node_:
-            mgraph = node.root_[-1]
-            # altG summation below is still buggy with current add_tree
-            if mgraph:
-                mgraph.altG = sum_G_([mgraph.altG, graph])  # bilateral sum?
-                graph.altG = sum_G_([graph.altG, mgraph])
-
+    yx = np.divide(yx,L)
+    dy,dx = np.divide( np.sum([yx-_yx for _yx in yx_], axis=0), L)
+    graph.aRad = np.hypot(dy,dx)  # ave distance from graph center to node centers
+    graph.yx = yx
+    if fd:  # dgraph # and val_(Et, mEt=root.Et) > 0:
+        altG_ = []  # mGs overlapping dG
+        for L in node_:
+            for n in L.nodet:  # map root mG
+                mG = n.root
+                if mG not in altG_:
+                    mG.altG_ += [graph]  # cross-comp|sum complete altG_ before next agg+ cross-comp
+                    altG_ += [mG]
     feedback(graph)  # recursive root.derH.add_fork(graph.derH)
     return graph
 
 def feedback(node):  # propagate node.derH to higher roots
 
     while node.root:
-        root = node.root[-1] if isinstance(node.root,list) else node.root  # root_ in distance-layered cluster
+        root = node.root
         lowH = addH = root.derH
         add = 1
         for fd in addH.fd_:  # unpack top-down, each fd was assigned by corresponding level of roots
             if len(addH.lft) > fd:
                 addH = lowH; lowH = lowH.lft[fd]  # keep unpacking
             else:
-                lowH.lft += [addH.copy_()]; add = 0  # fork was empty, init with He
-                break
-        if add:  # add in fork initialized by prior feedback
+                lowH.lft += [addH.copy_()]  # fork was empty, init with He
+                add = 0; break
+        if add:  # add in fork initialized by prior feedback, else append above
             lowH.add_tree(addH, root)
-
         node = root
 
-def sum_G_(node_):
-    G = CG()
-    for n in node_:
-        G.rng = n.rng; G.latuple += n.latuple; G.vert += n.vert; G.aRad += n.aRad; G.box = extend_box(G.box, n.box)
-        if n.derH: G.derH.add_tree(n.derH, root=G)
-        if n.extH: G.extH.add_tree(n.extH)
-    return G
-
 if __name__ == "__main__":
-    image_file = '../images/raccoon_eye.jpeg'
+    image_file = './images/raccoon_eye.jpeg'
     image = imread(image_file)
     frame = frame_blobs_root(image)
     intra_blob_root(frame)
