@@ -116,8 +116,6 @@ class CBlob(CBase):
     def G(blob): return blob.latuple[-1]
     @property
     def yx_(blob): return list(blob.dert_.keys())
-    @property
-    def yx(blob): return map(np.mean, zip(*blob.yx_))
 
 def frame_blobs_root(image):
     dert__ = comp_pixel(image)
@@ -275,10 +273,10 @@ if __name__ == "__main__":
     for blob in frame.blob_:
         for (y, x), (i, dy, dx, g) in blob.dert_.items():
             i__[y, x] = i; dy__[y, x] = dy; dx__[y, x] = dx; g__[y, x] = g; s__[y, x] = blob.sign
-        y, x = blob.yx  # blob center of gravity
+        y, x = map(np.mean, zip(*blob.yx_))  # blob center of gravity
         if not blob.sign:
             for _blob in blob.adj_:  # show adjacents
-                _y, _x = _blob.yx  # _blob center of gravity
+                _y, _x = map(np.mean, zip(*blob.yx_))  # _blob center of gravity
                 line_ += [((_x, x), (_y, y))]
 
     plt.imshow(i__, cmap='gray'); plt.show()  # show reconstructed i__

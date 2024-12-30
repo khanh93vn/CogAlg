@@ -1,4 +1,4 @@
-from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_
+from frame_blobs import CBase, CBlob, frame_blobs_root, intra_blob_root, imread, unpack_blob_
 from slice_edge import slice_edge, comp_angle, ave_G
 from comp_slice import comp_slice, comp_latuple, comp_md_
 from itertools import combinations, zip_longest
@@ -146,30 +146,34 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
             He.root.node_ = He.lft[i_[0]].node_
             # no He.node_ in CL?
 
+def init_G(G, **kwargs):
+    # inputs:
+    G.fd = kwargs.get('fd', 0)  # 1 if cluster of Ls | lGs?
+    G.Et = kwargs.get('Et', np.zeros(4))  # sum all param Ets
+    G.root = kwargs.get('root')  # may extend to list in cluster_N_, same nodes may be in multiple dist layers
+    G.node_ = kwargs.get('node_', [])  # convert to GG_ or node_tree in agg++
+    G.link_ = kwargs.get('link_', [])  # internal links per comp layer in rng+, convert to LG_ in agg++
+    G.latuple = kwargs.get('latuple', np.array([.0,.0,.0,.0,.0,np.zeros(2)],dtype=object))  # lateral I,G,M,D,L,[Dy,Dx]
+    G.vert = kwargs.get('vert', np.array([np.zeros(6), np.zeros(6)]))  # vertical m_d_ of latuple
+    G.box = kwargs.get('box', np.array([np.inf,np.inf,-np.inf,-np.inf]))  # y0,x0,yn,xn
+    G.yx = kwargs.get('yx', np.zeros(2))  # init PP.yx = [(y0+yn)/2,(x0,xn)/2], then ave node yx
+    # G.altG = CG(altG=G) if kwargs.get('altG', None) is None else kwargs.get('altG')  # prevent cyclic
+    G.rim = []  # flat links of any rng, may be nested in clustering
+    G.nest = 0  # nesting in nodes
+    G.aRad = 0  # average distance between graph center and node center
+    # maps to node_tree / agg+|sub+:
+    G.derH = CH()  # sum from nodes, then append from feedback
+    G.extH = CH()  # sum from rims
+    G.altG_ = []  # adjacent gap+overlap alt-fork graphs, forming a contour
+    # fd_ | fork_tree: list = z([[]])  # indices in all layers(forks, if no fback merge
+    # G.fback_ = []  # fb buffer
+
 class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
 
     def __init__(G,  **kwargs):
         super().__init__()
-        # inputs:
-        G.fd = kwargs.get('fd', 0)  # 1 if cluster of Ls | lGs?
-        G.Et = kwargs.get('Et', np.zeros(4))  # sum all param Ets
-        G.root = kwargs.get('root')  # may extend to list in cluster_N_, same nodes may be in multiple dist layers
-        G.node_ = kwargs.get('node_', [])  # convert to GG_ or node_tree in agg++
-        G.link_ = kwargs.get('link_', [])  # internal links per comp layer in rng+, convert to LG_ in agg++
-        G.latuple = kwargs.get('latuple', np.array([.0,.0,.0,.0,.0,np.zeros(2)],dtype=object))  # lateral I,G,M,D,L,[Dy,Dx]
-        G.vert = kwargs.get('vert', np.array([np.zeros(6), np.zeros(6)]))  # vertical m_d_ of latuple
-        G.box = kwargs.get('box', np.array([np.inf,np.inf,-np.inf,-np.inf]))  # y0,x0,yn,xn
-        G.yx = kwargs.get('yx', np.zeros(2))  # init PP.yx = [(y0+yn)/2,(x0,xn)/2], then ave node yx
-        # G.altG = CG(altG=G) if kwargs.get('altG', None) is None else kwargs.get('altG')  # prevent cyclic
-        G.rim = []  # flat links of any rng, may be nested in clustering
-        G.nest = 0  # nesting in nodes
-        G.aRad = 0  # average distance between graph center and node center
-        # maps to node_tree / agg+|sub+:
-        G.derH = CH()  # sum from nodes, then append from feedback
-        G.extH = CH()  # sum from rims
-        G.altG_ = []  # adjacent gap+overlap alt-fork graphs, forming a contour
-        # fd_ | fork_tree: list = z([[]])  # indices in all layers(forks, if no fback merge
-        # G.fback_ = []  # fb buffer
+        init_G(G, **kwargs)
+
     def __bool__(G): return bool(G.node_)  # never empty
 
 class CL(CBase):  # link or edge, a product of comparison between two nodes or links
@@ -192,18 +196,18 @@ def vectorize_root(frame):
     blob_ = unpack_blob_(frame)
     for blob in blob_:
         if not blob.sign and blob.G > ave_G * blob.root.olp:
-            blob = slice_edge(blob)
-            if blob.G * (len(blob.P_)-1) > ave:  # eval PP
-                comp_slice(blob)
-                if blob.Et[0] * (len(blob.node_)-1)*(blob.rng+1) > ave:
+            edge = slice_edge(blob)
+            if edge.G * (len(edge.P_)-1) > ave:  # eval PP
+                comp_slice(edge)
+                if edge.Et[0] * (len(edge.node_)-1)*(edge.rng+1) > ave:
                     # init for agg+:
                     if not hasattr(frame, 'derH'):
                         frame.derH = CH(root=frame, Et=np.zeros(4), tft=[]); frame.root = None; frame.node_ = []  # distinct from base blob_
                     lat = np.array([.0,.0,.0,.0,.0,np.zeros(2)],dtype=object); vert = np.array([np.zeros(6), np.zeros(6)])
-                    for PP in blob.node_:
+                    for PP in edge.node_:
                         vert += PP[3]; lat += PP[4]
-                    y_,x_ = zip(*blob.dert_.keys()); box = [min(y_),min(x_),max(y_),max(x_)]
-                    edge = CG(root=frame, node_=blob.node_, vert=vert,latuple=lat, box=box, yx=np.divide([blob.latuple[:2]], blob.area), Et=blob.Et)
+                    y_,x_ = zip(*edge.dert_.keys()); box = [min(y_),min(x_),max(y_),max(x_)]
+                    init_G(edge, vert=vert, latuple=lat, box=box, yx=np.divide([edge.latuple[:2]], edge.area))
                     G_ = []
                     for N in edge.node_:  # no comp node_, link_ | PPd_ for now
                         P_, link_, vert, lat, A, S, box, [y,x], Et = N[1:]  # PPt
@@ -429,7 +433,7 @@ def sum2graph(root, grapht, fd, maxL=None, nest=0):  # sum node and link params 
         graph.box = extend_box(graph.box, N.box)  # pre-compute graph.area += N.area?
         yx = np.add(yx, N.yx)
         yx_ += [N.yx]
-        if isinstance(node_[0],CG):
+        if isinstance(node_[0],(CG,CBlob)):
             graph.latuple += N.latuple; graph.vert += N.vert
         if N.derH:
             derH.add_tree(N.derH, graph)
