@@ -191,18 +191,18 @@ def vectorize_root(frame):
     blob_ = unpack_blob_(frame)
     for blob in blob_:
         if not blob.sign and blob.G > ave_G * blob.root.olp:
-            blob = slice_edge(blob)
-            if blob.G * (len(blob.P_)-1) > ave:  # eval PP
-                comp_slice(blob)
-                if blob.Et[0] * (len(blob.node_)-1)*(blob.rng+1) > ave:
+            edge = slice_edge(blob)
+            if edge.G * (len(edge.P_)-1) > ave:  # eval PP
+                comp_slice(edge)
+                if edge.Et[0] * (len(edge.node_)-1)*(edge.rng+1) > ave:
                     # init for agg+:
                     if not hasattr(frame, 'derH'):
                         frame.derH = CH(root=frame, Et=np.zeros(4), tft=[]); frame.root = None; frame.node_ = []  # distinct from base blob_
                     lat = np.array([.0,.0,.0,.0,.0,np.zeros(2)],dtype=object); vert = np.array([np.zeros(6), np.zeros(6)])
                     for PP in blob.node_:
                         vert += PP[3]; lat += PP[4]
-                    y_,x_ = zip(*blob.dert_.keys()); box = [min(y_),min(x_),max(y_),max(x_)]
-                    edge = CG(root=frame, node_=blob.node_, vert=vert,latuple=lat, box=box, yx=np.divide([blob.latuple[:2]], blob.area), Et=blob.Et)
+                    y_,x_ = zip(*edge.dert_.keys()); box = [min(y_),min(x_),max(y_),max(x_)]
+                    blob2CG(edge, root=frame, vert=vert,latuple=lat, box=box, yx=np.divide([edge.latuple[:2]], edge.area))  # node_, Et stays the same
                     G_ = []
                     for N in edge.node_:  # no comp node_, link_ | PPd_ for now
                         P_, link_, vert, lat, A, S, box, [y,x], Et = N[1:]  # PPt
@@ -483,6 +483,24 @@ def feedback(node):  # propagate node.derH to higher roots
         if add:  # add in fork initialized by prior feedback, else append above
             lowH.add_tree(addH, root)
         node = root
+
+def blob2CG(G, **kwargs):
+    # node_, Et stays the same:
+    G.fd = kwargs.get('fd', 0)  # 1 if cluster of Ls | lGs?
+    G.root = kwargs.get('root')  # may extend to list in cluster_N_, same nodes may be in multiple dist layers
+    G.link_ = kwargs.get('link_', [])  # internal links per comp layer in rng+, convert to LG_ in agg++
+    G.latuple = kwargs.get('latuple', np.array([.0,.0,.0,.0,.0,np.zeros(2)],dtype=object))  # lateral I,G,M,D,L,[Dy,Dx]
+    G.vert = kwargs.get('vert', np.array([np.zeros(6), np.zeros(6)]))  # vertical m_d_ of latuple
+    G.box = kwargs.get('box', np.array([np.inf,np.inf,-np.inf,-np.inf]))  # y0,x0,yn,xn
+    G.yx = kwargs.get('yx', np.zeros(2))  # init PP.yx = [(y0+yn)/2,(x0,xn)/2], then ave node yx
+    G.rim = []  # flat links of any rng, may be nested in clustering
+    G.nest = 0  # nesting in nodes
+    G.aRad = 0  # average distance between graph center and node center
+    # maps to node_tree / agg+|sub+:
+    G.derH = CH()  # sum from nodes, then append from feedback
+    G.extH = CH()  # sum from rims
+    G.altG_ = []  # or altG? adjacent (contour) gap+overlap alt-fork graphs, converted to CG
+    return G
 
 if __name__ == "__main__":
     image_file = './images/raccoon_eye.jpeg'
