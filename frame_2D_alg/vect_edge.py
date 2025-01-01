@@ -434,7 +434,7 @@ def sum2graph(root, grapht, fd, maxL=None, nest=0):  # sum node and link params 
     root_ = []
     for N in node_:
         if nest:  # G is dist-nested in cluster_N_, cluster roots instead of nodes
-            while N.root.nest < nest: N = N.root  # incr/elevation, term if ==nest
+            while N.root.nest+1 < nest: N = N.root  # incr/elevation in feedback, return root.nest+1 == nest
             if N in root_: continue  # roots overlap
             root_ += [N]
         graph.box = extend_box(graph.box, N.box)  # pre-compute graph.area += N.area?
@@ -454,7 +454,7 @@ def sum2graph(root, grapht, fd, maxL=None, nest=0):  # sum node and link params 
     graph.derH = derLay
     L = len(node_)
     yx = np.divide(yx,L)
-    dy,dx = np.divide( np.sum([yx-_yx for _yx in yx_], axis=0), L)
+    dy,dx = np.divide( np.sum([ np.abs(yx-_yx) for _yx in yx_], axis=0), L)
     graph.aRad = np.hypot(dy,dx)  # ave distance from graph center to node centers
     graph.yx = yx
     if fd:  # dgraph # and val_(Et, mEt=root.Et) > 0:
@@ -465,13 +465,14 @@ def sum2graph(root, grapht, fd, maxL=None, nest=0):  # sum node and link params 
                 if mG not in altG_:
                     mG.altG_ += [graph]  # cross-comp|sum complete altG_ before next agg+ cross-comp
                     altG_ += [mG]
-    feedback(graph)  # recursive root.derH.add_fork(graph.derH)
+    feedback(graph, nest)  # recursive root.derH.add_fork(graph.derH)
     return graph
 
-def feedback(node):  # propagate node.derH to higher roots
+def feedback(node, nest):  # propagate node.derH to higher roots
 
     while node.root:
         root = node.root
+        if nest: root.nest += 1
         lowH = addH = root.derH
         add = 1
         for fd in addH.fd_:  # unpack top-down, each fd was assigned by corresponding level of roots
@@ -483,6 +484,7 @@ def feedback(node):  # propagate node.derH to higher roots
         if add:  # add in fork initialized by prior feedback, else append above
             lowH.add_tree(addH, root)
         node = root
+
 
 def blob2CG(G, **kwargs):
     # node_, Et stays the same:
