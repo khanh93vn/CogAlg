@@ -187,7 +187,8 @@ class CL(CBase):  # link or edge, a product of comparison between two nodes or l
     def __bool__(l): return bool(l.nodet)
 
 def vectorize_root(frame):
-    blob2CG(frame)
+    # init for agg+:
+    frame2CG(frame, derH=CH(root=frame, Et=np.zeros(4), tft=[]), root=None)    # distinct from base blob_
     blob_ = unpack_blob_(frame)
     for blob in blob_:
         if not blob.sign and blob.G > ave_G * blob.root.olp:
@@ -195,11 +196,8 @@ def vectorize_root(frame):
             if edge.G * (len(edge.P_)-1) > ave:  # eval PP
                 comp_slice(edge)
                 if edge.Et[0] * (len(edge.node_)-1)*(edge.rng+1) > ave:
-                    # init for agg+:
-                    if not hasattr(frame, 'derH'):
-                        frame.derH = CH(root=frame, Et=np.zeros(4), tft=[]); frame.root = None; frame.node_ = []  # distinct from base blob_
                     lat = np.array([.0,.0,.0,.0,.0,np.zeros(2)],dtype=object); vert = np.array([np.zeros(6), np.zeros(6)])
-                    for PP in blob.node_:
+                    for PP in edge.node_:
                         vert += PP[3]; lat += PP[4]
                     y_,x_ = zip(*edge.dert_.keys()); box = [min(y_),min(x_),max(y_),max(x_)]
                     blob2CG(edge, root=frame, vert=vert,latuple=lat, box=box, yx=np.divide([edge.latuple[:2]], edge.area))  # node_, Et stays the same
@@ -228,7 +226,7 @@ def val_(Et, mEt=[], fo=0, coef=1):
 
 def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set of clusters in >ave G blob, unpack by default?
 
-    def cluster_PP_(edge, fd):
+    def cluster_PP_(fd):
         G_ = []
         N_ = copy(edge.link_ if fd else edge.node_)
         while N_:  # flood fill
@@ -256,7 +254,7 @@ def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set
     if val_(Et, fo=1) > 0:  # cancel by borrowing d?
         mlay = CH().add_tree([L.derH for L in L_]); H=edge.derH; mlay.root=H; H.Et += mlay.Et; H.lft = [mlay]  # init with mfork
         if len(N_) > ave_L:
-            cluster_PP_(edge, fd=0)
+            cluster_PP_(fd=0)
         if val_(Et, mEt=Et, fo=1) > 0:  # likely not from the same links
             for L in L_:
                 L.extH, L.root, L.mL_t, L.rimt, L.aRad, L.visited_, L.Et = CH(), edge, [[],[]], [[],[]], 0, [L], copy(L.derH.Et)
@@ -265,7 +263,7 @@ def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set
             if val_(dEt, fo=1) > 0:
                 dlay = CH().add_tree([L.derH for L in lL_]); dlay.root=H; H.Et += dlay.Et; H.lft += [dlay]  # append dfork
                 if len(lN_) > ave_L:
-                    cluster_PP_(edge, fd=1)
+                    cluster_PP_(fd=1)
 
 def comp_node_(_N_):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et, ~ graph CNN without backprop
 
@@ -484,6 +482,12 @@ def feedback(node):  # propagate node.derH to higher roots
         if add:  # add in fork initialized by prior feedback, else append above
             lowH.add_tree(addH, root)
         node = root
+
+
+def frame2CG(G, **kwargs):
+    blob2CG(G, **kwargs)
+    G.node_ = kwargs.get('node_', [])
+    G.derH = kwargs.get('node_', CH())
 
 
 def blob2CG(G, **kwargs):
