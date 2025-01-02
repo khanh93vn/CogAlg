@@ -77,6 +77,7 @@ class CBlob(CBase):
         blob.latuple = [0, 0, 0, 0, 0, 0]  # Y, X, I, Dy, Dx, G
         blob.dert_ = {}  # keys: (y, x). values: (i, dy, dx, g)
         blob.adj_ = []  # adjacent blobs
+        blob.yx = np.zeros(2)
 
     def fill_blob(blob, fill_yx_, perimeter_, root__, dert__):
         y, x = perimeter_.pop()  # pixel coord
@@ -120,9 +121,7 @@ class CBlob(CBase):
 def frame_blobs_root(image):
     dert__ = comp_pixel(image)
     frame = CFrame(image)
-
-    # Flood-fill 1 pixel at a time
-    flood_fill(frame, dert__)
+    flood_fill(frame, dert__)  # flood-fill 1 pixel at a time
 
     return frame
 
@@ -143,8 +142,8 @@ def comp_pixel(i__): # compare all in parallel -> i__, dy__, dx__, g__, s__
     # convert to dert__:
     y__, x__ = np.indices(i__.shape)
     dert__ = dict(zip(
-        zip(y__[1:-1, 1:-1].ravel(), x__[1:-1, 1:-1].ravel()),
-        zip(i__[1:-1, 1:-1].ravel(), dy__.ravel(), dx__.ravel(), g__.ravel(), s__.ravel()),
+        zip(y__[1:-1, 1:-1].flatten(), x__[1:-1, 1:-1].flatten()),
+        zip(i__[1:-1, 1:-1].flatten(), dy__.flatten(), dx__.flatten(), g__.flatten(), s__.flatten()),
     ))
     return dert__
 
@@ -169,7 +168,7 @@ class CrNode_(CFrame):
     def __init__(rnode_, blob):
         super().__init__(blob.root.i__)  # init params, extra params init below:
         rnode_.root = blob
-        rnode_.olp = blob.root.olp + 1.5
+        rnode_.olp= blob.root.olp + 1.5
         rnode_.rng = blob.root.rng + 1
 
 def intra_blob_root(frame):
@@ -273,10 +272,10 @@ if __name__ == "__main__":
     for blob in frame.blob_:
         for (y, x), (i, dy, dx, g) in blob.dert_.items():
             i__[y, x] = i; dy__[y, x] = dy; dx__[y, x] = dx; g__[y, x] = g; s__[y, x] = blob.sign
-        y, x = map(np.mean, zip(*blob.yx_))  # blob center of gravity
+        y,x = blob.yx = map(np.mean, zip(*blob.yx_))
         if not blob.sign:
             for _blob in blob.adj_:  # show adjacents
-                _y, _x = map(np.mean, zip(*blob.yx_))  # _blob center of gravity
+                _y, _x = _blob.yx = map(np.mean, zip(*_blob.yx_))  # _blob center of gravity
                 line_ += [((_x, x), (_y, y))]
 
     plt.imshow(i__, cmap='gray'); plt.show()  # show reconstructed i__
