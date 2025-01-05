@@ -48,22 +48,22 @@ med_cost = 10
 class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | derH, their layers and sub-layers
 
     name = "H"
-    def __init__(He, Et=None, tft=None, lft=None, H=None, fd_=None, root=None, node_=None, altH=None):
+    def __init__(He, **kwargs):
         super().__init__()
-        He.H = [] if H is None else H  # list of layers: Ets summed across fork tree
-        He.Et = np.zeros(4) if Et is None else Et
-        He.fd_ = [] if fd_ is None else fd_  # 0: sum CGs, 1: sum CLs, + concat from comparands
-        He.tft = [] if tft is None else tft  # top fork tuple: arrays m_t, d_t
-        He.lft = [] if lft is None else lft  # lower fork tuple: CH /comp N_,L_, each has tft and lft
-        He.root = None if root is None else root  # N or higher-composition He
-        He.node_ = [] if node_ is None else node_  # concat bottom nesting order if CG, may be redundant to G.node_
-        He.altH = CH(altH=object) if altH is None else altH   # summed altLays, prevent cyclic
-        # He.i = 0 if i is None else i  # lay index in root.lft, to revise olp
-        # He.i_ = [] if i_ is None else i_  # priority indices to compare node H by m | link H by d
-        # He.fd = 0 if fd is None else fd  # 0: sum CGs, 1: sum CLs
+        He.H = kwargs.get('H', [])    # list of layers: Ets summed across fork tree
+        He.Et = kwargs.get('Et', np.zeros(4))
+        He.fd_ = kwargs.get('fd_', [])    # 0: sum CGs, 1: sum CLs, + concat from comparands
+        He.tft = kwargs.get('tft', [])    # top fork tuple: arrays m_t, d_t
+        He.lft = kwargs.get('lft', [])    # lower fork tuple: CH /comp N_,L_, each has tft and lft
+        He.root = kwargs.get('root')    # N or higher-composition He
+        He.node_ = kwargs.get('node_', [])    # concat bottom nesting order if CG, may be redundant to G.node_
+        He.altH = kwargs.get('altH', CH(altH=object))    # summed altLays, prevent cyclic
+        # He.i = kwargs.get('i', 0)    # lay index in root.lft, to revise olp
+        # He.i_ = kwargs.get('i_', [])    # priority indices to compare node H by m | link H by d
+        # He.fd = kwargs.get('fd', 0)    # 0: sum CGs, 1: sum CLs
         # He.ni = 0  # exemplar in node_, trace in both directions?
-        # He.deep = 0 if deep is None else deep  # nesting in root H
-        # He.nest = 0 if nest is None else nest  # nesting in H
+        # He.deep = kwargs.get('deep', 0)    # nesting in root H
+        # He.nest = kwargs.get('nest', 0)    # nesting in H
     def __bool__(H): return bool(H.tft)  # empty CH
 
 
@@ -486,7 +486,8 @@ def feedback(node):  # propagate node.derH to higher roots
 def frame2CG(G, **kwargs):
     blob2CG(G, **kwargs)
     G.node_ = kwargs.get('node_', [])
-    G.derH = kwargs.get('node_', CH())
+    G.derH = kwargs.get('derH', CH())
+    G.Et = kwargs.get('Et', np.zeros(4))
 
 def blob2CG(G, **kwargs):
     # node_, Et stays the same:
@@ -504,11 +505,11 @@ def blob2CG(G, **kwargs):
     G.derH = CH()  # sum from nodes, then append from feedback
     G.extH = CH()  # sum from rims
     G.altG_ = []  # or altG? adjacent (contour) gap+overlap alt-fork graphs, converted to CG
-    if not hasattr(G, 'node_'): G.node_ = []  # add node_ in frame
     return G
 
 if __name__ == "__main__":
-    image_file = './images/raccoon_eye.jpeg'
+    # image_file = './images/raccoon_eye.jpeg'
+    image_file = './images/toucan_small.jpg'
     image = imread(image_file)
     frame = frame_blobs_root(image)
     intra_blob_root(frame)
