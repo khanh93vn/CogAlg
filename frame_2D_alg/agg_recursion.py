@@ -38,13 +38,15 @@ def cross_comp(root, nest=0):  # breadth-first node_,link_ cross-comp, connect.c
                 if len(plL_) > ave_L:
                     cluster_N_(root, plL_, nest, fd=1)
 
-        comb_altG_(root)  # combine node altG_(contour) by sum,cross-comp -> CG altG
-        cluster_C_(root)  # get (G,altG) exemplars, altG_ may reinforce G by borrowing from extended surround?
+        if len(pL_) > ave_L:  # else no higher clusters
+            comb_altG_(root)  # combine node altG_(contour) by sum,cross-comp -> CG altG
+            cluster_C_(root)  # get (G,altG) exemplars, altG_ may reinforce G by borrowing from extended surround?
 
 def cluster_N_(root, L_, nest, fd):  # top-down segment L_ by >ave ratio of L.dists
 
     L_ = sorted(L_, key=lambda x: x.dist)  # shorter links first
-    while L_:
+    min_dist = 0
+    while True:
         # each loop forms G_ of contiguous-distance L_ segment
         _L = L_[0]; N_, et = copy(_L.nodet), _L.derH.Et
         for n in [n for l in L_ for n in l.nodet]:
@@ -69,15 +71,21 @@ def cluster_N_(root, L_, nest, fd):  # top-down segment L_ by >ave ratio of L.di
                             if L.dist < max_dist:
                                 link_+=[L]; et+=L.derH.Et
                 _eN_ = {*eN_}
-            G_ += [sum2graph(root, [list({*node_}),list({*link_}), et], fd, max_dist, nest)]
+            if val_(et) > 0:
+                G_ += [sum2graph(root, [list({*node_}),list({*link_}), et], fd, max_dist, nest)]
+            else:  # unpack
+                for n in {*node_}:
+                    n.nest += 1; G_ += [n]
             # cluster node roots if nest else nodes
-        nest += 1
         if fd: root.link_ = G_  # replace with current-dist clusters
         else:  root.node_ = G_
         L_ = L_[i+1:]
-        # get longer links if any for next loop, to connect current-dist clusters
-
-''' Hierarchical clustering should alternate between two phases: generative via connectivity and compressive via centroid.
+        if L_:
+            nest += 1; min_dist = max_dist  # get longer links for next loop, to connect current-dist clusters
+        else:
+            break
+''' 
+Hierarchical clustering should alternate between two phases: generative via connectivity and compressive via centroid.
 
  Connectivity clustering terminates at effective contours: alt_Gs, beyond which cross-similarity is not likely to continue. 
  Next cross-comp is discontinuous and should be selective, for well-defined clusters: stable and likely recurrent.
@@ -108,28 +116,32 @@ def cluster_C_(graph):
         return C
 
     def comp_C(C, N):  # compute match without new derivatives: global cross-comp is not directional
+        # Et = np.zeros(4)  # m, _, n, olp: lateral proximity-weighted overlap, for sparse centroids
 
-        mL = min(C.L,len(N.node_)) - ave_L
+        mL = min(C.L, len(N.node_)) - ave_L
         mA = comp_area(C.box, N.box)[0]
         mLat = comp_latuple(C.latuple, N.latuple, C.Et[2], N.Et[2])[1][0]
         mVert = comp_md_(C.vert[1], N.vert[1])[1][0]
         M = mL + mA + mLat + mVert
         if C.derH and N.derH:
             M += C.derH.comp_tree(N.derH).Et[0]
-        if C.altG_ and N.altG_:  # altG_ was converted to altG
+        if C.altG_ and N.altG_:  # converted to altG
             M += comp_N(C.altG_, N.altG_, C.altG_.Et[2] / N.altG_.Et[2]).Et[0]
+        # weigh by proximity for differential clustering:
+        # M /= np.hypot(*C.yx, *N.yx)
         # comp node_?
         return M
 
     def centroid_cluster(N):  # refine and extend cluster with extN_
 
+        # add proximity bias, for both match and overlap?
         _N_ = {n for L,_ in N.rim for n in L.nodet if not n.fin}
         N.fin = 1; n_ = _N_| {N}  # include seed node
-        C = centroid(n_,n_)
+        C = centroid(n_, n_)
         while True:
             N_,dN_,extN_, M, dM, extM = [],[],[], 0,0,0  # included, changed, queued nodes and values
             for _N in _N_:
-                m = comp_C(C,_N)
+                m = comp_C(C,_N)  # Et if proximity-weighted overlap?
                 vm = m - ave  # deviation
                 if vm > 0:
                     N_ += [_N]; M += m
@@ -144,25 +156,26 @@ def cluster_C_(graph):
                     _N.sign=-1; _N.m=0; dN_+=[_N]; dM += -vm  # dM += abs m deviation
 
             if dM > ave and M + extM > ave:  # update for next loop, terminate if low reform val
-                if dN_: # recompute C if any changes in node_
+                if dN_:  # recompute C if any changes in node_
                     C = centroid(set(dN_), N_, C)
                 _N_ = set(N_) | set(extN_)  # next loop compares both old and new nodes to new C
                 C.M = M; C.node_ = N_
             else:
-                if C.M > ave * 10:
+                if C.M > ave * 10:  # add proximity-weighted overlap
                     C.root = N.root  # C.nest = N.nest+1
                     for n in C.node_:
                         n.root = C; n.fin = 1; delattr(n,"sign")
                     return C  # centroid cluster
                 else:  # unpack C.node_
                     for n in C.node_: n.m = 0
+                    N.nest += 1
                     return N  # keep seed node
 
     # get representative centroids of complemented Gs: mCore + dContour, initially in unpacked edges
     N_ = sorted([N for N in graph.node_ if any(N.Et)], key=lambda n: n.Et[0], reverse=True)
     G_ = []
     for N in N_:
-        N.sign, N.m, N.fin = 1, 0, 0  # setattr: C update sign, inclusion val, prior C inclusion flag
+        N.sign, N.m, N.fin = 1, 0, 0  # setattr C update sign, inclusion val, C inclusion flag
     for i, N in enumerate(N_):  # replace some of connectivity cluster by exemplar centroids
         if not N.fin:  # not in prior C
             if val_(N.Et, coef=10):
@@ -179,12 +192,13 @@ def sum_G_(G, node_, fc=0):
     for n in node_:
         if fc:
             s = n.sign; n.sign = 1  # single-use
+        else: s = 1
         G.latuple += n.latuple * s; G.vert += n.vert * s
         G.Et += n.Et * s; G.aRad += n.aRad * s
         G.yx += n.yx * s
         if n.derH: G.derH.add_tree(n.derH, root=G, rev = s==-1, fc=fc)
         if fc:
-            G.M += n.m*s; G.L += s
+            G.M += n.m * s; G.L += s
         else:
             if n.extH: G.extH.add_tree(n.extH, root=G, rev = s==-1)  # empty in centroid
             G.box = extend_box( G.box, n.box)  # extended per separate node_ in centroid
@@ -192,8 +206,8 @@ def sum_G_(G, node_, fc=0):
 def comb_altG_(root):  # combine contour G.altG_ into altG (node_ defined by root=G), for agg+ cross-comp
 
     for G in root.node_:
-        if G.nest+1 == root.nest and G.altG_:
-            alt_ = G.altG_
+        alt_ = G.altG_
+        if alt_ and isinstance(alt_, list):
             sum_G_(alt_[0], [alt for alt in alt_[1:]])
             G.altG_ = CG(root=G, node_=alt_); G.altG_.sign = 1; G.altG_.m = 0
             # alt D * G rM:
