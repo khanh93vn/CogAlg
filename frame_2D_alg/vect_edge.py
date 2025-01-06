@@ -66,7 +66,6 @@ class CH(CBase):  # generic derivation hierarchy of variable nesting: extH | der
         # He.nest = kwargs.get('nest', 0)    # nesting in H
     def __bool__(H): return bool(H.tft)  # empty CH
 
-
     def copy_(He, root=None, rev=0, fc=0, i=None):  # comp direction may be reversed to -1
     # add H:
 
@@ -210,7 +209,7 @@ def vectorize_root(frame):
                     for N in edge.node_:  # no comp node_, link_ | PPd_ for now
                         P_, link_, vert, lat, A, S, box, [y,x], Et = N[1:]  # PPt
                         if Et[0] > ave:   # no altG until cross-comp
-                            PP = CG(fd=0, Et=Et,root=edge, node_=P_,link_=link_, vert=vert, latuple=lat, box=box, yx=[y,x])
+                            PP = CG(fd=0, Et=Et,root=edge, node_=P_,link_=link_, vert=vert, latuple=lat, box=box, yx=np.array([y,x]))
                             y0,x0,yn,xn = box; PP.aRad = np.hypot((yn-y0)/2,(xn-x0)/2)  # approx
                             G_ += [PP]
                     edge.node_ = G_
@@ -219,12 +218,16 @@ def vectorize_root(frame):
                         # add altG: summed converted adj_blobs of converted edge blob
                         # if len(edge.node_) > ave_L: agg_recursion(edge)  # unlikely
 
-def val_(Et, mEt=[], fo=0, coef=1):
-    # ave *= coef: higher aves
+def val_(Et, _Et=[], fo=0, coef=1, fd=1):  # compute projected match in mfork or borrowed match in dfork
+    # ave *= coef: more specific rel aves
+
     m, d, n, o = Et
-    if any(mEt):
-        mm,_,mn,_ = mEt  # cross-induction from root mG, not affected by overlap
-        val = d * (mm / (ave * coef * mn)) - ave_d * coef * n * (o if fo else 1)
+    if any(_Et):  # get alt fork in root Et
+        _m,_d,_n,_o = _Et  # cross-fork induction, same overlap?
+        if fd:  # proj diff
+            val = d * (_m / (ave * coef * _n)) - ave_d * coef * n * (o if fo else 1)
+        else:  # proj match, currently not used
+            val = m * (_d / (ave_d * coef * _n)) - ave * coef * n * (o if fo else 1)
     else:
         val = m - ave * coef * n * (o if fo else 1)  # * overlap in cluster eval, not comp eval
     return val
@@ -429,9 +432,10 @@ def sum2graph(root, grapht, fd, minL=0, maxL=None, nest=0):  # sum node and link
     N_ = []
     for N in node_:
         if minL:  # >0, inclusive, = lower-layer exclusive maxL if G is distance-nested in cluster_N_
+            if N.root is graph: break  # assigned in prior loop
             while N.root.maxL and (minL != N.root.maxL):  # root maxL=0 in edge|frame
                 N = N.root  # cluster prior-dist graphs instead of nodes
-        if N not in N_: N_ += [N]
+        N_ += [N]  # roots if minL
         graph.box = extend_box(graph.box, N.box)  # pre-compute graph.area += N.area?
         yx = np.add(yx, N.yx)
         yx_ += [N.yx]
@@ -467,20 +471,21 @@ def feedback(node):  # propagate node.derH to higher roots
 
     while node.root:
         root = node.root
-        lowH = addH = root.derH
+        priH = addH = root.derH
         add = 1
-        for i, fd in enumerate(addH.fd_):  # unpack top-down, each fd was assigned by corresponding level of roots
-            # draft:
-            for _L,L in zip_longest(lowH.H, addH.H):
-                if _L and L: _L += L
-                elif L:      lowH.H += [copy(L)]
+        for fd in addH.fd_:  # unpack top-down, each fd was assigned by corresponding level of roots
             if len(addH.lft) > fd:
-                addH = lowH; lowH = lowH.lft[fd]  # keep unpacking
+                # add to higher-nested priH:
+                if len(addH.fd_) > len(priH.H):  # ddepth = 0|1, up fd_ maps to down H
+                    priH.H += [copy(addH.Et)]
+                else: priH.H[-1] += addH.Et
+                # keep unpacking:
+                addH = priH; priH = priH.lft[fd]
             else:
-                lowH.lft += [addH.copy_()]  # fork was empty, init with He
+                priH.lft += [addH.copy_()]  # fork was empty, init with He
                 add = 0; break
         if add:  # add in fork initialized by prior feedback, else append above
-            lowH.add_tree(addH, root)
+            priH.add_tree(addH, root)
         node = root
 
 def frame2CG(G, **kwargs):
