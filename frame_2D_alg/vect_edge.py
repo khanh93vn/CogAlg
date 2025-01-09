@@ -127,8 +127,6 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.fd_ = kwargs.get('fd_',[])  # list of forks forming G, 1 if cluster of Ls | lGs
         G.root = kwargs.get('root')  # may extend to list in cluster_N_, same nodes may be in multiple dist layers
         G.nest = 0  # n missing agg layers
-        G.derH = kwargs.get('derH',[]) # each layer is Clay(Et, m_d_t, n_l_t), summed|concat from nodes and links across fork tree
-        G.extH = []  # same but summed from rim
         G.rim = []  # external links, not rng-nested
         G.latuple = kwargs.get('latuple', np.array([.0,.0,.0,.0,.0,np.zeros(2)],dtype=object))  # lateral I,G,M,D,L,[Dy,Dx]
         G.vert = kwargs.get('vert', np.array([np.zeros(6), np.zeros(6)]))  # vertical m_d_ of latuple
@@ -139,6 +137,9 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.altG = []  # adjacent (contour) gap+overlap alt-fork graphs, converted to CG
         # G.fork_tree: list = z([[]])  # indices in all layers(forks, if no fback merge
         # G.fback_ = []  # fb buffer
+        G.node_, G.link_, G.m_d_t = [], [], []
+        if kwargs.get('derH') is not None:
+            form_H(G, kwargs.get('derH'), extH=[])
     def __bool__(G): return bool(G.derH)  # never empty
 
 class CL(CBase):  # link or edge, a product of comparison between two nodes or links
@@ -472,10 +473,17 @@ def norm_H(H, n):
             fork *= n
        lay.Et *= n  # n_l_t stays as is
 
+def form_H(G, derH, extH):
+    G.derH = derH
+    G.extH = extH
+    G.node_ = derH[0].n_l_t[0]
+    G.link_ = derH[0].n_l_t[1]
+    G.m_d_t = derH[0].m_d_t
+
 def frame2CG(G, **kwargs):
     blob2CG(G, **kwargs)
-    G.derH = kwargs.get('derH', [CLay(root=G)])
     G.Et = kwargs.get('Et', np.zeros(4))
+    G.node_ = []  # add node_ in frame
 
 def blob2CG(G, **kwargs):
     # node_, Et stays the same:
@@ -491,7 +499,7 @@ def blob2CG(G, **kwargs):
     G.derH = []  # sum from nodes, then append from feedback, maps to node_tree
     G.extH = []  # sum from rims
     G.altG = []  # or altG? adjacent (contour) gap+overlap alt-fork graphs, converted to CG
-    if not hasattr(G, 'node_'): G.node_ = []  # add node_ in frame
+    if not hasattr(G, 'node_'):
     return G
 
 if __name__ == "__main__":
