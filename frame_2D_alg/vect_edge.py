@@ -474,6 +474,7 @@ def frame2CG(G, **kwargs):
     blob2CG(G, **kwargs)
     G.derH = kwargs.get('derH', [CLay(root=G, Et=np.zeros(4), m_d_t=[], N_L_ =[])])
     G.Et = kwargs.get('Et', np.zeros(4))
+    G.node_ = []
 
 def blob2CG(G, **kwargs):
     # node_, Et stays the same:
@@ -490,7 +491,6 @@ def blob2CG(G, **kwargs):
     G.N_L_ = []
     G.extH = []  # sum from rims
     G.altG = []  # or altG? adjacent (contour) gap+overlap alt-fork graphs, converted to CG
-    if not hasattr(G, 'node_'): G.node_ = []  # add node_ in frame
     return G
 
 if __name__ == "__main__":

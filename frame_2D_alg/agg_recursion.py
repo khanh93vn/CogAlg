@@ -180,7 +180,7 @@ def cluster_C_(graph):
         N.sign, N.m, N.fin = 1, 0, 0  # setattr C update sign, inclusion val, C inclusion flag
     for i, N in enumerate(N_):  # replace some of connectivity cluster by exemplar centroids
         if not N.fin:  # not in prior C
-            if val_(N.Et, coef=10):
+            if val_(N.Et, coef=10) > 0:
                 G_ += [centroid_cluster(N)]  # extend from N.rim, return C if packed else N
             else:  # the rest of N_ M is lower
                 G_ += [N for N in N_[i:] if not N.fin]
