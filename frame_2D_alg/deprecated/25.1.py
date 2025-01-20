@@ -286,7 +286,6 @@ graph.node_ = G_  # mix of Ns and Cs: exemplars of their network?
 if len(G_) > ave_L:
     cross_comp(graph)
     # selective connectivity clustering between exemplars, extrapolated to their node_
-
 '''
     # direct fb:
     Q, altQ = (root.link_, root.node_) if fd else (root.node_, root.link_)
@@ -312,4 +311,70 @@ def feedback1(G):  # propagate new G and G.lay0.m_d_t to incrementally higher ro
             else:
                 break  # root may be deeper from prior feedback
         root = root.root
+
+def feedback2(root, fd):  # propagate new G and G.lay0.m_d_t to incrementally higher roots
+
+    Q = root.fback_t[fd]
+    root.nt[fd] += sum([g.n for g in Q])
+    derH = sum_H(Q, fd=fd, root=root, fmerge=0)  # add fd to sum link_ or node_ derHs?
+    if fd:
+        root.link_ = Q; add_H(root.derH[-len(derH)], derH, root)  # add aligned dlayers
+    else:
+        root.node_ = Q; root.derH += derH  # append flat mlayers
+    rroot = root.root
+    if rroot:
+        rroot.fback_t[fd] += [root]
+        if len(rroot.link_ if fd else rroot.node_) == sum([g.n for g in rroot.fback_t[fd]]):
+            feedback(rroot, fd)  # recursive root.root.derH.add_fork(graph.derH)
+
+def cross_comp1(root, deep=[]):  # breadth-first node_,link_ cross-comp, connect clustering, recursion
+
+    N_,L_,Et = comp_node_(root.node_[:-1] if deep else root.node_)  # cross-comp exemplars, extrapolate to their node_s
+    # mfork
+    if val_(Et, fo=1) > 0:
+        lay = sum_H(L_, root)  # mlay
+        pL_ = {l for n in N_ for l, _ in zrim(n, fd=0)}; plL_ = []
+        # dfork / all dist layers:
+        if val_(Et,_Et=Et, fo=1) > 0:  # same root for L_, root.link_ was compared in root-forming for alt clustering
+            L2N(L_,root)
+            lN_,lL_,dEt = comp_link_(L_,Et)
+            if val_(dEt, _Et=Et, fo=1) > 0:
+                lay.add_lay( sum_H(L_, root))  # mlay += dlay
+                plL_ = {l for n in lN_ for l,_ in zrim(n, fd=1)}
+        root.derH += [lay]
+        # buffered feedback per new G, not current node:
+        if len(pL_) > ave_L: cluster_N_(root, pL_, fd=0)  # cluster distance segments # else feedback of mlay?
+        if len(plL_)> ave_L: cluster_N_(root, plL_,fd=1)  # form altGs for cluster_C_, no new links between dist-seg Gs
+
+        comb_altG_(root.node_)  # combine node contour: altG_ or neg links, by sum, cross-comp -> CG altG
+        cluster_C_(root,deep)  # -> (G,altG) exemplars, reinforced by altG surround borrow?
+        # mfork only, dfork is possible but secondary, no ddfork
+'''
+        else:
+            for n in node_: deep_ += [n]  # unpack weak Gts
+        if fd: edge.link_ = G_+ [deep_]
+        else:  edge.node_ = G_+ [deep_]
+'''
+def merge_deep(Deep, deep):
+
+    Ddeep = []
+    if Deep and isinstance(Deep[-1], list):
+        Ddeep = Deep[-1]; Deep[:] = Deep[:-1]
+
+    ddeep = []
+    if deep and isinstance(deep[-1], list):
+        ddeep = deep[-1]; deep[:] = deep[:-1]
+
+    Deep += deep
+    if Ddeep and ddeep:
+        merge_deep(Ddeep, ddeep)
+        Deep += [Ddeep]
+
+        for edge in frame.node_:
+            comb_altG_(edge.node_)
+            cluster_C_(edge)  # no cluster_C_ in vect_edge
+            if isinstance(edge.node_[-1], list):
+                G_ += edge.node_[:-1]; deep += edge.node_[-1]  # unpack edge
+            else: G_ += edge.node_
+        if deep: G_ += [deep]
 
