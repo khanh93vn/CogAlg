@@ -354,6 +354,8 @@ def cross_comp1(root, deep=[]):  # breadth-first node_,link_ cross-comp, connect
             for n in node_: deep_ += [n]  # unpack weak Gts
         if fd: edge.link_ = G_+ [deep_]
         else:  edge.node_ = G_+ [deep_]
+        
+G.depth = kwargs.get('depth',0)  # 1/agg+: max nesting in node_, derH per node layer, overlapping between layers?
 '''
 def merge_deep(Deep, deep):
 
@@ -377,4 +379,26 @@ def merge_deep(Deep, deep):
                 G_ += edge.node_[:-1]; deep += edge.node_[-1]  # unpack edge
             else: G_ += edge.node_
         if deep: G_ += [deep]
+
+def add_H(H, h, root, rev=0, fc=0):
+    for Lay, lay in zip_longest(H, h, fillvalue=[]):  # different len if lay-selective comp
+        if lay:
+            if Lay: Lay.add_lay(lay,rev=rev,fc=fc)
+            else:   H += [lay.copy_(root=root,rev=rev,fc=fc)]
+            root.Et += lay.Et
+
+def sum_H(Q, root, rev=0, fc=0, fmerge=0):  # sum derH in link_|node_
+
+    DerH = [lay.copy_(root=root,rev=rev,fc=fc) for lay in Q[0].derH]
+    for e in Q[1:]:
+        for Lay, lay in zip_longest(DerH, e.derH, fillvalue=[]):
+            if lay:
+                if Lay: Lay.add_lay(lay,rev=rev,fc=fc)
+                else: DerH += [lay.copy_(root=root,rev=rev,fc=fc)]
+    if fmerge:
+        Lay = DerH[0].copy_(root=root)
+        for lay in DerH[1:]: Lay.add_lay(lay,rev=rev,fc=fc)
+        return Lay  # CLay derH, currently not used
+    else:
+        return DerH  # list
 
