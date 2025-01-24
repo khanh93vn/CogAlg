@@ -133,7 +133,7 @@ class CG(CBase):  # PP | graph | blob: params of single-fork node_ cluster
         G.box = kwargs.get('box', np.array([np.inf,np.inf,-np.inf,-np.inf]))  # y0,x0,yn,xn
         G.yx = kwargs.get('yx', np.zeros(2))  # init PP.yx = [(y0+yn)/2,(x0,xn)/2], then ave node yx
         G.maxL = kwargs.get('maxL', 0)  # if dist-nested in cluster_N_
-        G.aRad = 0  # average distance between graph center and node center
+        G.aRad = 0  # average Manhattan distance between graph center and node center
         G.altG = []  # adjacent (contour) gap+overlap alt-fork graphs, converted to CG
         # G.depth = 0  # n missing higher agg layers
         # G.fork_tree: list = z([[]])  # indices in all layers(forks, if no fback merge
@@ -174,11 +174,11 @@ def vectorize_root(frame):
                     y_,x_ = zip(*edge.dert_.keys()); box = [min(y_),min(x_),max(y_),max(x_)]
                     blob2G(edge, root=frame, vert=vert,latuple=lat, box=box, yx=np.divide([edge.latuple[:2]], edge.area))  # node_, Et stay the same
                     G_ = []
-                    for PP in edge.node_:  # no comp node_, link_ | PPd_ for now
+                    for PP in edge.node_:  # no comp node_, link_ | PPd_ for now?
                         P_,link_,vert,lat, A,S,box,[y,x],Et = PP[1:]  # PPt
                         if Et[0] > ave:  # no altG until cross-comp
                             G = CG(root=edge, fd_=[0], Et=Et, node_=P_, link_=[], vert=vert, latuple=lat, box=box, yx=np.array([y,x]))
-                            y0,x0,yn,xn = box; G.aRad = np.hypot((yn-y0)/2,(xn-x0)/2)  # approx
+                            y0,x0,yn,xn = box; G.aRad = np.hypot((yn-y0)/2,(xn-x0)/2)  # This gives error up to 40% or more. Not very approx
                             G_ += [G]
                     if len(G_) > ave_L:
                         frame.node_ += [edge]; edge.node_ = G_
@@ -246,7 +246,7 @@ def comp_node_(_N_, L=0):  # rng+ forms layer of rim and extH per N, appends N_,
     for _G, G in combinations([n for n in _N_ if len(n.derH)==L] if L else _N_, r=2):  # if max len derH in agg+
         rn = _G.Et[2] / G.Et[2]
         if rn > ave_rn:  # scope disparity or _G.depth != G.depth
-            continue
+            continue    # skip when _G.Et[2] > 1000*G.Et[2], but accept when G.Et[2] < 1000*_G.Et[2] ?
         radii = G.aRad + _G.aRad
         dy,dx = np.subtract(_G.yx,G.yx)
         dist = np.hypot(dy,dx)
@@ -391,8 +391,7 @@ def sum2graph(root, grapht, fd, minL=0, maxL=None):  # sum node and link params 
     node_, link_, Et = grapht
     graph = CG(fd_=node_[0].fd_+[fd], Et=Et*icoef, root=root, node_=[], link_=link_, maxL=maxL)
     # arg Et is weaker if internal, maxL,minL: max and min L.dist in graph.link_
-    yx = np.array([0,0]); yx_ = []
-    N_ = []
+    N_, yx_ = [], []
     for N in node_:
         fc = 0
         if minL:  # > 0, inclusive, = lower-layer exclusive maxL, if G was distance-nested in cluster_N_
@@ -403,7 +402,6 @@ def sum2graph(root, grapht, fd, minL=0, maxL=None):  # sum node and link params 
         if fc: continue  # N.root was clustered in prior loop
         else: N_ += [N]  # roots if minL
         graph.box = extend_box(graph.box, N.box)  # pre-compute graph.area += N.area?
-        yx = np.add(yx, N.yx)
         yx_ += [N.yx]
         if isinstance(node_[0],CG):
             graph.latuple += N.latuple; graph.vert += N.vert
@@ -411,11 +409,9 @@ def sum2graph(root, grapht, fd, minL=0, maxL=None):  # sum node and link params 
         N.root = graph
     graph.node_= N_  # nodes or roots, link_ is still current-dist links only?
     graph.derH = sum_H(link_,graph)  # sum link derH
-    L = len(node_)
-    yx = np.divide(yx,L)
-    dy,dx = np.divide( np.sum([ np.abs(yx-_yx) for _yx in yx_], axis=0), L)
-    graph.aRad = np.hypot(dy,dx)  # ave distance from graph center to node centers
-    graph.yx = yx
+    graph.yx = np.mean(yx_)
+    dists = np.abs(graph.yx - yx_).sum(axis=-1)     # Or, if using Euclidean distance: dists = np.hypot(*(graph.yx - yx_).T)
+    graph.aRad = dists.mean()  # ave Manhattan distance from graph center to node centers
     if fd:  # dgraph, no mGs / dG for now  # and val_(Et, _Et=root.Et) > 0:
         altG = []  # mGs overlapping dG
         for L in node_:
@@ -491,7 +487,7 @@ def blob2G(G, **kwargs):
     G.yx = kwargs.get('yx', np.zeros(2))  # init PP.yx = [(y0+yn)/2,(x0,xn)/2], then ave node yx
     G.rim = []  # flat links of any rng, may be nested in clustering
     G.maxL = 0  # nesting in nodes
-    G.aRad = 0  # average distance between graph center and node center
+    G.aRad = 0  # average Manhattan distance between graph center and node center
     G.altG = []  # or altG? adjacent (contour) gap+overlap alt-fork graphs, converted to CG
     return G
 
