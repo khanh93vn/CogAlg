@@ -401,4 +401,20 @@ def sum_H(Q, root, rev=0, fc=0, fmerge=0):  # sum derH in link_|node_
         return Lay  # CLay derH, currently not used
     else:
         return DerH  # list
+'''
+    C_, n_ = [], []  # concat exemplar centroids across top Gs
+    maxH = root.derH[:-addH] if addH else root.derH  # 0 in first call
+    maxL = len(maxH); maxL = maxL // 2 + maxL % 2  # 1|2 derlays per top composition lay
+    for G in root.node_:  # cluster_C_/ G.node_
+        GL = len(G.derH); GL = GL // 2 + GL % 2
+        if not G.derH or GL < maxL: continue
+        
+    if not G.derH: continue
+    L = len(root.derH); l = len(G.derH)
+    if l < L - (1 if L%2 == l%2 else 2): continue  # 2 if only one len is odd?
+'''
+def comb_H(DerH, derH):  # append link.derH lays to root.derH.lays
 
+    for Lay, lay in zip_longest(DerH,derH, fillvalue=[]):
+        if Lay: Lay += [lay]
+        else: DerH += [[lay]]  # two forks in G Lay
