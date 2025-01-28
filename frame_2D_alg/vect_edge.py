@@ -233,7 +233,8 @@ def cluster_edge(edge):  # edge is CG but not a connectivity cluster, just a set
 def comp_node_(_N_, L=0):  # rng+ forms layer of rim and extH per N, appends N_,L_,Et, ~ graph CNN without backprop
 
     _Gp_ = []  # [G pair + co-positionals], for top-nested Ns, unless cross-nesting comp:
-    for _G, G in combinations([N for N in _N_ if len(N.derH)==L] if L else _N_, r=2):  # if max len derH in agg+
+    if L: _N_ = filter(lambda N: len(N.derH) == L, _N_)
+    for _G, G in combinations(_N_, r=2):  # if max len derH in agg+
         _n,n = _G.Et[2],G.Et[2]; rn = _n/n if _n>n else n/_n
         if rn > ave_rn:  # scope disparity or _G.depth != G.depth
             continue
@@ -241,25 +242,25 @@ def comp_node_(_N_, L=0):  # rng+ forms layer of rim and extH per N, appends N_,
         dy,dx = np.subtract(_G.yx,G.yx)
         dist = np.hypot(dy,dx)
         _G.add, G.add = 0, 0
-        _Gp_ += [(_G,G, rn, dy,dx, radii, dist)]
+        _Gp_ += [(dist, radii, _G,G, rn, dy,dx)]    # dist first, for sorting
     rng = 1
     N_,L_,ET = set(),[],np.zeros(4)
-    _Gp_ = sorted(_Gp_, key=lambda x: x[-1])  # sort by dist, shortest pairs first
+    _Gp_.sort()  # sort by dist, shortest pairs first
     while True:  # prior vM
         Gp_,Et = [],np.zeros(4)
         for Gp in _Gp_:
-            _G,G, rn, dy,dx, radii, dist = Gp
+            dist, radii, _G,G, rn, dy,dx = Gp
             _nrim = {L.nodet[1] if L.nodet[0] is _G else L.nodet[0] for L,_ in _G.rim}
             nrim = {L.nodet[1] if L.nodet[0] is G else L.nodet[0] for L,_ in G.rim}
-            if _nrim & nrim:  # indirectly connected Gs,
+            if _nrim & nrim:  # indirectly connected Gs, (this may not work as intended for up-link-only rim)
                 continue     # no direct match priority?
             # dist vs. radii * induction, mainly / extH?
-            GV = val_(_G.Et) + val_(G.Et) + sum([val_(l.Et) for l in _G.extH]) + sum([val_(l.Et) for l in _G.extH])
+            GV = val_(_G.Et) + val_(G.Et) + sum([val_(l.Et) for l in _G.extH]) + sum([val_(l.Et) for l in G.extH])
             if dist < max_dist * ((radii * icoef**3) * GV):
                 Link = comp_N(_G,G, rn, angle=[dy,dx], dist=dist)
                 L_ += [Link]  # include -ve links
                 if val_(Link.Et) > 0:
-                    N_.update({_G,G}); Et += Link.Et; _G.add,G.add = 1,1
+                    N_.update({_G,G}); Et += Link.Et; _G.add,G.add = 1,1 # _G,G will be added back to _Gp_ forever, as long as val_(Et) > 0?
             else:
                 Gp_ += [Gp]  # re-evaluate not-compared pairs with one incremented N.M
         ET += Et
