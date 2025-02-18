@@ -1,7 +1,7 @@
 import numpy as np
-from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_
-from slice_edge import CP, slice_edge, comp_angle, ave_G
-
+from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_, aves
+from slice_edge import CP, slice_edge, comp_angle
+from functools import reduce
 '''
 comp_slice traces edge axis by cross-comparing vertically adjacent Ps: horizontal slices across an edge blob.
 These are low-M high-Ma blobs, vectorized into outlines of adjacent flat (high internal match) blobs.
@@ -26,15 +26,14 @@ These low-M high-Ma blobs are vectorized into outlines of adjacent flat (high in
 Connectivity in P_ is traced through root_s of derts adjacent to P.dert_, possibly forking. 
 len prior root_ sorted by G is root.olp, to eval for inclusion in PP or start new P by ave*olp
 '''
-
-ave = 5
-ave_dI = ave_inv = 20  # ave inverse m, change to Ave from the root intra_blob?
-ave_d = 5  # ave change to Ave_min from the root intra_blob?
-aves = ave, ave_mG, ave_mM, ave_mMa, ave_mA, ave_mL = 5, 10, 2, .1, .2, 2
-PP_aves = ave_PPm, ave_PPd = 50, 50
-P_aves = ave_Pm, ave_Pd = 10, 10
-ave_Gm = 50
-ave_L = 5
+ave     = aves[-2]
+ave_d   = aves[1]
+ave_G   = aves[4]
+ave_PPm = aves[22]
+ave_PPd = aves[23]
+ave_L   = aves[6]
+ave_dI  = aves[14]
+ave_md  = [ave,ave_d]
 
 class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
     name = "dP"
@@ -95,7 +94,7 @@ def comp_P_(edge):  # form links from prelinks
                 _P.rim += [convert_to_dP(_P,P, derLay, angle, distance, et)]  # up only
     del edge.pre__
 
-def comp_dP_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
+def comp_dP_(PP,):  # node_- mediated: comp node.rim dPs, call from form_PP_
 
     root, P_, link_, vert, lat, A, S, box, yx, (M,_,n,_) = PP
     rM = M / (ave * n)  # dP D borrows from normalized PP M
@@ -105,28 +104,10 @@ def comp_dP_(PP):  # node_- mediated: comp node.rim dPs, call from form_PP_
             rn = len(P.dert_) / len(_P.dert_)
             for dP in P.rim:  # higher links
                 if dP not in link_: continue  # skip removed node links
-                mdVer, et = comp_md_(_dP.vertuple[1], dP.vertuple[1], rn)
+                mdVer, et = comp_vert(_dP.vertuple[1], dP.vertuple[1], rn)
                 angle = np.subtract(dP.yx,_dP.yx)  # dy,dx of node centers
                 distance = np.hypot(*angle)  # between node centers
                 _dP.rim += [convert_to_dP(_dP, dP, mdVer, angle, distance, et)]  # up only
-
-def comp_md_(_d_,d_, rn=.1, dir=1):  # dir may be -1
-
-    d_ = d_ * rn  # normalize by compared accum span
-    dd_ = (_d_ - d_ * dir)  # np.arrays
-    md_ = np.minimum(np.abs(_d_), np.abs(d_))
-    md_[(_d_<0) != (d_<0)] *= -1  # negate if only one compared is negative
-    ''' 
-    sequential version:
-    md_, dd_ = [],[]
-    for _d, d in zip(_d_,d_):
-        d = d * rn
-        dd_ += [_d - d * dir]
-        md = min(abs(_d),abs(d))
-        md_ += [-md if _d<0 != d<0 else md]  # negate if only one compared is negative
-    md_, dd_ = np.array(md_), np.array(dd_)
-    '''
-    return np.array([md_,dd_]), np.array([md_.sum(),dd_.sum()])  # [m_,d_], Et
 
 def convert_to_dP(_P,P, derLay, angle, distance, Et):
 
@@ -143,14 +124,14 @@ def form_PP_(root, iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
     PPt_ = []
     for P in iP_: P.merged = 0
     for P in iP_:  # dP from link_ if fd
-        if P.merged: continue
+        if P.merged or (not fd and len(P.dert_)==1): continue
         _prim_ = P.prim; _lrim_ = P.lrim
         I,G, M,D, L,_ = P.latuple
         _P_ = {P}; link_ = set(); Et = np.array([I+M, G+D])
         while _prim_:
             prim_,lrim_ = set(),set()
             for _P,_link in zip(_prim_,_lrim_):
-                if _link.Et[fd] < aves[fd] or _P.merged:
+                if _link.Et[fd] < ave_md[fd] or _P.merged:
                     continue
                 _P_.add(_P); link_.add(_link)
                 _I,_G,_M,_D,_L,_ = _P.latuple
@@ -194,24 +175,43 @@ def sum2PP(root, P_, dP_, Et):  # sum links in Ps and Ps in PP
 
     return PPt
 
-def comp_latuple(_latuple, latuple, _n,n):  # 0der params
+def comp_latuple(_latuple, latuple, _n,n):  # 0der params, add dir?
 
     _I, _G, _M, _D, _L, (_Dy, _Dx) = _latuple
     I, G, M, D, L, (Dy, Dx) = latuple
     rn = _n / n
 
-    dI = _I - I*rn;  mI = ave_dI - dI    # vI = mI - ave
-    dG = _G - G*rn;  mG = min(_G, G*rn)  # vG = mG - ave_mG
-    dM = _M - M*rn;  mM = min(_M, M*rn)  # vM = mM - ave_mM
-    dD = _D - D*rn;  mD = min(_D, D*rn)  # vD = mD - ave_mD
-    dL = _L - L*rn;  mL = min(_L, L*rn)  # vL = mL - ave_mL
-    mA, dA = comp_angle((_Dy,_Dx),(Dy,Dx))  # vA = mA - ave_mA
+    I*=rn; dI = _I - I;  mI = ave_dI -dI / max(_I,I)  # vI = mI - ave)
+    G*=rn; dG = _G - G;  mG = min(_G, G) / max(_G,G)  # vG = mG - ave_mG
+    M*=rn; dM = _M - M;  mM = min(_M, M) / max(_M,M)  # vM = mM - ave_mM
+    D*=rn; dD = _D - D;  mD = min(_D, D) / max(_D,D)  # vD = mD - ave_mD
+    L*=rn; dL = _L - L;  mL = min(_L, L) / max(_L,L)  # vL = mL - ave_mL
+    mA, dA = comp_angle((_Dy,_Dx),(Dy,Dx))  # vA = mA - ave_mA, normalized
 
-    d_ = np.array([dI, dG, dM, dD, dL, dA])
-    m_ = np.array([mI, mG, mM, mD, mL, mA])
-    et = np.array([np.sum(m_), np.sum(np.abs(d_))])
+    d_ = np.array([dI, dG, dA, dM, dD, dL])  # derTT[:3], Et
+    m_ = np.array([mI, mG, mA, mM, mD, mL])
 
-    return np.array([m_,d_]), et
+    return np.array([m_,d_]), np.array([sum(m_),sum(d_)])
+
+def comp_vert(_i_,i_, rn=.1, dir=1):  # i_ is ds, dir may be -1
+
+    i_ = i_ * rn  # normalize by compared accum span
+    d_ = (_i_ - i_ * dir)  # np.arrays [I,G,A,M,D,L]
+    _a_,a_ = np.abs(_i_), np.abs(i_)
+    m_ = np.divide( np.minimum(_a_,a_), reduce(np.maximum, [_a_, a_, 1e-7]))  # rms
+    m_[(_i_<0) != (d_<0)] *= -1  # m is negative if comparands have opposite sign
+
+    return np.array([m_,d_]), np.array([sum(m_),sum(d_)])  # Et
+''' 
+    sequential version:
+    md_, dd_ = [],[]
+    for _d, d in zip(_d_,d_):
+        d = d * rn
+        dd_ += [_d - d * dir]
+        md = min(abs(_d),abs(d))
+        md_ += [-md if _d<0 != d<0 else md]  # negate if only one compared is negative
+    md_, dd_ = np.array(md_), np.array(dd_)
+'''
 
 def accum_box(box, y, x):  # extend box with kernel
     y0, x0, yn, xn = box

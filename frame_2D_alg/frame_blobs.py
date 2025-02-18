@@ -40,10 +40,6 @@ from matplotlib import pyplot as plt
     capitalized variables are normally summed small-case variables,
     longer names are normally classes
 '''
-# hyper-parameters, set as a guess, latter adjusted by feedback:
-ave = 30  # base filter, directly used for comp_r fork
-aveR = 10  # for range+, fixed overhead per blob
-
 class CBase:
     refs = []
     def __init__(obj):
@@ -58,6 +54,59 @@ class CBase:
         if inst is not None and inst.id == _id:
             return inst
     def __repr__(obj): return f"{obj.__class__.__name__}(id={obj.id})"
+
+
+    def __getattribute__(ave,name):
+        coefs =   object.__getattribute__(ave, "coefs")
+        if name == "coefs":
+            return object.__getattribute__(ave, name)
+        elif name == "md":
+            return [ave.m * coefs["m"], ave.d *  coefs["d"]]  # get updated md
+        else:
+            return object.__getattribute__(ave, name)  * coefs[name]  # always return ave * coef
+
+ # hyper-parameters, init a guess, adjusted by feedback
+aves = np.array([
+        5,    # ave.m
+        10,   # ave.d = ave change to Ave_min from the root intra_blob?
+        2,    # ave.n
+        100,  # ave.I
+        100,  # ave.G
+        5,    # ave.Ga
+        1,    # ave.L
+        5,    # ave.LA
+        1000, # ave.rn = max scope disparity
+        2,    # ave.max_dist
+        10,   # ave.coef
+        10,   # ave.ccoef = scaling match ave to clustering ave
+        .15,  # ave.icoef = internal M proj_val / external M proj_val
+        10,   # ave.med_cost
+        # comp_slice
+        20,   # ave.dI = ave inverse m, change to Ave from the root intra_blob?
+        20,   # ave.inv
+        10,   # ave.mG
+        2,    # ave.mM
+        2,    # ave.mD
+        .1,   # ave.mMa
+        .2,   # ave.mA
+        2,    # ave.mL
+        50,   # ave.PPm
+        50,   # ave.PPd
+        10,   # ave.Pm
+        10,   # ave.Pd
+        50,   # ave.Gm
+        5,    # ave.Lslice
+        # slice_edge
+        30,   # ave.g = change to Ave from the root intra_blob?
+        2,    # ave.mL
+        3,    # ave.dist
+        .95,  # ave.dangle = vertical difference between angles: -1->1, abs dangle: 0->1, ave_dangle = (min abs(dangle) + max abs(dangle))/2,
+        5,    # ave.olp
+        30,   # ave.B
+        10    # ave.R
+    ])
+ave  = aves[-2]  # base filter, directly used for comp_r fork
+aveR = aves[-1]  # for range+, fixed overhead per blob
 
 class CFrame(CBase):
 
