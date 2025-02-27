@@ -347,6 +347,9 @@ class Caves(object):  # hyper-parameters, init a guess, adjusted by feedback
         if len(root.derH[0])==2: root.derH[0][1].add_lay(mfork)  # current mfork is root dfork
         else:  root.derH[0] += [mfork.copy_()]  # init
         root.derTT += mfork.derTT
+        
+        mfork = reduce(lambda Lay, lay: Lay.add_lay(lay), L_.derH[0], CLay())
+        dfork = reduce(lambda Lay, lay: Lay.add_lay(lay), LL_.derH[0], CLay())
 '''
 def comp_H(H,h, rn, root, Et, fd):  # one-fork derH if fd, else two-fork derH
     derH = []
@@ -371,4 +374,16 @@ def comp_H(H,h, rn, root, Et, fd):  # one-fork derH if fd, else two-fork derH
             derH += [dLay]
     return derH
 
+def top_(G, fd=0):
+    return (G.link_[-1] if G.lnest else G.link_) if fd else (G.node_[-1] if G.nnest else G.node_)
+
+aves = np.array([
+        5,    # ave.m
+        10,   # ave.d = ave change to Ave_min from the root intra_blob?
+        1.2,  # ave.rn
+        1.2,  # ave.ro
+        100,  # ave.I
+        100,  # ave.G
+        2,    # ave.A
+        2])   # ave.L
 
