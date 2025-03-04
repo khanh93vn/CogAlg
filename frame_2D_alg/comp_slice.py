@@ -1,5 +1,5 @@
 import numpy as np
-from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_, aves
+from frame_blobs import CBase, frame_blobs_root, intra_blob_root, imread, unpack_blob_
 from slice_edge import CP, slice_edge, comp_angle
 from functools import reduce
 '''
@@ -26,16 +26,10 @@ These low-M high-Ma blobs are vectorized into outlines of adjacent flat (high in
 Connectivity in P_ is traced through root_s of derts adjacent to P.dert_, possibly forking. 
 len prior root_ sorted by G is root.olp, to eval for inclusion in PP or start new P by ave*olp
 '''
-ave     = aves[-2]
-ave_d   = aves[1]
-ave_G   = aves[4]
-ave_PPm = aves[30]
-ave_PPd = aves[31]
-ave_L   = aves[6]
-ave_dI  = aves[22]
-ave_md  = [ave,ave_d]
-mweights = [aves[3], aves[4], aves[7], aves[0], aves[1], aves[6]]
-dweights = [aves[11], aves[12], aves[15], aves[8], aves[9], aves[14]]
+
+ave, avd, aveB, ave_PPm, ave_PPd, ave_L, aI = 10, 10, 100, 50, 50, 4, 20
+wM, wD, wI, wG, wA, wL = 10, 10, 1, 1, 20, 20  # dert:
+w_t = np.ones((2,6))
 
 class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
     name = "dP"
@@ -56,17 +50,22 @@ class CdP(CBase):  # produced by comp_P, comp_slice version of Clink
         l.prim = []
     def __bool__(l): return l.nodet
 
-def vectorize_root(frame):
+def comp_slice_root(frame, rV=1, ww_t=[]):
 
     blob_ = unpack_blob_(frame)
     for blob in blob_:
-        if not blob.sign and blob.G > ave_G * blob.root.olp:
-            edge = slice_edge(blob)
+        if not blob.sign and blob.G > aveB * blob.root.olp:
+            edge = slice_edge(blob, ww_t[0][2:-1])  # wI,wG,wA?
             if edge.G * (len(edge.P_) - 1) > ave_PPm:  # eval PP, olp=1
-                comp_slice(edge)
+                comp_slice(edge, rV, ww_t = ww_t)
 
-def comp_slice(edge):  # root function
+def comp_slice(edge, rV=1, ww_t=[]):  # root function
 
+    global ave, avd, wM, wD, wI, wG, wA, wL, ave_L, ave_PPm, ave_PPd, w_t
+    ave, avd, ave_L, ave_PPm, ave_PPd = np.array([ave, avd, ave_L, ave_PPm, ave_PPd]) / rV  # projected value change
+    if np.any(ww_t):
+        w_t = np.array([np.array([wM,wD,wI,wG,wA,wL]),np.array([wM,wD,wI,wG,wA,wL])]) * ww_t
+        # der weights
     edge.Et, edge.vertuple = np.zeros(4), np.array([np.zeros(6), np.zeros(6)])  # (M, D, n, o), (m_,d_)
     for P in edge.P_:  # add higher links
         P.vertuple = np.array([np.zeros(6), np.zeros(6)])
@@ -101,7 +100,7 @@ def comp_dP_(PP,):  # node_- mediated: comp node.rim dPs, call from form_PP_
     root, P_, link_, vert, lat, A, S, box, yx, (M,_,n,_) = PP
     rM = M / (ave * n)  # dP D borrows from normalized PP M
     for _dP in link_:
-        if _dP.Et[1] * rM > ave_d:
+        if _dP.Et[1] * rM > avd:
             _P, P = _dP.nodet  # _P is lower
             rn = len(P.dert_) / len(_P.dert_)
             for dP in P.rim:  # higher links
@@ -133,7 +132,7 @@ def form_PP_(root, iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
         while _prim_:
             prim_,lrim_ = set(),set()
             for _P,_link in zip(_prim_,_lrim_):
-                if _link.Et[fd] < ave_md[fd] or _P.merged:
+                if _link.Et[fd] < [ave,avd][fd] or _P.merged:
                     continue
                 _P_.add(_P); link_.add(_link)
                 _I,_G,_M,_D,_L,_ = _P.latuple
@@ -183,16 +182,16 @@ def comp_latuple(_latuple, latuple, _n,n):  # 0der params, add dir?
     I, G, M, D, L, (Dy, Dx) = latuple
     rn = _n / n
 
-    I*=rn; dI = _I - I;  mI = ave_dI -dI / max(_I,I)  # vI = mI - ave)
-    G*=rn; dG = _G - G;  mG = min(_G, G) / max(_G,G)  # vG = mG - ave_mG
-    M*=rn; dM = _M - M;  mM = min(_M, M) / max(_M,M)  # vM = mM - ave_mM
-    D*=rn; dD = _D - D;  mD = min(_D, D) / max(_D,D)  # vD = mD - ave_mD
-    L*=rn; dL = _L - L;  mL = min(_L, L) / max(_L,L)  # vL = mL - ave_mL
-    mA, dA = comp_angle((_Dy,_Dx),(Dy,Dx))  # vA = mA - ave_mA, normalized
+    I*=rn; dI = _I - I;  mI = aI - dI / max(_I,I, 1e-7)  # vI = mI - ave
+    G*=rn; dG = _G - G;  mG = min(_G, G) / max(_G,G, 1e-7)  # vG = mG - ave_mG
+    M*=rn; dM = _M - M;  mM = min(_M, M) / max(_M,M, 1e-7)  # vM = mM - ave_mM
+    D*=rn; dD = _D - D;  mD = min(_D, D) / max(_D,D) if _D or D else 1e-7  # may be negative
+    L*=rn; dL = _L - L;  mL = min(_L, L) / max(_L,L)
+    mA, dA = comp_angle((_Dy,_Dx),(Dy,Dx))  # normalized
 
-    d_ = np.array([dI, dG, dA, dM, dD, dL])  # derTT[:3], Et
-    m_ = np.array([mI, mG, mA, mM, mD, mL])
-    M = sum(m_ * mweights); D = sum(d_ * dweights)  # we need to apply this the same for all Et computation?
+    d_ = np.array([dM, dD, dI, dG, dA, dL])  # derTT[:3], Et
+    m_ = np.array([mM, mD, mI, mG, mA, mL])
+    M = sum(m_ * w_t[0]); D = sum(d_ * w_t[1])
     return np.array([m_,d_]), np.array([M,D])
 
 def comp_vert(_i_,i_, rn=.1, dir=1):  # i_ is ds, dir may be -1
@@ -202,7 +201,7 @@ def comp_vert(_i_,i_, rn=.1, dir=1):  # i_ is ds, dir may be -1
     _a_,a_ = np.abs(_i_), np.abs(i_)
     m_ = np.divide( np.minimum(_a_,a_), reduce(np.maximum, [_a_, a_, 1e-7]))  # rms
     m_[(_i_<0) != (d_<0)] *= -1  # m is negative if comparands have opposite sign
-    M = sum(m_ * mweights); D = sum(d_ * dweights)
+    M = sum(m_ * w_t[0]); D = sum(d_ * w_t[1])
 
     return np.array([m_,d_]), np.array([M, D])  # Et
 ''' 
@@ -233,7 +232,7 @@ if __name__ == "__main__":
 
     frame = frame_blobs_root(image)
     intra_blob_root(frame)
-    vectorize_root(frame)
+    comp_slice_root(frame)
     # ----- verification -----
     # draw PPms as graphs of Ps and dPs
     # draw PPds as graphs of dPs and ddPs

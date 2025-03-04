@@ -2,7 +2,7 @@ import numpy as np
 from collections import defaultdict
 from itertools import combinations
 from math import atan2, cos, floor, pi
-from frame_blobs import frame_blobs_root, intra_blob_root, CBase, imread, unpack_blob_, aves
+from frame_blobs import frame_blobs_root, intra_blob_root, CBase, imread, unpack_blob_
 '''
 In natural images, objects look very fuzzy and frequently interrupted, only vaguely suggested by initial blobs and contours.
 Potential object is proximate low-gradient (flat) blobs, with rough / thick boundary of adjacent high-gradient (edge) blobs.
@@ -16,9 +16,7 @@ This process is very complex, so it must be selective. Selection should be by co
 and inverse gradient deviation of flat blobs. But the latter is implicit here: high-gradient areas are usually quite sparse.
 A stable combination of a core flat blob with adjacent edge blobs is a potential object.
 '''
-ave_I = aves[3]
-ave_G = aves[4]
-ave_dangle = aves[-4]
+ave_I, ave_G, ave_dangle  = 100, 100, 0.95
 
 class CP(CBase):
     def __init__(P, yx, axis):
@@ -28,14 +26,17 @@ class CP(CBase):
         P.dert_ = []
         P.latuple = None  # I,G, M,D, L, [Dy, Dx]
 
-def vectorize_root(frame):
+def slice_edge_root(frame, rM=1):
 
     blob_ = unpack_blob_(frame)
     for blob in blob_:
-        if not blob.sign and blob.G > frame.ave.G:
-            slice_edge(blob, frame.ave)
+        if not blob.sign and blob.G > ave_G * blob.n * rM:
+            slice_edge(blob, rM)
 
-def slice_edge(edge):
+def slice_edge(edge, rV=1):
+    if rV != 1:
+        global ave_I, ave_G, ave_dangle
+        ave_I, ave_G, ave_dangle = np.array([ave_I, ave_G, ave_dangle]) / rV  # projected value change
 
     axisd = select_max(edge)
     yx_ = sorted(axisd.keys(), key=lambda yx: edge.dert_[yx][-1])  # sort by g
@@ -44,7 +45,7 @@ def slice_edge(edge):
     while yx_:
         yx = yx_.pop(); axis = axisd[yx]  # get max of g maxes
         P = form_P(CP(yx, axis), edge)
-        if P: edge.P_ += [P]
+        edge.P_ += [P]
         yx_ = [yx for yx in yx_ if yx not in edge.rootd]    # remove merged maxes if any
     edge.P_.sort(key=lambda P: P.yx, reverse=True)
     trace_P_adjacency(edge)
@@ -90,7 +91,7 @@ def form_P(P, edge):
             if mangle < ave_dangle: break  # terminate P if angle miss
             m = min(_i,i) + min(_g,g) + mangle
             d = abs(-i-i) + abs(_g-g) + dangle
-            if m < ave_I + ave_G + ave_dangle: break  # need separate weights?  terminate P if total miss, blob should be more permissive than P
+            if m < ave_I + ave_G + ave_dangle: break  # terminate P if total miss, blob should be more permissive than P
             # update P:
             edge.rootd[ky, kx] = P
             I+=i; Dy+=dy; Dx+=dx; G+=g; M+=m; D+=d; L+=1
@@ -101,9 +102,8 @@ def form_P(P, edge):
 
     P.yx = tuple(np.mean([P.yx_[0], P.yx_[-1]], axis=0))    # new center
     P.latuple = new_latuple(I,G, M,D, L, [Dy, Dx])
-    if len(P.dert_)>1:  # skip single dert's P
-        edge.rootd[iy,ix] = P
-        return P
+    edge.rootd[iy,ix] = P
+    return P
 
 def trace_P_adjacency(edge):  # fill and trace across slices
 
@@ -206,7 +206,7 @@ if __name__ == "__main__":
 
     frame = frame_blobs_root(image)
     intra_blob_root(frame)
-    vectorize_root(frame)
+    slice_edge_root(frame)
     # verification:
     import matplotlib.pyplot as plt
     # settings
