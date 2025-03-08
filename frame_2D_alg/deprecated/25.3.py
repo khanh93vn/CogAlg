@@ -78,6 +78,33 @@ def cluster_C_(root, rc):  # 0 nest gap from cluster_edge: same derH depth in ro
             if not root.root:  # frame
                 cross_comp(root, fn, rc+1)  # append derH, cluster_N_([root.node_,root.link_][fn][-1])
 
+    # get centroid clusters of top Gs for next cross_comp
+    C_t = [[],[]]
+    ave = globals()['ave'] * rc  # recursion count
+    # cluster top node_| link_:
+    for fn, C_,nest,_N_ in zip((1,0), C_t, [root.nnest,root.lnest], [root.node_,root.link_]):
+        if not nest: continue
+        N_ = [N for N in sorted([N for N in _N_[-1].node_], key=lambda n: n.Et[fn], reverse=True)]
+        for N in N_: N.Ct_ = []
+        for N in N_:
+            node_ = [N]; dist_ = [0]  # C node_
+            for _N in N_:
+                if N is _N: continue
+                if Val_(N.Et, root.Et, ave, coef=1) < 0:  # the rest of N_ is lower-M
+                    break
+                dy,dx = np.subtract(_N.yx,N.yx); dist = np.hypot(dy,dx)
+                if dist < max_dist:  # close enough to compare
+                    node_ += [_N]; dist_ += [dist]
+            C = sum_C(node_)
+            for n, dist in zip(node_,dist_): n.Ct_ += [[C,0,dist]]  # empty m, same n in multiple Ns
+            C_+= [C]
+        refine_C_(C_)  # refine centroid clusters
+
+        if _C is C:
+            vm = m - ave * (max_dist / 2 / _dist) * (i + 1) * (_dist / max_dist) ** 2  # disc overlap
+            # ave * inverse dist deviation (lower ave m) * redundancy * relative overlap between clusters
+
+
 def add_lay(Lay, lay_, rev=0, fc=0):  # merge lays, including mlay + dlay
 
         if not isinstance(lay_,list): lay_ = [lay_]
@@ -91,3 +118,39 @@ def add_lay(Lay, lay_, rev=0, fc=0):  # merge lays, including mlay + dlay
             et = lay.Et * -1 if rev and fc else lay.Et
             Lay.Et += et
         return Lay
+
+def cross_comp(root, fn, rc):  # form agg_Level by breadth-first node_,link_ cross-comp, connect clustering, recursion
+    # ave *= recursion count
+
+    N_,L_,Et = comp_node_(root.node_[-1].node_ if fn else root.link_[-1].node_, ave*rc)  # cross-comp top-composition exemplars
+    # mval -> lay
+    if Val_(Et, Et, ave*(rc+1), fd=0) > 0:  # cluster eval
+        derH = [[comb_H_(L_, root, fd=1)]]  # nested mlay
+        pL_ = {l for n in N_ for l,_ in get_rim(n, fd=0)}
+        if len(pL_) > ave_L:
+            cluster_N_(root, pL_, ave*(rc+2), fd=0, rc=rc+2)  # form multiple distance segments, same depth
+        # dval -> comp L_ for all dist segments, adds altGs
+        if Val_(Et, Et, ave*(rc+2), fd=1) > 0:
+            lN_,lL_,dEt = comp_link_(L2N(L_), ave*(rc+2))  # comp root.link_ forms root in alt clustering?
+            if Val_(dEt, Et, ave*(rc+3), fd=1) > 0:
+                derH[0] += [comb_H_(lL_, root, fd=1)]  # += dlay
+                plL_ = {l for n in lN_ for l,_ in get_rim(n,fd=1)}
+                if len(plL_) > ave_L:
+                    cluster_N_(root, plL_, ave*(rc+4), fd=1, rc=rc+4)
+                    # form altGs for cluster_C_, no new links between dist-seg Gs
+        root.derH += derH  # feedback
+        comb_altG_(root.node_[-1].node_, ave*(rc+4), rc=rc+4)  # comb node contour: altG_ | neg links sum, cross-comp -> CG altG
+        cluster_C_(root, rc+5)  # -> mfork G,altG exemplars, +altG surround borrow, root.derH + 1|2 lays, agg++
+        # no dfork cluster_C_, no ddfork
+        # if val_: lev_G -> agg_H_seq
+        return root.node_[-1]
+''' 
+ Hierarchical clustering should alternate between two phases: generative via connectivity and compressive via centroid.
+
+ Connectivity clustering terminates at contour alt_Gs, with next-level cross-comp between new core + contour clusters.
+ If strongly connected, these clusters may be sub-clustered (classified into) by centroids, with proximity bias. 
+
+ Connectivity clustering is a generative learning phase, forming new derivatives and structured composition levels, 
+ and centroid clustering is a compressive phase, reducing multiple similar comparands to a single exemplar. 
+'''
+
