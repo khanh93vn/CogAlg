@@ -4,7 +4,8 @@ from functools import reduce
 from itertools import zip_longest
 from multiprocessing import Pool, Manager
 from frame_blobs import frame_blobs_root, intra_blob_root, imread
-from vect_edge import L2N, base_comp, sum_G_, comb_H_, sum_H, copy_, comp_node_, comp_link_, sum2graph, get_rim, CG, CLay, vect_root, extend_box, Val_, val_
+from slice_edge import comp_angle
+from vect_edge import L2N, base_comp, comp_N, sum_G_, comb_H_, sum_H, copy_, comp_node_, sum2graph, get_rim, CG, CLay, vect_root, Val_, val_
 '''
 notation:
 prefix f: flag
@@ -34,39 +35,104 @@ Code-coordinate filters may extend base code by cross-projecting and combining p
 (which may include extending eval function with new match-projecting derivatives) 
 Similar to cross-projection by data-coordinate filters, described in "imagination, planning, action" section of part 3 in Readme.
 '''
-ave, ave_L, max_med, icoef, ave_dist = 5, 2, 3, .5, 2
+ave, ave_L, max_med, icoef, ave_dist, med_cost = 5, 2, 3, .5, 2, 2
 
-def cross_comp(root, fn, rc):  # recursion count, form agg_Level by breadth-first node_,link_ cross-comp, connect clustering, recursion
+def cross_comp(root, rc, fi=1):  # recursion count, form agg_Level by breadth-first node_,link_ cross-comp, connect clustering, recursion
 
-    # or single-fork cross-comp?
-    N_,L_,Et = comp_node_(root.node_[-1].node_ if fn else root.link_[-1].node_, ave*rc)  # cross-comp top-composition exemplars
-    # mval -> lay
-    if Val_(Et, Et, ave*(rc+1), fd=0) > 0:  # cluster eval
-        derH = [[comb_H_(L_, root, fd=1)]]  # nested mlay
-        pL_ = {l for n in N_ for l,_ in get_rim(n, fd=0)}
+    nnest, lnest = root.nnest, root.lnest
+    N_,L_,Et = comp_node_(root.node_[-1].node_, ave*rc) if fi else comp_link_(L2N(root.link_), ave*rc)  # nested node_ or flat link_
 
-        # long_link_ for CC: >ave n shorter neg-linked nodes roughly between nodet: no clear structure?
+    if Val_(Et, Et, ave*(rc+1), fi) > 0:
+        lay = comb_H_(L_, root, fi=0)
+        if fi: root.derH += [[lay]]  # [mfork] feedback
+        else: root.derH[-1] +=[lay]  # dfork
+        pL_ = {l for n in N_ for l,_ in get_rim(n, fi=fi)}
         if len(pL_) > ave_L:
-            cluster_N_(root, pL_, ave*(rc+2), fd=0, rc=rc+2)  # form multiple distance segments, same depth
-        # if root is LC, not frame
-        # not updated:
-        # dval -> comp L_ for all dist segments, adds altGs
-        if Val_(Et, Et, ave*(rc+2), fd=1) > 0:
-            lN_,lL_,dEt = comp_link_(L2N(L_), ave*(rc+2))  # comp root.link_ forms root in alt clustering?
-            if Val_(dEt, Et, ave*(rc+3), fd=1) > 0:
-                derH[0] += [comb_H_(lL_, root, fd=1)]  # += dlay
-                plL_ = {l for n in lN_ for l,_ in get_rim(n,fd=1)}
-                if len(plL_) > ave_L:
-                    cluster_N_(root, plL_, ave*(rc+4), fd=1, rc=rc+4)
-                    # form altGs for cluster_C_, no new links between dist-seg Gs
-        root.derH += derH  # feedback
-        comb_altG_(root.node_[-1].node_, ave*(rc+4), rc=rc+4)  # comb node contour: altG_ | neg links sum, cross-comp -> CG altG
-        cluster_C_(root, rc+5)  # -> mfork G,altG exemplars, +altG surround borrow, root.derH + 1|2 lays, agg++
-        # no dfork cluster_C_, no ddfork
-        # if val_: lev_G -> agg_H_seq
-        return root.node_[-1]
+            if fi:
+                # prior to cluster_C_: use shorter links
+                cluster_N_(root, pL_, ave*(rc+2), fi, rc=rc+2)  # form multiple distance segments, same depth
+                cpL_ = {l for n in N_ for l,_ in n.nrim}  # no nrim in CL
+                cEt = np.sum([l.Et for l in cpL_])
+                if val_(cEt, ave*rc+3, coef=.5) > 0:  # .5 is redundancy to LC above
+                    cluster_C_(root, rc+3)  # -> mfork G,altG exemplars, +altG surround borrow, root.derH + 1|2 lays, agg++
+            else:
+                cluster_L_(root, N_, ave*(rc+2), rc=rc+2)  # CC links via llinks, no dist-nesting
+                # no cluster_C_ for links, connectivity only
+        # recursion:
+        lev_Gt = []
+        for N_, nest, inest in zip((root.node_,root.link_),(root.nnest,root.lnest),(nnest,lnest)):
+            if nest > nest:  # nested above
+                lev_G = root.node_[-1] if fi else root.link_[-1]  # cross_comp CGs in link_[-1].node_
+                if Val_(lev_G.Et, lev_G.Et, ave*(rc+4), fi=1) > 0:  # or global Et?
+                    cross_comp(root, rc+4)
+                lev_Gt += [lev_G]
+            else: lev_Gt+=[[]]
+        return lev_Gt
 
-def cluster_N_(root, L_, ave, fd, rc):  # top-down segment L_ by >ave ratio of L.dists
+def comp_link_(iL_, ave):  # comp CLs via directional node-mediated link tracing: der+'rng+ in root.link_ rim_t node rims
+
+    fi = isinstance(iL_[0].nodet[0], CG)
+    for L in iL_:
+        # init mL_t: bilateral mediated Ls per L:
+        for rev, N, mL_ in zip((0,1), L.nodet, L.mL_t):
+            for _L,_rev in N.rim if fi else N.rimt[0]+N.rimt[1]:
+                if _L is not L and _L in iL_:  # nodet-mediated
+                    if val_(_L.Et, ave) > 0:
+                        mL_ += [(_L, rev ^_rev)]  # direction of L relative to _L
+    _L_, out_L_, LL_, ET = iL_,set(),[],np.zeros(4)  # out_L_: positive subset of iL_, Et = np.zeros(4)?
+    med = 1
+    while True:  # xcomp _L_
+        L_, Et = set(), np.zeros(4)
+        for L in _L_:
+            for mL_ in L.mL_t:
+                for _L, rev in mL_:  # rev is relative to L
+                    rn = _L.Et[2] / L.Et[2]
+                    dy,dx = np.subtract(_L.yx,L.yx)
+                    Link = comp_N(_L,L, ave, fi=0, angle=[dy,dx],dist=np.hypot(dy,dx), dir = -1 if rev else 1)  # d = -d if L is reversed relative to _L
+                    Link.med = med
+                    LL_ += [Link]  # include -ves, link order: nodet < L < rimt, mN.rim || L
+                    if val_(Link.Et, ave) > 0:  # link induction
+                        out_L_.update({_L,L}); L_.update({_L,L}); Et += Link.Et
+        ET += Et
+        if not any(L_): break
+        # extend mL_t per last medL:
+        if val_(Et, ave) - med * med_cost > 0:  # project prior-loop value, med adds fixed cost
+            _L_, ext_Et = set(), np.zeros(4)
+            for L in L_:
+                mL_t, lEt = [set(),set()], np.zeros(4)  # __Ls per L
+                for mL_,_mL_ in zip(mL_t, L.mL_t):
+                    for _L, rev in _mL_:
+                        for _rev, N in zip((0,1), _L.nodet):
+                            rim = N.rim if fi else N.rimt
+                            if len(rim) == med:  # append in comp loop
+                                for __L,__rev in rim if fi else rim[0]+rim[1]:
+                                    if __L in L.visited_ or __L not in iL_: continue
+                                    L.visited_ += [__L]; __L.visited_ += [L]
+                                    if val_(__L.Et, ave) > 0:  # add coef for loop induction?
+                                        mL_.add((__L, rev ^_rev ^__rev))  # combine reversals: 2 * 2 mLs, but 1st 2 are pre-combined
+                                        lEt += __L.Et
+                if val_(lEt, ave) > 0:  # L'rng+, vs L'comp above
+                    L.mL_t = mL_t; _L_.add(L); ext_Et += lEt
+            # refine eval by extension D:
+            if val_(ext_Et, ave) - med * med_cost > 0:
+                med +=1
+            else: break
+        else: break
+    return out_L_, LL_, ET
+
+''' 
+ Connectivity clustering (LC) is local, by short links: stable due to less interference?)
+ Centroid clustering (CC) by any links, regardless of local structure, val /= n_overlapping_LCs.
+ 
+ LC min distance is more restrictive than in cross-comp, due to density eval and optional use of resulting links in CC.
+ LC terminates at contour alt_Gs, with next-level cross-comp between new core+contour clusters.
+
+ LC is mainly generative: complexity of new derivatives and structured composition levels is greater than compression by LC 
+ CC is strictly compressive, by similarity, no new diff representation. 
+'''
+def cluster_N_(root, L_, ave, fi, rc):  # top-down segment L_ by >ave ratio of L.dists
+
+    nest = root.nnest if fi else root.lnest  # same process for nested link_?
 
     L_ = sorted(L_, key=lambda x: x.L)  # short links first
     min_dist = 0; Et = root.Et
@@ -94,41 +160,66 @@ def cluster_N_(root, L_, ave, fd, rc):  # top-down segment L_ by >ave ratio of L
                 eN_ = []
                 for eN in _eN_:  # cluster rim-connected ext Ns, all in root Gt
                     node_+=[eN]; eN.fin = 1  # all rim
-                    for L,_ in get_rim(eN, fd):  # all +ve
+                    for L,_ in get_rim(eN, fi=1):  # all +ve
                         if L not in link_:
                             eN_ += [n for n in L.nodet if not n.fin]
                             if L.L < max_dist:
                                 link_+=[L]; et+=L.Et
                 _eN_ = {*eN_}
             link_ = list({*link_});  Lay = CLay()
-            [Lay.add_lay(lay) for lay in sum_H(link_, root, fd=1)]
+            [Lay.add_lay(lay) for lay in sum_H(link_, root, fi=0)]
             derTT = Lay.derTT
             # weigh m_|d_ by similarity to mean m|d, replacing derTT:
             _,M = centroid_M_(derTT[0], np.sum(derTT[0]), ave)
             _,D = centroid_M_(derTT[1], np.sum(derTT[1]), ave)
             et[:2] = M,D
             if Val_(et, Et, ave) > 0:  # cluster node roots:
-                G_ += [sum2graph(root, [list({*node_}),link_, et, Lay], fd, min_dist, max_dist)]
+                G_ += [sum2graph(root, [list({*node_}),link_, et, Lay], 1, min_dist, max_dist)]
         # longer links:
         L_ = L_[i + 1:]
         if L_: min_dist = max_dist  # next loop connects current-distance clusters via longer links
+        # not updated:
         else:
             if G_:
                 [comb_altG_(G.altG.node_, ave, rc) for G in G_]
-                if fd:
+                if fi:
+                    root.node_ += [sum_G_(G_)]  # node_ is already nested
+                    root.nnest += 1
+                else:
                     if root.lnest: root.link_ += [sum_G_(G_)]
                     else: root.link_ = [sum_G_(root.link_), sum_G_(G_)]  # init nesting
                     root.lnest += 1
-                else:
-                    root.node_ += [sum_G_(G_)]  # node_ is already nested
-                    root.nnest += 1
             break
-''' 
- Clustering is via connectivity for >ave short links and via centroids for >ave long links (no clear local structure)
- Connectivity clustering terminates at contour alt_Gs, with next-level cross-comp between new core+contour clusters.
+    # draft:
+    if (root.nnest if fi else root.lnest) > nest:  # if nested above
+        node_ = root.node_[-1].node_ if fi else root.link_[-1].node_
+        for n in node_:
+            if Val_(n.Et, n.Et, ave*(rc+4), fi=0) > 0:
+                # cross_comp new-G' flat link_:
+                cross_comp(n, rc+4, fi=0)
 
- Connectivity clustering is partly generative, forming new derivatives and structured composition levels, 
- while centroid clustering is strictly compressive by similarity, not forming new differences. '''
+def cluster_L_(root, L_, ave, rc):  # CC links via direct llinks, no dist-nesting
+
+    G_ = []  # flood-filled link clusters
+    for L in L_: L.fin = 0
+    for L in L_:
+        if L.fin: continue
+        L.fin = 1
+        node_, link_, Et, Lay = [L], [], copy(L.Et), CLay()
+        for lL, _ in L.rimt[0] + L.rimt[1]:
+            # eval by directional density?
+            link_ += [lL]; Et += lL.Et
+            _L = lL.nodet[0] if lL.nodet[1] is L else lL.nodet[1]
+            if not _L.fin:
+                _L.fin = 1; node_ += [_L]
+        if Val_(Et, Et, ave) > 0:
+            Lay = CLay()
+            [Lay.add_lay(l) for l in sum_H(link_, root, fi=0)]
+            G_ += [sum2graph(root, [list({*node_}), link_, Et, Lay], 0)]
+    if G_:
+        [comb_altG_(G.altG.node_, ave, rc) for G in G_]
+        root.link_ += [sum_G_(G_)]
+        root.lnest += 1
 
 def cluster_C_(root, rc):  # 0 nest gap from cluster_edge: same derH depth in root and top Gs
 
@@ -148,8 +239,8 @@ def cluster_C_(root, rc):  # 0 nest gap from cluster_edge: same derH depth in ro
 
     def refine_C_(C_):  # refine weights in fuzzy C cluster around N, in root node_| link_
         '''
-        - compare center-node pairs, weigh match by center-node distance (inverse ave similarity),
-        - suppress non-max cluster_sum in center-node pairs: ave * cluster overlap ((dist/max_dist)**2)
+        - compare mean-node pairs, weigh match by center-node distance (inverse ave similarity),
+        - suppress non-max cluster_sum in mean-node pairs: ave * cluster overlap | (dist/max_dist)**2
         - delete weak clusters, recompute cluster_sums of mean-to-node matches / remaining cluster overlap
         '''
         remove_ = []
@@ -188,7 +279,7 @@ def cluster_C_(root, rc):  # 0 nest gap from cluster_edge: same derH depth in ro
         N_ = [N for N in sorted([N for N in _N_[-1].node_], key=lambda n: n.Et[fn], reverse=True)]
         for N in N_: N.Ct_ = []
         for N in N_:
-            med = 1; med_ = [1]; sN_ = set([N]); node_,_n_ = sN_,sN_
+            med = 1; med_ = [1]; node_,_n_ = set([N]), set([N])
             while med <= max_med and _n_:  # fill init C.node_: _Ns connected to N by <=3 mediation degrees
                 n_ = []
                 for _n in _n_:
@@ -201,14 +292,14 @@ def cluster_C_(root, rc):  # 0 nest gap from cluster_edge: same derH depth in ro
             C = sum_C(list(node_))
             for n, med in zip(node_,med_): n.Ct_ += [[C,0,med]]  # empty m, same n in multiple Ns
             C_+= [C]
-        refine_C_(C_)  # refine centroid clusters
+        # refine centroid clusters
+        refine_C_(C_)
         if len(C_) > ave_L:
             if fn:
                 root.node_ += [sum_G_(C_)]; root.nnest += 1
             else:
                 root.link_ += [sum_G_(C_)]; root.lnest += 1
-            if not root.root:  # frame
-                cross_comp(root, fn, rc+1)  # append derH, cluster_N_([root.node_,root.link_][fn][-1])
+        # recursion in root cross_comp
 
 def comb_altG_(G_, ave, rc=1):  # combine contour G.altG_ into altG (node_ defined by root=G), for agg+ cross-comp
     # internal and external alts: different decay / distance?
@@ -219,9 +310,9 @@ def comb_altG_(G_, ave, rc=1):  # combine contour G.altG_ into altG (node_ defin
             if G.altG.node_:
                 G.altG = sum_G_(G.altG.node_)
                 G.altG.node_ = [G.altG]  # formality for single-lev_G
-                G.altG.root=G; G.altG.fd=1; G.altG.m=0
+                G.altG.root=G; G.altG.fi=0; G.altG.m=0
                 if Val_(G.altG.Et, G.Et, ave):  # alt D * G rM
-                    cross_comp(G.altG, fn=1, rc=rc)  # adds nesting
+                    cross_comp(G.altG, fi=1, rc=rc)  # adds nesting
         else:  # sum neg links
             link_,node_,derH, Et = [],[],[], np.zeros(4)
             for link in G.link_:
@@ -230,8 +321,8 @@ def comb_altG_(G_, ave, rc=1):  # combine contour G.altG_ into altG (node_ defin
                     node_ += [n for n in link.nodet if n not in node_]
                     Et += link.Et
             if link_ and Val_(Et, G.Et, ave, coef=10) > 0:  # altG-specific coef for sum neg links (skip empty Et)
-                altG = CG(root=G, Et=Et, node_=node_, link_=link_, fd=1); altG.m=0  # other attrs are not significant
-                altG.derH = sum_H(altG.link_, altG, fd=1)   # sum link derHs
+                altG = CG(root=G, Et=Et, node_=node_, link_=link_, fi=0); altG.m=0  # other attrs are not significant
+                altG.derH = sum_H(altG.link_, altG, fi=0)   # sum link derHs
                 altG.derTT = np.sum([link.derTT for link in altG.link_],axis=0)
                 G.altG = altG
 
@@ -246,15 +337,15 @@ def norm_H(H, n):
                     for v_ in fork.derTT: v_ *= n  # array
                     fork.Et *= n  # same node_, link_
 # not used:
-def sort_H(H, fd):  # re-assign olp and form priority indices for comp_tree, if selective and aligned
+def sort_H(H, fi):  # re-assign olp and form priority indices for comp_tree, if selective and aligned
 
     i_ = []  # priority indices
-    for i, lay in enumerate(sorted(H.node_, key=lambda lay: lay.Et[fd], reverse=True)):
+    for i, lay in enumerate(sorted(H.node_, key=lambda lay: lay.Et[fi], reverse=True)):
         di = lay.i - i  # lay index in H
         lay.olp += di  # derR - valR
         i_ += [lay.i]
     H.i_ = i_  # H priority indices: node/m | link/d
-    if not fd:
+    if fi:
         H.root.node_ = H.node_
 
 def centroid_M_(m_, M, ave):  # adjust weights on attr matches | diffs, recompute with sum
@@ -277,7 +368,7 @@ def agg_level(inputs):  # draft parallel
 
     frame, H, elevation = inputs
     lev_G = H[elevation]
-    Lev_G = cross_comp(frame, fn=1, rc=0)  # return combined top composition level, append frame.derH
+    Lev_G = cross_comp(frame, fi=1, rc=0)  # return combined top composition level, append frame.derH
     if lev_G:
         # feedforward
         if len(H) < elevation+1: H += [Lev_G]  # append graph hierarchy
@@ -324,7 +415,7 @@ def agg_H_seq(focus, image, _nestt=(1,0), rV=1, _rv_t=[]):  # recursive level-fo
         return frame
     comb_altG_(frame.node_[-1].node_, ave*2)  # PP graphs in frame.node_[2]
     # forward agg+:
-    cross_comp(frame, fn=1, rc=1)  # node_+= edge.node_
+    cross_comp(frame, fi=1, rc=1)  # node_+= edge.node_
     rM,rD = 1,1  # sum derTT coefs: m_,d_ [M,D,n,o, I,G,A,L] / Et, baseT, dimension
     rv_t = np.ones((2,8))  # d value is borrowed from corresponding ms in proportion to d mag, both scaled by fb
     # feedback to scale m,d aves:
@@ -350,7 +441,7 @@ def agg_H_seq(focus, image, _nestt=(1,0), rV=1, _rv_t=[]):  # recursive level-fo
             if y > 0 and x > 0 and Y < image.shape[0] and X < image.shape[1]:  # focus is inside the image
                 # rerun agg+ with new focus and aves:
                 agg_H_seq(image[y:Y,x:X], image, (frame.nnest,frame.lnest), rV, rv_t)
-                # all aves *= rV, but ultimately differential weight backprop?
+                # all aves *= rV, but ultimately differential backprop per ave?
     return frame
 
 def max_g_window(i__, wsize=64):  # set min,max coordinate filters, updated by feedback to shift the focus
