@@ -55,7 +55,7 @@ def comp_slice_root(frame, rV=1, ww_t=[]):
     blob_ = unpack_blob_(frame)
     for blob in blob_:
         if not blob.sign and blob.G > aveB * blob.root.olp:
-            edge = slice_edge(blob, ww_t[0][2:-1])  # wI,wG,wA?
+            edge = slice_edge(blob, ww_t[0][2:-1])  # wI,wG,wA? This gives index error, could you explain the curent scheme?
             if edge.G * (len(edge.P_) - 1) > ave_PPm:  # eval PP, olp=1
                 comp_slice(edge, rV, ww_t = ww_t)
 
