@@ -166,8 +166,8 @@ def vect_root(frame, rV=1, ww_t=None):  # init for agg+:
         global ave, avd, arn, aveB, aveR, Lw, ave_dist, int_w, loop_w, clust_w, wM, wD, wN, wO, wI, wG, wA, wL, w_t
         ave, avd, arn, aveB, aveR, Lw, ave_dist, int_w, loop_w, clust_w = (
             np.array([ave,avd,arn,aveB, aveR,Lw,ave_dist,int_w,loop_w, clust_w]) / rV)  # projected value change
-        w_t = np.array( [[wM,wD,wN,wO,wI,wG,wA,wL]]*2 ) * ww_t  # or dw_ ~= w_/ 2?
-        ww_t = np.array([(*ww_t[0][:2],*ww_t[0][4:]),(*ww_t[0][:2],*ww_t[1][4:])])  # for comp_slice input
+        w_t = [[wM,wD,wN,wO,wI,wG,wA,wL]] * ww_t  # or dw_ ~= w_/ 2?
+        ww_t = np.delete(ww_t, (2, 3), axis=1)  # for comp_slice input
         # derTT w_
     blob_ = unpack_blob_(frame)
     frame2G(frame, derH=[CLay(root=frame)], node_=[blob_], root=None)
