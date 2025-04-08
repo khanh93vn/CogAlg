@@ -35,5 +35,47 @@ def blob2G(G, **kwargs):
     G.altG = []  # or altG? adjacent (contour) gap+overlap alt-fork graphs, converted to CG
     return G
 
-def get_node_(G): return G.H[-1][0] if isinstance(G.H[-1][0],list) else G.H[-1][0].H  # node_ | nG.node_
+def get_node_(G, fi): return G.H[-1][fi] if isinstance(G.H[0],list) else G.H  # node_ | nG.node_
+
+def sum_C(node_):  # sum|subtract and average C-connected nodes
+
+        C = copy_(node_[0]); C.H = node_  # add root and medoid / exemplar?
+        C.M = 0
+        sum_N_(node_[1:], root_G=C)  # no extH, extend_box
+        alt_ = [n.altG for n in node_ if n.altG]
+        if alt_:
+            sum_N_(alt_, root_G=C.altG)  # no m, M, L in altG
+        k = len(node_)
+        for n in (C, C.altG):
+            n.Et/=k; n.baseT/=k; n.derTT/=k; n.aRad/=k; n.yx /= k
+            norm_H(n.derH, k)
+        return C
+'''
+        lay = comb_H_(L_,root,fi=0)
+        if fi: root.derH += [[lay]]  # [mfork] feedback, no eval?
+        else:  root.derH[-1] += [lay]  # dfork feedback
+'''
+def feedback(root, ifi):  # root is frame if ifi else lev_lG
+    # draft
+    rv_t = np.ones((2,8))  # sum derTT coefs: m_,d_ [M,D,n,o, I,G,A,L] / Et, baseT, dimension
+    rM, rD = 1, 1; hG = sum_N_(root.H[-1][0])  # top level, no  feedback (we need sum_N_ here? Since last layer is flat)
+
+    for lev in reversed(root.H[:-1]):
+        for fi, fork_G in lev[0], lev[2]:  # CG node_ if fi else, CL link_
+            if fi:
+                _m,_d,_n,_ = hG.Et; m,d,n,_ = fork_G.Et
+                rM += (_m/_n) / (m/n)  # no o eval?
+                rD += (_d/_n) / (d/n)
+                rv_t += np.abs((hG.derTT/_n) / (fork_G.derTT/n))
+                hG = fork_G
+            else:
+                # also for ddfork: not ifi?
+                rMd, rDd, rv_td = feedback(root, fi)  # intra-level recursion in lG
+                rv_t = rv_t + rv_td; rM += rMd; rD += rDd
+
+    return rM,rD,rv_t
+
+def get_rim(N,fi): return N.rim if fi else N.rimt[0] + N.rimt[1]  # add nesting in cluster_N_?
+
+
 
