@@ -55,7 +55,7 @@ def comp_slice_root(frame, rV=1, ww_t=None):
     blob_ = unpack_blob_(frame)
     for blob in blob_:
         if not blob.sign and blob.G > aveB * blob.root.olp:
-            edge = slice_edge(blob, rV)  # wI,wG,wA?
+            edge = slice_edge(blob, rV)  # ww_t[0][2:-1])  # wI,wG,wA?
             if edge.G * (len(edge.P_) - 1) > ave_PPm:  # eval PP, olp=1
                 comp_slice(edge, rV, ww_t=ww_t)
 
@@ -85,7 +85,7 @@ def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
 
     for P in iP_: P.merged = 0
     for P in iP_:  # dP from link_ if fd
-        if P.merged or (not fd and len(P.dert_)==1): continue   # this causes empty PPt_ and zero n (Et[2])
+        if P.merged or (not fd and len(P.dert_)==1): continue
         _prim_ = P.prim; _lrim_ = P.lrim
         I,G, M,D, L,_ = P.latuple
         _P_ = {P}; link_ = set(); Et = np.array([I+M, G+D])
@@ -106,7 +106,8 @@ def form_PP_(iP_, fd):  # form PPs of dP.valt[fd] + connected Ps val
             _prim_, _lrim_ = prim_, lrim_
         Et = np.array([*Et, L, 1])  # Et + n,o
         rEt += Et; rvert += vert
-        PPt_ += [sum2PP(list(_P_), list(link_), Et)]
+        if _P_:
+            PPt_ += [sum2PP(list(_P_), list(link_), Et)]
 
     return PPt_, rvert, rEt
 
@@ -127,7 +128,7 @@ def comp_P_(edge):  # form links from prelinks
 def comp_dP_(edge, mEt):  # node_- mediated: comp node.rim dPs, call from form_PP_
 
     M,_,n,_ = mEt
-    rM = M / (ave * n)  # dP D borrows from normalized PP M. Note: n can be zero, caused by line 88 above (form_PP_)
+    rM = M / (ave * n)  # dP D borrows from normalized PP M
     for _dP in edge.dP_: _dP.prim = []; _dP.lrim = []
     for _dP in edge.dP_:
         if _dP.Et[1] * rM > avd:
@@ -175,7 +176,7 @@ def sum2PP(P_, dP_, Et):  # sum links in Ps and Ps in PP
         for y,x in P.yx_ if isinstance(P, CP) else [P.nodet[0].yx, P.nodet[1].yx]:  # CdP
             box = accum_box(box,y,x)
     y0,x0,yn,xn = box
-    PPt = [P_, link_, vert, lat, A, S, box, [(y0+yn)/2,(x0+xn)/2], Et]
+    PPt = [P_, link_, vert, lat, A, S, box, np.array([(y0+yn)/2,(x0+xn)/2]), Et]
     for P in P_: P.root = PPt
     return PPt
 
