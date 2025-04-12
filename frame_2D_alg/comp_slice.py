@@ -129,6 +129,7 @@ def comp_dP_(edge, mEt):  # node_- mediated: comp node.rim dPs, call from form_P
 
     M,_,n,_ = mEt
     rM = M / (ave * n)  # dP D borrows from normalized PP M
+    if n == 0: print(f"n = {n}, rM = {rM}")
     for _dP in edge.dP_: _dP.prim = []; _dP.lrim = []
     for _dP in edge.dP_:
         if _dP.Et[1] * rM > avd:
