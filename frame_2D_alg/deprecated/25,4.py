@@ -216,8 +216,98 @@ def add_node_H(H,h):
                 if F: add_N(F,f)  # nG|lG
                 else: Lev += [f]  # if lG
 
+    # if len(_P_)==1 and len(next(iter(_P_)).dert_)==1: continue
+'''
+        for Gp in _Gp_:
+            _G,G, rn, dy,dx, radii, dist = Gp
+            medG_ = _G._N_ & G._N_
+            if medG_:
+                _mL_,mL_ =[],[]; fcomp=0; fshort = 0  # compare indirectly connected Gs
+                for g in medG_:
+                    for mL in g.rim:
+                        if mL in G.rim: mL_ += [mL]
+                        elif mL in _G.rim: _mL_ += [mL]
+                Lpt_ = [[_l,l,comp_angle(_l.baseT[2:],l.baseT[2:])[1]] for (_l,_),(l,_) in product(mL_,_mL_)]
+                [_l,l,dA] = max(Lpt_, key=lambda x: x[2])  # links closest to the opposite from medG
+                if dA > 0.4:  # we probably can include dA back?
+                    G_ = set(_l.nodet) ^ set(l.nodet)  # we might get 4 Gs here now, _G, G and the other 2 different nodes from both of their rim
+                    if len(G_) == 2: 
+                        _G,G = list(G_)[:2]  # if there's 4 Gs, that's mean they are not directly mediated by link? So we should skip them?
+                        fcomp=1
+                # end nodes
+            else:  # eval new Link, dist vs radii * induction, mainly / extH?
+                (_m,_,_n,_),(m,_,n,_) = _G.Et,G.Et
+                weighted_max = ave_dist * ((radii/aveR * int_w**3) * (_m/_n + m/n)/2 / (ave*(_n+n)))  # all ratios
+                if dist < weighted_max:
+                    fcomp=1; fshort = dist < weighted_max/2  # no density, ext V is not complete
+                else: fcomp=0
+            if fcomp:
+                Link = comp_N(_G,G, ave, fi=1, angle=[dy,dx], dist=dist, fshort=fshort)
+                L_ += [Link]  # include -ve links
+                if Link.Et[0] > ave * Link.Et[2] * loop_w:
+                    N_.update({_G,G}); Et += Link.Et; _G.add,G.add = 1,1
+            else:
+                Gp_ += [Gp]  # re-evaluate not-compared pairs with one incremented N.M
+'''
+def merge_Lp(L, l, w_):  # combine med_Ls into Link
 
+    L = copy_(L)
+    L.nodet = list(set(L.nodet) ^ set(l.nodet))  # get end nodes and remove mediator
+    L.box = extend_box(L.box, l.box)
+    L.yx = (L.yx + l.yx) / 2
+    L.baseT += l.baseT
+    for Lay,lay in zip(L.derH, l.derH):
+        L.derTT[1] += lay.derTT[1]
+        L.Et[1] += lay.Et[1]  # D only, keep iL n,o?
+    # get max comparands from L.nodet to compute M, L=A:
+    _Et, Et = np.abs(L.nodet[0].Et), np.abs(L.nodet[1].Et)
+    M,D,n,o = np.minimum(_Et,Et) / np.maximum(_Et,Et)
+    _IG, IG = L.nodet[0].baseT[:2], L.nodet[1].baseT[:2]
+    I,G = np.minimum(_IG) / np.maximum(IG)
+    _y0,_x0,_yn,_xn = L.nodet[0].box; y0,x0,yn,xn = L.nodet[1].box
+    _Len = (_yn-_y0) * (_xn-_x0); Len = (yn-y0) * (xn-x0)
+    mL = min(_Len,Len) / max(_Len,Len)
+    A = .5  # max dA
+    # recompute match as max comparands - abs diff:
+    L.derTT[0] = np.array([M,D,n,o,I,G,mL,mA]) * w_
+    L.Et[0] = np.sum(L.derTT[0] - np.abs(L.derTT[1]))
+    return L
 
+def val_(Et, _Et, ave, mw=1, aw=1, fi=1):  # m+d cluster | cross_comp eval, including cross|root alt_Et projection
 
+    m, d, n, o = Et; _m,_d,_n,_o = _Et  # cross-fork induction of root Et alt, same o (overlap)?
+    m *= mw  # such as len*Lw
+
+    d_loc = d * (_m - ave * aw * (_n/n))  # diff * co-projected m deviation, no bilateral deviation?
+    d_ave = d - avd / ave  # d deviation, filter ave_d decreases with ave m, which lends value to d
+
+    if fi: val = m + d_ave - d_loc  # match + proj surround val - blocking val, * decay?
+    else:  val = d_ave + d_loc  # diff borrow val, generic + specific
+
+    return val - ave * aw * n * o  # simplified: np.add(Et[:2]) > ave * np.multiply(Et[2:])
+
+def val_1(Et, _Et=None, mw=1, aw=1, fi=1):  # m+d val per cluster|cross_comp
+
+    m, d, n, o = Et  # m->d lend cancels-out in Et scope, not in higher-scope _Et?
+    am = ave * aw
+    ad = avd * aw
+    if _Et:  # higher scope values
+        _m,_d,_n,_o = _Et; rn = _n / n
+        _m_dev = _m * rn - am
+        _d_dev = _d * rn - ad
+    else: _m_dev,_d_dev = 0,0
+
+    if fi: return m*mw - am - (d - ad + _d_dev)  # m_dev -= lend to d_dev, local + global
+    else:  return d*mw - ad + (m - am + _m_dev)  # d_dev += borrow from m_dev, local + global
+
+def add_node_H(H, h, root):
+
+    for Lev, lev in zip(H, h):  # always aligned?
+        for i, (F, f) in enumerate(zip_longest(Lev, lev, fillvalue=None)):
+            if f:  # nG | lG | dH
+                if isinstance(F,CG): add_N(F,f)  # nG|lG
+                elif isinstance(F,list): add_node_H(F,f, root=Lev[1])  # dH rooted in lG?
+                elif F is None: Lev += [f]  # if lG, no empty layers?
+                else:  Lev[i] = copy_(f, root=root)  # replace empty layer
 
 
