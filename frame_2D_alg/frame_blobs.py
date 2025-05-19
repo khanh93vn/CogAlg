@@ -70,10 +70,12 @@ aveR = 10  # for range+, fixed overhead per blob
 
 class CFrame(CBase):
 
-    def __init__(frame, i__):
+    def __init__(frame, image):
         super().__init__()
-        frame.i__, frame.latuple, frame.blob_ = i__, [0, 0, 0, 0], []
-
+        frame.box = np.array([0,0,image.shape[0],image.shape[1]])
+        frame.latuple = [0,0,0,0]  # I, Dy, Dx, G
+        frame.i__= image
+        frame.blob_ = []
     def __repr__(frame): return f"frame(id={frame.id})"
 
 class CBlob(CBase):
@@ -169,8 +171,8 @@ def flood_fill(frame, dert__):
         if not perimeter_:  # init blob
             blob = CBlob(frame); perimeter_ += [fill_yx_[0]]
         blob.fill_blob(fill_yx_, perimeter_, root__, dert__)  # https://en.wikipedia.org/wiki/Flood_fill
-        if not perimeter_: blob.term()
-
+        if not perimeter_ or not fill_yx_:
+            blob.term()
 '''
 intra_blob recursively segments each blob for two forks of extended internal cross-comp and sub-clustering:
 - comp_range: incremental range cross-comp in low-variation blobs: >ave negative gradient
